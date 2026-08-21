@@ -1,0 +1,23 @@
+{
+  "name": "my-car",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b --noEmit"
+  },
+  "dependencies": {
+    "idb": "^8.0.0",
+    "vue": "^3.4.38"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.2",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.1",
+    "vite-plugin-pwa": "^0.20.5",
+    "vue-tsc": "^2.0.29"
+  }
+}
