@@ -15,7 +15,12 @@ const PAD_TOP = 4
 const PAD_BOTTOM = 4
 
 const points = computed(() => {
-  return props.history.filter((row) => row.litersPer100km !== null).slice(-10)
+  // props.history is newest-first, so take the 10 most recent entries
+  // and reverse them to chronological order for left-to-right plotting.
+  return props.history
+    .filter((row) => row.litersPer100km !== null)
+    .slice(0, 10)
+    .reverse()
 })
 
 const domainMax = computed(() => {

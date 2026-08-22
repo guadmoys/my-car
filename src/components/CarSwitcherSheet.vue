@@ -155,7 +155,7 @@ function fmt(n: number): string {
 
 .card {
   background: var(--bg-elevated);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--card-border);
   overflow: hidden;
 }
