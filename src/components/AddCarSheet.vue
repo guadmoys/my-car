@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
+import PickerSheet from './PickerSheet.vue'
 
 const emit = defineEmits<{
   close: []
@@ -10,10 +12,17 @@ const make = ref('')
 const model = ref('')
 const year = ref(String(new Date().getFullYear()))
 const mileage = ref('')
+const activePicker = ref<'make' | 'model' | null>(null)
 
 const currentYear = new Date().getFullYear()
 const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '')))
 const yearNumber = computed(() => Number(year.value))
+const modelOptions = computed(() => modelsForMake(make.value))
+
+function selectMake(value: string) {
+  if (value !== make.value) model.value = ''
+  make.value = value
+}
 
 const isValid = computed(() => {
   return (
@@ -52,15 +61,21 @@ function handleSave() {
 
       <div class="form">
         <div class="group">
-          <div class="field">
+          <button class="field picker-field" @click="activePicker = 'make'">
             <label>Марка</label>
-            <input v-model="make" type="text" placeholder="Toyota" autocapitalize="words" />
-          </div>
+            <span class="picker-value" :class="{ placeholder: !make }">{{ make || 'Выбрать' }}</span>
+          </button>
           <div class="divider" />
-          <div class="field">
+          <button
+            class="field picker-field"
+            :class="{ disabled: !make }"
+            @click="make && (activePicker = 'model')"
+          >
             <label>Модель</label>
-            <input v-model="model" type="text" placeholder="Camry" autocapitalize="words" />
-          </div>
+            <span class="picker-value" :class="{ placeholder: !model }">
+              {{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}
+            </span>
+          </button>
           <div class="divider" />
           <div class="field">
             <label>Год выпуска</label>
@@ -74,6 +89,27 @@ function handleSave() {
         </div>
       </div>
     </div>
+
+    <PickerSheet
+      v-if="activePicker === 'make'"
+      title="Марка"
+      :items="CAR_MAKES"
+      :selected="make"
+      placeholder="Поиск марки"
+      custom-label="Своя марка"
+      @close="activePicker = null"
+      @select="selectMake"
+    />
+    <PickerSheet
+      v-if="activePicker === 'model'"
+      title="Модель"
+      :items="modelOptions"
+      :selected="model"
+      placeholder="Поиск модели"
+      custom-label="Своя модель"
+      @close="activePicker = null"
+      @select="(value) => (model = value)"
+    />
   </div>
 </template>
 
@@ -183,6 +219,25 @@ function handleSave() {
 }
 
 .field input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.picker-field {
+  width: 100%;
+  text-align: left;
+  align-items: flex-start;
+}
+
+.picker-field.disabled {
+  opacity: 0.5;
+}
+
+.picker-value {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.picker-value.placeholder {
   color: var(--text-tertiary);
 }
 
