@@ -9,6 +9,15 @@ export interface Car {
   updatedAt: number
 }
 
+export interface Part {
+  id: string
+  name: string
+  articleNumber: string
+  platform: string
+  /** Optional direct link to buy this part. */
+  url?: string
+}
+
 export interface MaintenanceItem {
   id: string
   name: string
@@ -23,6 +32,7 @@ export interface MaintenanceItem {
   isCustom: boolean
   order: number
   note?: string
+  parts: Part[]
 }
 
 export interface MaintenanceStatus {

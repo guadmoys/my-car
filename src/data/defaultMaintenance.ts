@@ -40,5 +40,6 @@ export function buildDefaultItems(initialMileage: number): MaintenanceItem[] {
     lastServiceDate: null,
     isCustom: false,
     order: index,
+    parts: [],
   }))
 }

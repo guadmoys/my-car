@@ -7,7 +7,7 @@ import MileageSheet from './MileageSheet.vue'
 import SettingsSheet from './SettingsSheet.vue'
 import SummaryCard from './SummaryCard.vue'
 import FuelSheet from './FuelSheet.vue'
-import type { MaintenanceItem } from '../types'
+import type { MaintenanceItem, Part } from '../types'
 
 const store = useCarStore()
 const { car, enabledStatuses, disabledItems, dueCount, soonCount, okCount, fuelHistory, averageConsumption } = store
@@ -51,6 +51,7 @@ async function handleSaveItem(payload: {
   intervalKm: number
   intervalKmMax?: number
   lastServiceMileage: number
+  parts: Part[]
 }) {
   if (editModalItem.value) {
     await store.updateItem(editModalItem.value.id, payload)
@@ -58,7 +59,12 @@ async function handleSaveItem(payload: {
   closeEdit()
 }
 
-async function handleCreateItem(payload: { name: string; intervalKm: number; intervalKmMax?: number }) {
+async function handleCreateItem(payload: {
+  name: string
+  intervalKm: number
+  intervalKmMax?: number
+  parts: Part[]
+}) {
   await store.addCustomItem(payload)
   closeEdit()
 }

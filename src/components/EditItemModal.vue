@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { MaintenanceItem } from '../types'
+import type { MaintenanceItem, Part } from '../types'
 
 const props = defineProps<{
   item: MaintenanceItem | null
@@ -9,8 +9,16 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { name: string; intervalKm: number; intervalKmMax?: number; lastServiceMileage: number }]
-  create: [payload: { name: string; intervalKm: number; intervalKmMax?: number }]
+  save: [
+    payload: {
+      name: string
+      intervalKm: number
+      intervalKmMax?: number
+      lastServiceMileage: number
+      parts: Part[]
+    },
+  ]
+  create: [payload: { name: string; intervalKm: number; intervalKmMax?: number; parts: Part[] }]
   delete: [id: string]
 }>()
 
@@ -20,6 +28,19 @@ const name = ref('')
 const interval = ref('')
 const intervalMax = ref('')
 const lastServiceMileage = ref('')
+const parts = ref<Part[]>([])
+
+function makePartId(): string {
+  return `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function addPart() {
+  parts.value.push({ id: makePartId(), name: '', articleNumber: '', platform: '', url: '' })
+}
+
+function removePart(id: string) {
+  parts.value = parts.value.filter((p) => p.id !== id)
+}
 
 watch(
   () => props.item,
@@ -29,11 +50,13 @@ watch(
       interval.value = String(item.intervalKm)
       intervalMax.value = item.intervalKmMax ? String(item.intervalKmMax) : ''
       lastServiceMileage.value = String(item.lastServiceMileage)
+      parts.value = item.parts.map((p) => ({ ...p }))
     } else {
       name.value = ''
       interval.value = ''
       intervalMax.value = ''
       lastServiceMileage.value = String(props.currentMileage)
+      parts.value = []
     }
   },
   { immediate: true },
@@ -53,19 +76,32 @@ const isValid = computed(() => {
   return true
 })
 
+function cleanedParts(): Part[] {
+  return parts.value
+    .filter((p) => p.name.trim())
+    .map((p) => ({
+      id: p.id,
+      name: p.name.trim(),
+      articleNumber: p.articleNumber.trim(),
+      platform: p.platform.trim(),
+      url: p.url?.trim() || undefined,
+    }))
+}
+
 function handleSave() {
   if (!isValid.value) return
   const intervalKm = Math.round(Number(interval.value))
   const intervalKmMax = intervalMax.value.trim() ? Math.round(Number(intervalMax.value)) : undefined
 
   if (isCreate.value) {
-    emit('create', { name: name.value.trim(), intervalKm, intervalKmMax })
+    emit('create', { name: name.value.trim(), intervalKm, intervalKmMax, parts: cleanedParts() })
   } else if (props.item) {
     emit('save', {
       name: name.value.trim(),
       intervalKm,
       intervalKmMax,
       lastServiceMileage: Math.round(Number(lastServiceMileage.value)),
+      parts: cleanedParts(),
     })
   }
 }
@@ -112,6 +148,44 @@ function handleDelete() {
             <label>Пробег последнего ТО, км</label>
             <input v-model="lastServiceMileage" type="text" inputmode="numeric" />
           </div>
+        </div>
+
+        <div class="parts-block">
+          <div class="parts-header">
+            <span>Детали</span>
+            <span class="parts-hint">название, артикул и площадка для быстрой покупки</span>
+          </div>
+
+          <div v-for="(part, index) in parts" :key="part.id" class="group part-card">
+            <div class="part-card-header">
+              <span>Деталь {{ index + 1 }}</span>
+              <button class="part-remove" aria-label="Удалить деталь" @click="removePart(part.id)">
+                ✕
+              </button>
+            </div>
+            <div class="divider" />
+            <div class="field">
+              <label>Название</label>
+              <input v-model="part.name" type="text" placeholder="Фильтр масляный" />
+            </div>
+            <div class="divider" />
+            <div class="field">
+              <label>Артикул</label>
+              <input v-model="part.articleNumber" type="text" placeholder="2630035503" />
+            </div>
+            <div class="divider" />
+            <div class="field">
+              <label>Площадка</label>
+              <input v-model="part.platform" type="text" placeholder="Exist.ru" />
+            </div>
+            <div class="divider" />
+            <div class="field">
+              <label>Ссылка на покупку (необязательно)</label>
+              <input v-model="part.url" type="url" placeholder="https://..." />
+            </div>
+          </div>
+
+          <button class="add-part" @click="addPart">+ Добавить деталь</button>
         </div>
 
         <button v-if="!isCreate" class="delete" @click="handleDelete">
@@ -235,6 +309,74 @@ function handleDelete() {
 .divider {
   height: 1px;
   background: var(--separator);
+}
+
+.parts-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.parts-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.parts-header span:first-child {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.parts-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.part-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.part-remove {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--fill-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.part-remove:active {
+  opacity: 0.6;
+}
+
+.add-part {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--fill-secondary);
+  color: var(--blue);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.add-part:active {
+  opacity: 0.6;
 }
 
 .delete {

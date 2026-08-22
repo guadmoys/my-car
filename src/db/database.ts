@@ -21,6 +21,14 @@ interface MyCarDB extends DBSchema {
 const DB_NAME = 'my-car-db'
 const DB_VERSION = 2
 
+/**
+ * IndexedDB's structured clone can choke on Vue reactive proxies (nested
+ * arrays/objects in particular), so strip reactivity before writing.
+ */
+function toPlain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value))
+}
+
 let dbPromise: Promise<IDBPDatabase<MyCarDB>> | null = null
 
 function getDB(): Promise<IDBPDatabase<MyCarDB>> {
@@ -51,7 +59,7 @@ export async function getCar(): Promise<Car | undefined> {
 
 export async function putCar(car: Car): Promise<void> {
   const db = await getDB()
-  await db.put('car', car)
+  await db.put('car', toPlain(car))
 }
 
 export async function getAllMaintenanceItems(): Promise<MaintenanceItem[]> {
@@ -62,13 +70,13 @@ export async function getAllMaintenanceItems(): Promise<MaintenanceItem[]> {
 
 export async function putMaintenanceItem(item: MaintenanceItem): Promise<void> {
   const db = await getDB()
-  await db.put('maintenanceItems', item)
+  await db.put('maintenanceItems', toPlain(item))
 }
 
 export async function putMaintenanceItems(items: MaintenanceItem[]): Promise<void> {
   const db = await getDB()
   const tx = db.transaction('maintenanceItems', 'readwrite')
-  await Promise.all(items.map((item) => tx.store.put(item)))
+  await Promise.all(items.map((item) => tx.store.put(toPlain(item))))
   await tx.done
 }
 
@@ -84,7 +92,7 @@ export async function getAllFuelEntries(): Promise<FuelEntry[]> {
 
 export async function putFuelEntry(entry: FuelEntry): Promise<void> {
   const db = await getDB()
-  await db.put('fuelEntries', entry)
+  await db.put('fuelEntries', toPlain(entry))
 }
 
 export async function deleteFuelEntry(id: string): Promise<void> {

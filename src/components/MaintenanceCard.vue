@@ -39,6 +39,10 @@ const statusLabel = computed(() => {
   return `Осталось ${fmt(km)} км`
 })
 
+const showBuyHint = computed(
+  () => props.status.item.parts.length > 0 && props.status.state !== 'ok',
+)
+
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('ru-RU')
 }
@@ -78,6 +82,30 @@ function fmt(n: number): string {
         />
         <span class="slider" />
       </label>
+    </div>
+
+    <div v-if="showBuyHint" class="buy-hint" :style="{ borderColor: stateColor }">
+      <div class="buy-hint-title" :style="{ color: stateColor }">
+        🛒 Пора купить {{ status.item.parts.length > 1 ? 'детали' : 'деталь' }}
+      </div>
+      <div v-for="part in status.item.parts" :key="part.id" class="part-row">
+        <div class="part-info">
+          <div class="part-name">{{ part.name }}</div>
+          <div class="part-meta">
+            {{ [part.articleNumber, part.platform].filter(Boolean).join(' · ') || '—' }}
+          </div>
+        </div>
+        <a
+          v-if="part.url"
+          :href="part.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="part-buy"
+          @click.stop
+        >
+          Купить ›
+        </a>
+      </div>
     </div>
   </div>
 </template>
@@ -221,5 +249,62 @@ function fmt(n: number): string {
 
 .switch input:checked + .slider::before {
   transform: translateX(18px);
+}
+
+.buy-hint {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid;
+  background: var(--fill-secondary);
+}
+
+.buy-hint-title {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.part-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.part-info {
+  min-width: 0;
+}
+
+.part-name {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.part-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.part-buy {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+  padding: 5px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.part-buy:active {
+  opacity: 0.6;
 }
 </style>

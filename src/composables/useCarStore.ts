@@ -1,5 +1,5 @@
 import { computed, reactive, ref } from 'vue'
-import type { Car, FuelConsumption, FuelEntry, MaintenanceItem, MaintenanceStatus } from '../types'
+import type { Car, FuelConsumption, FuelEntry, MaintenanceItem, MaintenanceStatus, Part } from '../types'
 import { buildDefaultItems } from '../data/defaultMaintenance'
 import * as db from '../db/database'
 
@@ -23,7 +23,7 @@ async function load(): Promise<void> {
     db.getAllFuelEntries(),
   ])
   car.value = loadedCar ?? null
-  items.splice(0, items.length, ...loadedItems)
+  items.splice(0, items.length, ...loadedItems.map((item) => ({ ...item, parts: item.parts ?? [] })))
   fuelEntries.splice(0, fuelEntries.length, ...loadedFuel)
   isLoaded.value = true
 }
@@ -79,7 +79,9 @@ async function toggleItem(id: string, enabled: boolean): Promise<void> {
 
 async function updateItem(
   id: string,
-  patch: Partial<Pick<MaintenanceItem, 'name' | 'intervalKm' | 'intervalKmMax' | 'lastServiceMileage' | 'note'>>,
+  patch: Partial<
+    Pick<MaintenanceItem, 'name' | 'intervalKm' | 'intervalKmMax' | 'lastServiceMileage' | 'note' | 'parts'>
+  >,
 ): Promise<void> {
   const item = items.find((i) => i.id === id)
   if (!item) return
@@ -99,6 +101,7 @@ async function addCustomItem(input: {
   name: string
   intervalKm: number
   intervalKmMax?: number
+  parts?: Part[]
 }): Promise<void> {
   if (!car.value) return
   const item: MaintenanceItem = {
@@ -111,6 +114,7 @@ async function addCustomItem(input: {
     lastServiceDate: null,
     isCustom: true,
     order: items.length,
+    parts: input.parts ?? [],
   }
   items.push(item)
   await db.putMaintenanceItem(item)
