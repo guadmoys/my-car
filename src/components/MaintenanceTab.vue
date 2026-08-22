@@ -176,7 +176,7 @@ const filteredStatuses = computed(() => {
 .filter-chip {
   flex-shrink: 0;
   padding: 7px 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: var(--fill-secondary);
   color: var(--text-secondary);
   font-size: 13px;

@@ -391,7 +391,7 @@ function handleAddToCalendar() {
 
 .group {
   background: var(--bg-elevated);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   padding: 0 14px;
   border: 1px solid var(--card-border);
 }

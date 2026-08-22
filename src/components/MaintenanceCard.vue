@@ -218,7 +218,7 @@ function fmt(n: number): string {
   color: var(--blue);
   background: color-mix(in srgb, var(--blue) 12%, transparent);
   padding: 6px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
 }
 
 .done:active {

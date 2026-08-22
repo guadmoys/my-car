@@ -1,5 +1,6 @@
 export function downloadIcsReminder(opts: { title: string; description?: string; dueAt: number }): void {
   const dateStr = formatIcsDate(new Date(opts.dueAt))
+  const dateEndStr = formatIcsDate(new Date(opts.dueAt + 24 * 60 * 60 * 1000))
   const stamp = formatIcsDateTime(new Date())
   const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}@moya-mashina`
 
@@ -12,7 +13,7 @@ export function downloadIcsReminder(opts: { title: string; description?: string;
     `UID:${uid}`,
     `DTSTAMP:${stamp}`,
     `DTSTART;VALUE=DATE:${dateStr}`,
-    `DTEND;VALUE=DATE:${dateStr}`,
+    `DTEND;VALUE=DATE:${dateEndStr}`,
     `SUMMARY:${escapeIcs(opts.title)}`,
     opts.description ? `DESCRIPTION:${escapeIcs(opts.description)}` : null,
     'BEGIN:VALARM',

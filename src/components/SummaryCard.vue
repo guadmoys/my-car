@@ -147,7 +147,7 @@ function fmt(n: number): string {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.18);
   font-size: 13px;
   font-weight: 600;
