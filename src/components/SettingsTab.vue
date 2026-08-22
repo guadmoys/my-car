@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { Car } from '../types'
 import {
   getNotificationPermission,
@@ -11,15 +11,16 @@ import {
 
 const props = defineProps<{
   car: Car
+  carCount: number
   importError: string | null
 }>()
 
 const emit = defineEmits<{
-  close: []
   save: [payload: { make: string; model: string; year: number }]
   deleteCar: []
   export: []
   import: [file: File]
+  openCarSwitcher: []
 }>()
 
 const make = ref(props.car.make)
@@ -27,6 +28,16 @@ const model = ref(props.car.model)
 const year = ref(String(props.car.year))
 const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+
+watch(
+  () => props.car.id,
+  () => {
+    make.value = props.car.make
+    model.value = props.car.model
+    year.value = String(props.car.year)
+    confirmingDelete.value = false
+  },
+)
 
 const notificationsSupported = isNotificationApiSupported()
 const notificationsOn = ref(isNotificationsEnabled() && getNotificationPermission() === 'granted')
@@ -50,9 +61,12 @@ async function handleToggleNotifications(checked: boolean) {
   }
 }
 
-function handleSave() {
+function commitCarInfo() {
   const y = Number(year.value)
   if (!make.value.trim() || !model.value.trim() || Number.isNaN(y)) return
+  if (make.value.trim() === props.car.make && model.value.trim() === props.car.model && y === props.car.year) {
+    return
+  }
   emit('save', { make: make.value.trim(), model: model.value.trim(), year: y })
 }
 
@@ -77,165 +91,122 @@ function handleFileSelected(event: Event) {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
-    <div class="sheet">
-      <div class="handle" />
-      <div class="header">
-        <button class="cancel" @click="emit('close')">Закрыть</button>
-        <h2>Настройки</h2>
-        <button class="save" @click="handleSave">Готово</button>
-      </div>
+  <div class="tab-page">
+    <header class="topbar">
+      <h1>Настройки</h1>
+    </header>
 
-      <div class="form">
+    <div class="form">
+      <div class="car-zone">
+        <div class="section-title">Автомобиль</div>
         <div class="group">
           <div class="field">
             <label>Марка</label>
-            <input v-model="make" type="text" />
+            <input v-model="make" type="text" @blur="commitCarInfo" />
           </div>
           <div class="divider" />
           <div class="field">
             <label>Модель</label>
-            <input v-model="model" type="text" />
+            <input v-model="model" type="text" @blur="commitCarInfo" />
           </div>
           <div class="divider" />
           <div class="field">
             <label>Год выпуска</label>
-            <input v-model="year" type="text" inputmode="numeric" />
+            <input v-model="year" type="text" inputmode="numeric" @blur="commitCarInfo" />
           </div>
         </div>
+        <button class="backup-btn" @click="emit('openCarSwitcher')">
+          Мои машины ({{ carCount }})
+        </button>
+      </div>
 
-        <div v-if="notificationsSupported" class="notifications-zone">
-          <div class="parts-header">Уведомления</div>
-          <div class="group">
-            <label class="field notif-row">
-              <span>
-                <span class="notif-label">Уведомлять о ТО</span>
-                <span class="hint notif-hint">Когда параметр становится «скоро» или «просрочено»</span>
-              </span>
-              <label class="switch">
-                <input
-                  type="checkbox"
-                  :checked="notificationsOn"
-                  @change="handleToggleNotifications(($event.target as HTMLInputElement).checked)"
-                />
-                <span class="slider" />
-              </label>
+      <div v-if="notificationsSupported" class="notifications-zone">
+        <div class="section-title">Уведомления</div>
+        <div class="group">
+          <label class="field notif-row">
+            <span>
+              <span class="notif-label">Уведомлять о ТО</span>
+              <span class="hint notif-hint">Когда параметр становится «скоро» или «просрочено»</span>
+            </span>
+            <label class="switch">
+              <input
+                type="checkbox"
+                :checked="notificationsOn"
+                @change="handleToggleNotifications(($event.target as HTMLInputElement).checked)"
+              />
+              <span class="slider" />
             </label>
-          </div>
-          <p v-if="notificationsBlocked" class="hint error">
-            Уведомления заблокированы в браузере — включите их в настройках сайта, чтобы приложение
-            могло их показывать
-          </p>
+          </label>
         </div>
+        <p v-if="notificationsBlocked" class="hint error">
+          Уведомления заблокированы в браузере — включите их в настройках сайта, чтобы приложение
+          могло их показывать
+        </p>
+      </div>
 
-        <div class="backup-zone">
-          <div class="parts-header">Резервная копия</div>
-          <button class="backup-btn" @click="emit('export')">Экспортировать данные</button>
-          <button class="backup-btn" @click="triggerImport">Импортировать резервную копию</button>
-          <input
-            ref="fileInput"
-            type="file"
-            accept="application/json"
-            class="sr-only"
-            @change="handleFileSelected"
-          />
-          <p v-if="importError" class="hint error">{{ importError }}</p>
-          <p v-else class="hint">
-            Экспорт сохраняет машину, параметры ТО, заправки и историю в файл. Импорт полностью
-            заменит текущие данные содержимым файла
-          </p>
-        </div>
+      <div class="backup-zone">
+        <div class="section-title">Резервная копия</div>
+        <button class="backup-btn" @click="emit('export')">Экспортировать данные</button>
+        <button class="backup-btn" @click="triggerImport">Импортировать резервную копию</button>
+        <input
+          ref="fileInput"
+          type="file"
+          accept="application/json"
+          class="sr-only"
+          @change="handleFileSelected"
+        />
+        <p v-if="importError" class="hint error">{{ importError }}</p>
+        <p v-else class="hint">
+          Экспорт сохраняет все машины, параметры ТО, заправки и историю в файл. Импорт полностью
+          заменит текущие данные содержимым файла
+        </p>
+      </div>
 
-        <div class="danger-zone">
-          <button class="reset" @click="handleDelete">
-            {{ confirmingDelete ? 'Точно удалить эту машину?' : 'Удалить эту машину' }}
-          </button>
-          <p class="hint">
-            Удалит эту машину, её параметры ТО, заправки и историю без возможности восстановления.
-            Другие ваши машины не затронет
-          </p>
-        </div>
+      <div class="danger-zone">
+        <div class="section-title">Опасная зона</div>
+        <button class="reset" @click="handleDelete">
+          {{ confirmingDelete ? 'Точно удалить эту машину?' : 'Удалить эту машину' }}
+        </button>
+        <p class="hint">
+          Удалит эту машину, её параметры ТО, заправки и историю без возможности восстановления.
+          Другие ваши машины не затронет
+        </p>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: flex-end;
-  z-index: 100;
-  animation: fade-in 0.15s ease;
+.tab-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: calc(16px + var(--safe-top)) 16px calc(96px + var(--safe-bottom));
 }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.topbar {
+  padding: 8px 4px 20px;
 }
 
-.sheet {
-  width: 100%;
-  max-height: 88dvh;
-  overflow-y: auto;
-  background: var(--bg-grouped);
-  border-radius: 20px 20px 0 0;
-  padding: 8px 0 calc(24px + var(--safe-bottom));
-  animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-.handle {
-  width: 36px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--text-tertiary);
-  margin: 6px auto 4px;
-  opacity: 0.5;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px 4px;
-}
-
-.header h2 {
-  font-size: 17px;
-  font-weight: 600;
+.topbar h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
-.cancel,
-.save {
-  font-size: 17px;
-  color: var(--blue);
-}
-
-.save {
-  font-weight: 600;
-}
-
 .form {
-  padding: 12px 16px 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0 4px 8px;
 }
 
 .group {
@@ -270,6 +241,7 @@ function handleFileSelected(event: Event) {
   background: var(--separator);
 }
 
+.car-zone,
 .notifications-zone,
 .backup-zone,
 .danger-zone {
@@ -342,16 +314,8 @@ function handleFileSelected(event: Event) {
   transform: translateX(18px);
 }
 
-.parts-header {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  padding: 0 4px;
-}
-
 .backup-btn {
+  width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
   border-radius: 14px;
