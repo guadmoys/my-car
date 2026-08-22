@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { MaintenanceItem, Part } from '../types'
+import type { HistoryEntry, MaintenanceItem, Part } from '../types'
 
 const props = defineProps<{
   item: MaintenanceItem | null
   currentMileage: number
+  history: HistoryEntry[]
 }>()
+
+function fmtHistoryDate(ts: number): string {
+  return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function fmtMileage(n: number): string {
+  return Math.round(n).toLocaleString('ru-RU')
+}
 
 const emit = defineEmits<{
   close: []
@@ -147,6 +156,18 @@ function handleDelete() {
           <div class="field">
             <label>Пробег последнего ТО, км</label>
             <input v-model="lastServiceMileage" type="text" inputmode="numeric" />
+          </div>
+        </div>
+
+        <div v-if="!isCreate && history.length > 0" class="history-block">
+          <div class="parts-header">
+            <span>История ТО</span>
+          </div>
+          <div class="group history-list">
+            <div v-for="entry in history" :key="entry.id" class="history-row">
+              <span class="history-date">{{ fmtHistoryDate(entry.date) }}</span>
+              <span class="history-mileage">{{ fmtMileage(entry.mileage) }} км</span>
+            </div>
           </div>
         </div>
 
@@ -309,6 +330,37 @@ function handleDelete() {
 .divider {
   height: 1px;
   background: var(--separator);
+}
+
+.history-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-list {
+  padding: 0 14px;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--separator);
+  font-size: 15px;
+}
+
+.history-row:last-child {
+  border-bottom: none;
+}
+
+.history-date {
+  color: var(--text);
+}
+
+.history-mileage {
+  color: var(--text-secondary);
 }
 
 .parts-block {

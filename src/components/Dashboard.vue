@@ -18,6 +18,7 @@ const showFuelSheet = ref(false)
 const showDisabled = ref(false)
 const showAllFuel = ref(false)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
+const importError = ref<string | null>(null)
 
 const visibleFuelHistory = computed(() =>
   showAllFuel.value ? fuelHistory.value : fuelHistory.value.slice(0, 5),
@@ -98,6 +99,45 @@ async function handleReset() {
   showSettingsSheet.value = false
 }
 
+function handleExport() {
+  const data = store.exportData()
+  const json = JSON.stringify(data, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const dateStr = new Date().toISOString().slice(0, 10)
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `moya-mashina-backup-${dateStr}.json`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+async function handleImportFile(file: File) {
+  importError.value = null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(await file.text())
+  } catch {
+    importError.value = 'Не удалось прочитать файл — это не корректный JSON'
+    return
+  }
+
+  const confirmed = window.confirm(
+    'Импорт полностью заменит текущие данные (машина, параметры ТО, заправки, история) содержимым файла. Продолжить?',
+  )
+  if (!confirmed) return
+
+  const result = await store.importData(parsed)
+  if (result.ok) {
+    showSettingsSheet.value = false
+  } else {
+    importError.value = result.error
+  }
+}
+
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('ru-RU')
 }
@@ -113,7 +153,11 @@ function fmtDate(ts: number): string {
       <div class="titles">
         <h1>Моя машина</h1>
       </div>
-      <button class="settings-btn" aria-label="Настройки" @click="showSettingsSheet = true">
+      <button
+        class="settings-btn"
+        aria-label="Настройки"
+        @click="importError = null; showSettingsSheet = true"
+      >
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
           <circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8" />
           <path
@@ -222,6 +266,7 @@ function fmtDate(ts: number): string {
       v-if="editingItem !== null"
       :item="editModalItem"
       :current-mileage="car.currentMileage"
+      :history="editModalItem ? store.getItemHistory(editModalItem.id) : []"
       @close="closeEdit"
       @save="handleSaveItem"
       @create="handleCreateItem"
@@ -245,9 +290,12 @@ function fmtDate(ts: number): string {
     <SettingsSheet
       v-if="showSettingsSheet"
       :car="car"
+      :import-error="importError"
       @close="showSettingsSheet = false"
       @save="handleSaveCarInfo"
       @reset="handleReset"
+      @export="handleExport"
+      @import="handleImportFile"
     />
   </div>
 </template>

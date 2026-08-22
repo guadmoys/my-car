@@ -43,6 +43,15 @@ export interface MaintenanceStatus {
   state: 'ok' | 'soon' | 'due'
 }
 
+export interface HistoryEntry {
+  id: string
+  itemId: string
+  /** Name of the maintenance item at the time it was completed (item may later be renamed or deleted). */
+  itemName: string
+  mileage: number
+  date: number
+}
+
 export interface FuelEntry {
   id: string
   /** Odometer reading at the time of this fill-up. */
@@ -56,4 +65,13 @@ export interface FuelConsumption {
   distanceKm: number
   litersPer100km: number | null
   quality: 'good' | 'bad' | 'neutral'
+}
+
+export interface BackupData {
+  version: 1
+  exportedAt: number
+  car: Car
+  items: MaintenanceItem[]
+  fuelEntries: FuelEntry[]
+  historyEntries: HistoryEntry[]
 }

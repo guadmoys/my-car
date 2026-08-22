@@ -4,18 +4,22 @@ import type { Car } from '../types'
 
 const props = defineProps<{
   car: Car
+  importError: string | null
 }>()
 
 const emit = defineEmits<{
   close: []
   save: [payload: { make: string; model: string; year: number }]
   reset: []
+  export: []
+  import: [file: File]
 }>()
 
 const make = ref(props.car.make)
 const model = ref(props.car.model)
 const year = ref(String(props.car.year))
 const confirmingReset = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 function handleSave() {
   const y = Number(year.value)
@@ -29,6 +33,17 @@ function handleReset() {
     return
   }
   emit('reset')
+}
+
+function triggerImport() {
+  fileInput.value?.click()
+}
+
+function handleFileSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (file) emit('import', file)
+  input.value = ''
 }
 </script>
 
@@ -58,6 +73,24 @@ function handleReset() {
             <label>Год выпуска</label>
             <input v-model="year" type="text" inputmode="numeric" />
           </div>
+        </div>
+
+        <div class="backup-zone">
+          <div class="parts-header">Резервная копия</div>
+          <button class="backup-btn" @click="emit('export')">Экспортировать данные</button>
+          <button class="backup-btn" @click="triggerImport">Импортировать резервную копию</button>
+          <input
+            ref="fileInput"
+            type="file"
+            accept="application/json"
+            class="sr-only"
+            @change="handleFileSelected"
+          />
+          <p v-if="importError" class="hint error">{{ importError }}</p>
+          <p v-else class="hint">
+            Экспорт сохраняет машину, параметры ТО, заправки и историю в файл. Импорт полностью
+            заменит текущие данные содержимым файла
+          </p>
         </div>
 
         <div class="danger-zone">
@@ -183,10 +216,39 @@ function handleReset() {
   background: var(--separator);
 }
 
+.backup-zone,
 .danger-zone {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.parts-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0 4px;
+}
+
+.backup-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 13px;
+  color: var(--blue);
+  font-size: 17px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.backup-btn:active {
+  opacity: 0.6;
+}
+
+.hint.error {
+  color: var(--red);
 }
 
 .reset {

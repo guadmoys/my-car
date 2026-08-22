@@ -1,11 +1,21 @@
 import { computed, reactive, ref } from 'vue'
-import type { Car, FuelConsumption, FuelEntry, MaintenanceItem, MaintenanceStatus, Part } from '../types'
+import type {
+  BackupData,
+  Car,
+  FuelConsumption,
+  FuelEntry,
+  HistoryEntry,
+  MaintenanceItem,
+  MaintenanceStatus,
+  Part,
+} from '../types'
 import { buildDefaultItems } from '../data/defaultMaintenance'
 import * as db from '../db/database'
 
 const car = ref<Car | null>(null)
 const items = reactive<MaintenanceItem[]>([])
 const fuelEntries = reactive<FuelEntry[]>([])
+const historyEntries = reactive<HistoryEntry[]>([])
 const isLoaded = ref(false)
 
 function nowTs(): number {
@@ -17,14 +27,16 @@ function makeId(): string {
 }
 
 async function load(): Promise<void> {
-  const [loadedCar, loadedItems, loadedFuel] = await Promise.all([
+  const [loadedCar, loadedItems, loadedFuel, loadedHistory] = await Promise.all([
     db.getCar(),
     db.getAllMaintenanceItems(),
     db.getAllFuelEntries(),
+    db.getAllHistoryEntries(),
   ])
   car.value = loadedCar ?? null
   items.splice(0, items.length, ...loadedItems.map((item) => ({ ...item, parts: item.parts ?? [] })))
   fuelEntries.splice(0, fuelEntries.length, ...loadedFuel)
+  historyEntries.splice(0, historyEntries.length, ...loadedHistory)
   isLoaded.value = true
 }
 
@@ -92,9 +104,20 @@ async function updateItem(
 async function markServiced(id: string, atMileage?: number): Promise<void> {
   const item = items.find((i) => i.id === id)
   if (!item || !car.value) return
-  item.lastServiceMileage = atMileage ?? car.value.currentMileage
+  const mileage = atMileage ?? car.value.currentMileage
+  item.lastServiceMileage = mileage
   item.lastServiceDate = nowTs()
   await db.putMaintenanceItem({ ...item })
+
+  const entry: HistoryEntry = {
+    id: makeId(),
+    itemId: item.id,
+    itemName: item.name,
+    mileage,
+    date: nowTs(),
+  }
+  historyEntries.unshift(entry)
+  await db.putHistoryEntry(entry)
 }
 
 async function addCustomItem(input: {
@@ -150,11 +173,65 @@ async function deleteFuelEntry(id: string): Promise<void> {
   await db.deleteFuelEntry(id)
 }
 
+function getItemHistory(itemId: string): HistoryEntry[] {
+  return historyEntries
+    .filter((h) => h.itemId === itemId)
+    .slice()
+    .sort((a, b) => b.date - a.date)
+}
+
 async function resetAll(): Promise<void> {
   await db.clearAll()
   car.value = null
   items.splice(0, items.length)
   fuelEntries.splice(0, fuelEntries.length)
+  historyEntries.splice(0, historyEntries.length)
+}
+
+function exportData(): BackupData {
+  return {
+    version: 1,
+    exportedAt: nowTs(),
+    car: JSON.parse(JSON.stringify(car.value)),
+    items: JSON.parse(JSON.stringify(items)),
+    fuelEntries: JSON.parse(JSON.stringify(fuelEntries)),
+    historyEntries: JSON.parse(JSON.stringify(historyEntries)),
+  }
+}
+
+function isValidBackup(data: unknown): data is BackupData {
+  if (!data || typeof data !== 'object') return false
+  const d = data as Record<string, unknown>
+  return (
+    typeof d.car === 'object' &&
+    d.car !== null &&
+    typeof (d.car as Car).make === 'string' &&
+    Array.isArray(d.items)
+  )
+}
+
+async function importData(data: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isValidBackup(data)) {
+    return { ok: false, error: 'Файл повреждён или это не резервная копия «Моей машины»' }
+  }
+
+  const importedCar = data.car
+  const importedItems = data.items.map((item) => ({ ...item, parts: item.parts ?? [] }))
+  const importedFuel = Array.isArray(data.fuelEntries) ? data.fuelEntries : []
+  const importedHistory = Array.isArray(data.historyEntries) ? data.historyEntries : []
+
+  await db.clearAll()
+  await db.putCar(importedCar)
+  await db.putMaintenanceItems(importedItems)
+  if (importedFuel.length) await db.putFuelEntries(importedFuel)
+  if (importedHistory.length) await db.putHistoryEntries(importedHistory)
+
+  car.value = importedCar
+  items.splice(0, items.length, ...importedItems)
+  fuelEntries.splice(0, fuelEntries.length, ...importedFuel)
+  historyEntries.splice(0, historyEntries.length, ...importedHistory)
+
+  return { ok: true }
 }
 
 function statusFor(item: MaintenanceItem, currentMileage: number): MaintenanceStatus {
@@ -240,6 +317,7 @@ export function useCarStore() {
     car,
     items,
     fuelEntries,
+    historyEntries,
     isLoaded,
     statuses,
     enabledStatuses,
@@ -260,6 +338,9 @@ export function useCarStore() {
     deleteItem,
     addFuelEntry,
     deleteFuelEntry,
+    getItemHistory,
     resetAll,
+    exportData,
+    importData,
   }
 }
