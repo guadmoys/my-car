@@ -153,7 +153,7 @@ function fmtCost(n: number): string {
   align-items: center;
   gap: 6px;
   padding: 16px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
   box-shadow: var(--shadow);
@@ -186,7 +186,7 @@ function fmtCost(n: number): string {
 .card {
   width: 100%;
   background: var(--bg-elevated);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
   box-shadow: var(--shadow);
   overflow: hidden;

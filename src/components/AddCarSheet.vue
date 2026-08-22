@@ -100,7 +100,7 @@ function handleSave() {
 .sheet {
   width: 100%;
   background: var(--bg-grouped);
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 8px 0 calc(24px + var(--safe-bottom));
   animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }

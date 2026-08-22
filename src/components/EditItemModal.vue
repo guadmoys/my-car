@@ -2,6 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import type { HistoryEntry, MaintenanceItem, Part } from '../types'
 import CostEditSheet from './CostEditSheet.vue'
+import { downloadIcsReminder } from '../utils/ics'
+
+function addMonths(ts: number, months: number): number {
+  const d = new Date(ts)
+  d.setMonth(d.getMonth() + months)
+  return d.getTime()
+}
 
 const props = defineProps<{
   item: MaintenanceItem | null
@@ -160,6 +167,20 @@ function handleSave() {
 function handleDelete() {
   if (props.item) emit('delete', props.item.id)
 }
+
+const nextDueAt = computed<number | null>(() => {
+  if (isCreate.value || !props.item?.intervalMonths || !props.item.lastServiceDate) return null
+  return addMonths(props.item.lastServiceDate, props.item.intervalMonths)
+})
+
+function handleAddToCalendar() {
+  if (!props.item || nextDueAt.value === null) return
+  downloadIcsReminder({
+    title: `ТО: ${props.item.name}`,
+    description: `Напоминание из приложения «Моя машина» — раз в ${props.item.intervalMonths} мес.`,
+    dueAt: nextDueAt.value,
+  })
+}
 </script>
 
 <template>
@@ -205,6 +226,10 @@ function handleDelete() {
             <input v-model="lastServiceMileage" type="text" inputmode="numeric" />
           </div>
         </div>
+
+        <button v-if="nextDueAt !== null" class="calendar-btn" @click="handleAddToCalendar">
+          🗓 Добавить напоминание в календарь
+        </button>
 
         <div v-if="!isCreate && history.length > 0" class="history-block">
           <div class="parts-header">
@@ -306,7 +331,7 @@ function handleDelete() {
   max-height: 88dvh;
   overflow-y: auto;
   background: var(--bg-grouped);
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 8px 0 calc(24px + var(--safe-bottom));
   animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -500,7 +525,7 @@ function handleDelete() {
 .add-part {
   width: 100%;
   padding: 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: var(--fill-secondary);
   color: var(--blue);
   font-size: 15px;
@@ -512,10 +537,26 @@ function handleDelete() {
   opacity: 0.6;
 }
 
+.calendar-btn {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  padding: 13px;
+  color: var(--blue);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.calendar-btn:active {
+  opacity: 0.6;
+}
+
 .delete {
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   padding: 13px;
   color: var(--red);
   font-size: 17px;

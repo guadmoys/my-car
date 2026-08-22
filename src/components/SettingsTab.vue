@@ -318,7 +318,7 @@ function handleFileSelected(event: Event) {
   width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   padding: 13px;
   color: var(--blue);
   font-size: 17px;
@@ -337,7 +337,7 @@ function handleFileSelected(event: Event) {
 .reset {
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   padding: 13px;
   color: var(--red);
   font-size: 17px;

@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { FuelConsumption } from '../types'
+import type { FuelConsumption, HistoryEntry } from '../types'
+import SwipeRow from './SwipeRow.vue'
+import ConsumptionChart from './ConsumptionChart.vue'
+import MonthlySpendChart from './MonthlySpendChart.vue'
 
 const props = defineProps<{
   fuelHistory: FuelConsumption[]
+  historyEntries: HistoryEntry[]
+  averageConsumption: number | null
   totalFuelCost: number
   totalServiceCost: number
   totalCost: number
   hasAnyCost: boolean
 }>()
+
+const fuelEntriesRaw = computed(() => props.fuelHistory.map((row) => row.entry))
 
 const emit = defineEmits<{
   addFuel: []
@@ -18,7 +25,25 @@ const emit = defineEmits<{
 
 const showAll = ref(false)
 
-const visible = computed(() => (showAll.value ? props.fuelHistory : props.fuelHistory.slice(0, 8)))
+type Period = 'all' | '30' | '90' | 'year'
+const period = ref<Period>('all')
+const PERIODS: { key: Period; label: string }[] = [
+  { key: 'all', label: 'Всё' },
+  { key: '30', label: '30 дней' },
+  { key: '90', label: '90 дней' },
+  { key: 'year', label: 'Год' },
+]
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const periodFiltered = computed(() => {
+  if (period.value === 'all') return props.fuelHistory
+  const days = period.value === '30' ? 30 : period.value === '90' ? 90 : 365
+  const cutoff = Date.now() - days * DAY_MS
+  return props.fuelHistory.filter((row) => row.entry.date >= cutoff)
+})
+
+const visible = computed(() => (showAll.value ? periodFiltered.value : periodFiltered.value.slice(0, 8)))
 
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('ru-RU')
@@ -57,41 +82,65 @@ function fmtCost(n: number): string {
       </div>
     </section>
 
+    <section v-if="fuelHistory.length > 1 || hasAnyCost" class="section charts-section">
+      <ConsumptionChart :history="fuelHistory" :average="averageConsumption" />
+      <MonthlySpendChart :fuel-entries="fuelEntriesRaw" :history-entries="historyEntries" />
+    </section>
+
     <section class="section">
       <div class="section-title">Заправки</div>
+      <div class="period-chips">
+        <button
+          v-for="p in PERIODS"
+          :key="p.key"
+          class="period-chip"
+          :class="{ active: period === p.key }"
+          @click="period = p.key"
+        >
+          {{ p.label }}
+        </button>
+      </div>
       <div class="card list">
-        <div v-for="row in visible" :key="row.entry.id" class="fuel-row">
-          <button class="fuel-tap" @click="emit('editCost', row.entry.id)">
-            <div class="quality-dot" :class="row.quality" />
-            <div class="fuel-info">
-              <div class="fuel-main">
-                {{ fmt(row.entry.liters) }} л
-                <span v-if="row.litersPer100km !== null" class="fuel-consumption">
-                  · {{ row.litersPer100km.toFixed(1) }} л/100км
-                </span>
-                <span v-if="row.entry.cost !== undefined" class="fuel-cost">
-                  · {{ fmtCost(row.entry.cost) }}
-                </span>
+        <SwipeRow
+          v-for="row in visible"
+          :key="row.entry.id"
+          :right-action="{ label: 'Удалить', colorVar: 'var(--red)', onTrigger: () => emit('deleteFuel', row.entry.id) }"
+        >
+          <div class="fuel-row">
+            <button class="fuel-tap" @click="emit('editCost', row.entry.id)">
+              <div class="quality-dot" :class="row.quality" />
+              <div class="fuel-info">
+                <div class="fuel-main">
+                  {{ fmt(row.entry.liters) }} л
+                  <span v-if="row.litersPer100km !== null" class="fuel-consumption">
+                    · {{ row.litersPer100km.toFixed(1) }} л/100км
+                  </span>
+                  <span v-if="row.entry.cost !== undefined" class="fuel-cost">
+                    · {{ fmtCost(row.entry.cost) }}
+                  </span>
+                </div>
+                <div class="fuel-meta">
+                  {{ fmt(row.entry.mileage) }} км · {{ fmtDate(row.entry.date) }}
+                </div>
               </div>
-              <div class="fuel-meta">
-                {{ fmt(row.entry.mileage) }} км · {{ fmtDate(row.entry.date) }}
-              </div>
-            </div>
-          </button>
-          <button class="fuel-delete" aria-label="Удалить заправку" @click="emit('deleteFuel', row.entry.id)">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-              <path
-                d="M6 6l12 12M18 6L6 18"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
+            </button>
+            <button class="fuel-delete" aria-label="Удалить заправку" @click="emit('deleteFuel', row.entry.id)">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </button>
+          </div>
+        </SwipeRow>
+        <div v-if="periodFiltered.length === 0" class="empty">
+          {{ fuelHistory.length === 0 ? 'Нет записей о заправках' : 'Нет записей за этот период' }}
         </div>
-        <div v-if="fuelHistory.length === 0" class="empty">Нет записей о заправках</div>
-        <button v-if="fuelHistory.length > 8" class="show-more" @click="showAll = !showAll">
-          {{ showAll ? 'Скрыть' : `Показать все (${fuelHistory.length})` }}
+        <button v-if="periodFiltered.length > 8" class="show-more" @click="showAll = !showAll">
+          {{ showAll ? 'Скрыть' : `Показать все (${periodFiltered.length})` }}
         </button>
       </div>
       <button class="add-item" @click="emit('addFuel')">+ Добавить заправку</button>
@@ -121,6 +170,12 @@ function fmtCost(n: number): string {
   margin-bottom: 24px;
 }
 
+.charts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .section-title {
   font-size: 13px;
   font-weight: 600;
@@ -132,10 +187,38 @@ function fmtCost(n: number): string {
 
 .card {
   background: var(--bg-elevated);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+
+.period-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+  padding: 0 4px 2px;
+}
+
+.period-chip {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 14px;
+  background: var(--fill-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.period-chip.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.period-chip:active {
+  opacity: 0.7;
 }
 
 .expenses-card {
@@ -170,16 +253,20 @@ function fmtCost(n: number): string {
   font-size: 15px;
 }
 
+.list :deep(.swipe-row) {
+  border-bottom: 1px solid var(--separator);
+}
+
+.list :deep(.swipe-row:last-child) {
+  border-bottom: none;
+}
+
 .fuel-row {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 16px;
-  border-bottom: 1px solid var(--separator);
-}
-
-.fuel-row:last-child {
-  border-bottom: none;
+  background: var(--bg-elevated);
 }
 
 .fuel-tap {
@@ -271,7 +358,7 @@ function fmtCost(n: number): string {
   width: 100%;
   margin-top: 12px;
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: var(--fill-secondary);
   color: var(--blue);
   font-size: 16px;

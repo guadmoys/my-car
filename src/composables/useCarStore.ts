@@ -162,9 +162,15 @@ async function updateItem(
   await db.putMaintenanceItem({ ...item })
 }
 
-async function markServiced(id: string, atMileage?: number): Promise<void> {
+export interface MarkServicedResult {
+  historyEntryId: string
+  previous: { lastServiceMileage: number; lastServiceDate: number | null }
+}
+
+async function markServiced(id: string, atMileage?: number): Promise<MarkServicedResult | null> {
   const item = items.find((i) => i.id === id)
-  if (!item || !car.value) return
+  if (!item || !car.value) return null
+  const previous = { lastServiceMileage: item.lastServiceMileage, lastServiceDate: item.lastServiceDate }
   const mileage = atMileage ?? car.value.currentMileage
   item.lastServiceMileage = mileage
   item.lastServiceDate = nowTs()
@@ -180,6 +186,20 @@ async function markServiced(id: string, atMileage?: number): Promise<void> {
   }
   historyEntries.unshift(entry)
   await db.putHistoryEntry(entry)
+
+  return { historyEntryId: entry.id, previous }
+}
+
+async function undoMarkServiced(id: string, result: MarkServicedResult): Promise<void> {
+  const item = items.find((i) => i.id === id)
+  if (item) {
+    item.lastServiceMileage = result.previous.lastServiceMileage
+    item.lastServiceDate = result.previous.lastServiceDate
+    await db.putMaintenanceItem({ ...item })
+  }
+  const idx = historyEntries.findIndex((h) => h.id === result.historyEntryId)
+  if (idx !== -1) historyEntries.splice(idx, 1)
+  await db.deleteHistoryEntry(result.historyEntryId)
 }
 
 async function addCustomItem(input: {
@@ -233,11 +253,18 @@ async function addFuelEntry(input: { mileage: number; liters: number; cost?: num
   }
 }
 
-async function deleteFuelEntry(id: string): Promise<void> {
+async function deleteFuelEntry(id: string): Promise<FuelEntry | null> {
   const index = fuelEntries.findIndex((e) => e.id === id)
-  if (index === -1) return
-  fuelEntries.splice(index, 1)
+  if (index === -1) return null
+  const [removed] = fuelEntries.splice(index, 1)
   await db.deleteFuelEntry(id)
+  return removed
+}
+
+async function restoreFuelEntry(entry: FuelEntry): Promise<void> {
+  if (fuelEntries.some((e) => e.id === entry.id)) return
+  fuelEntries.push(entry)
+  await db.putFuelEntry(entry)
 }
 
 async function updateFuelCost(id: string, cost: number | null): Promise<void> {
@@ -484,10 +511,12 @@ export function useCarStore() {
     toggleItem,
     updateItem,
     markServiced,
+    undoMarkServiced,
     addCustomItem,
     deleteItem,
     addFuelEntry,
     deleteFuelEntry,
+    restoreFuelEntry,
     updateFuelCost,
     updateHistoryCost,
     getItemHistory,

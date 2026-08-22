@@ -54,6 +54,7 @@ function fmt(n: number): string {
           <div v-for="c in cars" :key="c.id" class="car-row" :class="{ active: c.id === activeCarId }">
             <button class="car-main" @click="handleSelect(c.id)">
               <span class="check" :class="{ visible: c.id === activeCarId }">✓</span>
+              <span class="car-avatar">{{ c.make.charAt(0).toUpperCase() }}</span>
               <span class="car-info">
                 <span class="car-name">{{ c.year }} · {{ c.make }} {{ c.model }}</span>
                 <span class="car-mileage">{{ fmt(c.currentMileage) }} км</span>
@@ -100,7 +101,7 @@ function fmt(n: number): string {
   max-height: 88dvh;
   overflow-y: auto;
   background: var(--bg-grouped);
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 8px 0 calc(24px + var(--safe-bottom));
   animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -194,6 +195,20 @@ function fmt(n: number): string {
   opacity: 1;
 }
 
+.car-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--blue), #0040dd);
+}
+
 .car-info {
   display: flex;
   flex-direction: column;
@@ -234,7 +249,7 @@ function fmt(n: number): string {
 .add-car {
   width: 100%;
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: var(--fill-secondary);
   color: var(--blue);
   font-size: 16px;
