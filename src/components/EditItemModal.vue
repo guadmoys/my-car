@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import type { HistoryEntry, MaintenanceItem, Part } from '../types'
 import CostEditSheet from './CostEditSheet.vue'
+import PartQuickLinks from './PartQuickLinks.vue'
 import { downloadIcsReminder } from '../utils/ics'
 
 function addMonths(ts: number, months: number): number {
@@ -293,6 +294,10 @@ function handleAddToCalendar() {
               <label>Ссылка на покупку (необязательно)</label>
               <input v-model="part.url" type="url" placeholder="https://..." />
             </div>
+            <div class="divider" />
+            <div class="part-links">
+              <PartQuickLinks :part="part" />
+            </div>
           </div>
 
           <button class="add-part" @click="addPart">+ Добавить деталь</button>
@@ -520,6 +525,10 @@ function handleAddToCalendar() {
 
 .part-remove:active {
   opacity: 0.6;
+}
+
+.part-links {
+  padding: 10px 0;
 }
 
 .add-part {
