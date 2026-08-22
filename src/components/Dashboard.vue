@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useCarStore } from '../composables/useCarStore'
+import { checkAndNotify, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
 import MaintenanceCard from './MaintenanceCard.vue'
 import EditItemModal from './EditItemModal.vue'
 import MileageSheet from './MileageSheet.vue'
@@ -44,6 +45,15 @@ const sortedStatuses = computed(() =>
 
 const editModalItem = computed(() => (editingItem.value === 'new' ? null : editingItem.value))
 
+watch(
+  [car, enabledStatuses],
+  ([carVal, statusesVal]) => {
+    updateAppBadge(dueCount.value + soonCount.value)
+    if (carVal) checkAndNotify(carVal.id, statusesVal)
+  },
+  { immediate: true },
+)
+
 function openEdit(id: string) {
   const item = store.items.find((i) => i.id === id)
   if (item) editingItem.value = item
@@ -55,6 +65,7 @@ function closeEdit() {
 
 async function handleMarkServiced(id: string) {
   await store.markServiced(id)
+  if (car.value) clearNotifiedItem(car.value.id, id)
 }
 
 async function handleToggle(id: string, enabled: boolean) {

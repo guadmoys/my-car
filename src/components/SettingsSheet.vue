@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Car } from '../types'
+import {
+  getNotificationPermission,
+  isNotificationApiSupported,
+  isNotificationsEnabled,
+  requestNotificationPermission,
+  setNotificationsEnabled,
+} from '../utils/notifications'
 
 const props = defineProps<{
   car: Car
@@ -20,6 +27,28 @@ const model = ref(props.car.model)
 const year = ref(String(props.car.year))
 const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+
+const notificationsSupported = isNotificationApiSupported()
+const notificationsOn = ref(isNotificationsEnabled() && getNotificationPermission() === 'granted')
+const notificationsBlocked = ref(getNotificationPermission() === 'denied')
+
+async function handleToggleNotifications(checked: boolean) {
+  if (!checked) {
+    setNotificationsEnabled(false)
+    notificationsOn.value = false
+    return
+  }
+  const permission = await requestNotificationPermission()
+  if (permission === 'granted') {
+    setNotificationsEnabled(true)
+    notificationsOn.value = true
+    notificationsBlocked.value = false
+  } else {
+    setNotificationsEnabled(false)
+    notificationsOn.value = false
+    notificationsBlocked.value = permission === 'denied'
+  }
+}
 
 function handleSave() {
   const y = Number(year.value)
@@ -73,6 +102,30 @@ function handleFileSelected(event: Event) {
             <label>Год выпуска</label>
             <input v-model="year" type="text" inputmode="numeric" />
           </div>
+        </div>
+
+        <div v-if="notificationsSupported" class="notifications-zone">
+          <div class="parts-header">Уведомления</div>
+          <div class="group">
+            <label class="field notif-row">
+              <span>
+                <span class="notif-label">Уведомлять о ТО</span>
+                <span class="hint notif-hint">Когда параметр становится «скоро» или «просрочено»</span>
+              </span>
+              <label class="switch">
+                <input
+                  type="checkbox"
+                  :checked="notificationsOn"
+                  @change="handleToggleNotifications(($event.target as HTMLInputElement).checked)"
+                />
+                <span class="slider" />
+              </label>
+            </label>
+          </div>
+          <p v-if="notificationsBlocked" class="hint error">
+            Уведомления заблокированы в браузере — включите их в настройках сайта, чтобы приложение
+            могло их показывать
+          </p>
         </div>
 
         <div class="backup-zone">
@@ -217,11 +270,76 @@ function handleFileSelected(event: Event) {
   background: var(--separator);
 }
 
+.notifications-zone,
 .backup-zone,
 .danger-zone {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.notif-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  cursor: pointer;
+}
+
+.notif-label {
+  display: block;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.notif-hint {
+  display: block;
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: var(--fill-secondary);
+  border-radius: 13px;
+  transition: background 0.2s;
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.switch input:checked + .slider {
+  background: var(--green);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(18px);
 }
 
 .parts-header {
