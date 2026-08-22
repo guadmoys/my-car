@@ -32,3 +32,18 @@ export interface MaintenanceStatus {
   progress: number
   state: 'ok' | 'soon' | 'due'
 }
+
+export interface FuelEntry {
+  id: string
+  /** Odometer reading at the time of this fill-up. */
+  mileage: number
+  liters: number
+  date: number
+}
+
+export interface FuelConsumption {
+  entry: FuelEntry
+  distanceKm: number
+  litersPer100km: number | null
+  quality: 'good' | 'bad' | 'neutral'
+}

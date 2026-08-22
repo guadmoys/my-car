@@ -5,15 +5,23 @@ import MaintenanceCard from './MaintenanceCard.vue'
 import EditItemModal from './EditItemModal.vue'
 import MileageSheet from './MileageSheet.vue'
 import SettingsSheet from './SettingsSheet.vue'
+import SummaryCard from './SummaryCard.vue'
+import FuelSheet from './FuelSheet.vue'
 import type { MaintenanceItem } from '../types'
 
 const store = useCarStore()
-const { car, enabledStatuses, disabledItems, dueCount, soonCount } = store
+const { car, enabledStatuses, disabledItems, dueCount, soonCount, okCount, fuelHistory, averageConsumption } = store
 
 const showMileageSheet = ref(false)
 const showSettingsSheet = ref(false)
+const showFuelSheet = ref(false)
 const showDisabled = ref(false)
+const showAllFuel = ref(false)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
+
+const visibleFuelHistory = computed(() =>
+  showAllFuel.value ? fuelHistory.value : fuelHistory.value.slice(0, 5),
+)
 
 const sortedStatuses = computed(() =>
   enabledStatuses.value.slice().sort((a, b) => a.remainingKm - b.remainingKm),
@@ -65,6 +73,15 @@ async function handleSaveMileage(mileage: number) {
   showMileageSheet.value = false
 }
 
+async function handleSaveFuel(payload: { mileage: number; liters: number }) {
+  await store.addFuelEntry(payload)
+  showFuelSheet.value = false
+}
+
+async function handleDeleteFuel(id: string) {
+  await store.deleteFuelEntry(id)
+}
+
 async function handleSaveCarInfo(payload: { make: string; model: string; year: number }) {
   await store.updateCarInfo(payload)
   showSettingsSheet.value = false
@@ -78,13 +95,16 @@ async function handleReset() {
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('ru-RU')
 }
+
+function fmtDate(ts: number): string {
+  return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+}
 </script>
 
 <template>
   <div v-if="car" class="dashboard">
     <header class="topbar">
       <div class="titles">
-        <div class="eyebrow">{{ car.year }} · {{ car.make }} {{ car.model }}</div>
         <h1>Моя машина</h1>
       </div>
       <button class="settings-btn" aria-label="Настройки" @click="showSettingsSheet = true">
@@ -100,16 +120,14 @@ function fmt(n: number): string {
       </button>
     </header>
 
-    <button class="mileage-card" @click="showMileageSheet = true">
-      <div class="mileage-left">
-        <div class="label">Текущий пробег</div>
-        <div class="value">{{ fmt(car.currentMileage) }} <span class="unit">км</span></div>
-      </div>
-      <div class="badges">
-        <div v-if="dueCount > 0" class="badge due">{{ dueCount }}</div>
-        <div v-if="soonCount > 0" class="badge soon">{{ soonCount }}</div>
-      </div>
-    </button>
+    <SummaryCard
+      :car="car"
+      :ok-count="okCount"
+      :soon-count="soonCount"
+      :due-count="dueCount"
+      :average-consumption="averageConsumption"
+      @edit-mileage="showMileageSheet = true"
+    />
 
     <section class="section">
       <div class="section-title">Техобслуживание</div>
@@ -126,6 +144,48 @@ function fmt(n: number): string {
           Все параметры отключены
         </div>
       </div>
+    </section>
+
+    <section class="section">
+      <div class="section-title">Топливо</div>
+      <div class="card list">
+        <div v-for="row in visibleFuelHistory" :key="row.entry.id" class="fuel-row">
+          <div
+            class="quality-dot"
+            :class="row.quality"
+          />
+          <div class="fuel-info">
+            <div class="fuel-main">
+              {{ fmt(row.entry.liters) }} л
+              <span v-if="row.litersPer100km !== null" class="fuel-consumption">
+                · {{ row.litersPer100km.toFixed(1) }} л/100км
+              </span>
+            </div>
+            <div class="fuel-meta">
+              {{ fmt(row.entry.mileage) }} км · {{ fmtDate(row.entry.date) }}
+            </div>
+          </div>
+          <button class="fuel-delete" aria-label="Удалить заправку" @click="handleDeleteFuel(row.entry.id)">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <div v-if="fuelHistory.length === 0" class="empty">Нет записей о заправках</div>
+        <button
+          v-if="fuelHistory.length > 5"
+          class="show-more"
+          @click="showAllFuel = !showAllFuel"
+        >
+          {{ showAllFuel ? 'Скрыть' : `Показать все (${fuelHistory.length})` }}
+        </button>
+      </div>
+      <button class="add-item" @click="showFuelSheet = true">+ Добавить заправку</button>
     </section>
 
     <section v-if="disabledItems.length > 0" class="section">
@@ -169,6 +229,13 @@ function fmt(n: number): string {
       @save="handleSaveMileage"
     />
 
+    <FuelSheet
+      v-if="showFuelSheet"
+      :current-mileage="car.currentMileage"
+      @close="showFuelSheet = false"
+      @save="handleSaveFuel"
+    />
+
     <SettingsSheet
       v-if="showSettingsSheet"
       :car="car"
@@ -193,14 +260,6 @@ function fmt(n: number): string {
   padding: 8px 4px 20px;
 }
 
-.eyebrow {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--blue);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
 .titles h1 {
   font-size: 30px;
   font-weight: 700;
@@ -223,64 +282,6 @@ function fmt(n: number): string {
 
 .settings-btn:active {
   opacity: 0.6;
-}
-
-.mileage-card {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(135deg, var(--blue), #0040dd);
-  color: #fff;
-  border-radius: 18px;
-  padding: 20px;
-  box-shadow: var(--shadow);
-  margin-bottom: 28px;
-}
-
-.mileage-card:active {
-  transform: scale(0.99);
-}
-
-.mileage-left {
-  text-align: left;
-}
-
-.label {
-  font-size: 13px;
-  opacity: 0.85;
-  font-weight: 500;
-}
-
-.value {
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-top: 2px;
-}
-
-.unit {
-  font-size: 17px;
-  font-weight: 500;
-  opacity: 0.85;
-}
-
-.badges {
-  display: flex;
-  gap: 8px;
-}
-
-.badge {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.22);
 }
 
 .section {
@@ -391,6 +392,7 @@ function fmt(n: number): string {
 
 .add-item {
   width: 100%;
+  margin-top: 12px;
   padding: 14px;
   border-radius: 14px;
   background: var(--fill-secondary);
@@ -401,6 +403,84 @@ function fmt(n: number): string {
 }
 
 .add-item:active {
+  opacity: 0.6;
+}
+
+.fuel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.fuel-row:last-child {
+  border-bottom: none;
+}
+
+.quality-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-tertiary);
+}
+
+.quality-dot.good {
+  background: var(--green);
+}
+
+.quality-dot.bad {
+  background: var(--red);
+}
+
+.fuel-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.fuel-main {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.fuel-consumption {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.fuel-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 1px;
+}
+
+.fuel-delete {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.fuel-delete:active {
+  background: var(--fill-secondary);
+}
+
+.show-more {
+  width: 100%;
+  padding: 12px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--blue);
+  border-top: 1px solid var(--separator);
+}
+
+.show-more:active {
   opacity: 0.6;
 }
 </style>

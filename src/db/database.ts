@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Car, MaintenanceItem } from '../types'
+import type { Car, FuelEntry, MaintenanceItem } from '../types'
 
 interface MyCarDB extends DBSchema {
   car: {
@@ -11,10 +11,15 @@ interface MyCarDB extends DBSchema {
     value: MaintenanceItem
     indexes: { 'by-order': number }
   }
+  fuelEntries: {
+    key: string
+    value: FuelEntry
+    indexes: { 'by-mileage': number }
+  }
 }
 
 const DB_NAME = 'my-car-db'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 let dbPromise: Promise<IDBPDatabase<MyCarDB>> | null = null
 
@@ -28,6 +33,10 @@ function getDB(): Promise<IDBPDatabase<MyCarDB>> {
         if (!db.objectStoreNames.contains('maintenanceItems')) {
           const store = db.createObjectStore('maintenanceItems', { keyPath: 'id' })
           store.createIndex('by-order', 'order')
+        }
+        if (!db.objectStoreNames.contains('fuelEntries')) {
+          const store = db.createObjectStore('fuelEntries', { keyPath: 'id' })
+          store.createIndex('by-mileage', 'mileage')
         }
       },
     })
@@ -68,9 +77,28 @@ export async function deleteMaintenanceItem(id: string): Promise<void> {
   await db.delete('maintenanceItems', id)
 }
 
+export async function getAllFuelEntries(): Promise<FuelEntry[]> {
+  const db = await getDB()
+  return db.getAllFromIndex('fuelEntries', 'by-mileage')
+}
+
+export async function putFuelEntry(entry: FuelEntry): Promise<void> {
+  const db = await getDB()
+  await db.put('fuelEntries', entry)
+}
+
+export async function deleteFuelEntry(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('fuelEntries', id)
+}
+
 export async function clearAll(): Promise<void> {
   const db = await getDB()
-  const tx = db.transaction(['car', 'maintenanceItems'], 'readwrite')
-  await Promise.all([tx.objectStore('car').clear(), tx.objectStore('maintenanceItems').clear()])
+  const tx = db.transaction(['car', 'maintenanceItems', 'fuelEntries'], 'readwrite')
+  await Promise.all([
+    tx.objectStore('car').clear(),
+    tx.objectStore('maintenanceItems').clear(),
+    tx.objectStore('fuelEntries').clear(),
+  ])
   await tx.done
 }
