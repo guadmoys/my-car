@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
+import PickerSheet from './PickerSheet.vue'
 
 const emit = defineEmits<{
   submit: [payload: { make: string; model: string; year: number; initialMileage: number }]
@@ -10,10 +12,17 @@ const model = ref('')
 const year = ref<number>(new Date().getFullYear())
 const mileage = ref<string>('')
 const touched = ref(false)
+const activePicker = ref<'make' | 'model' | null>(null)
 
 const currentYear = new Date().getFullYear()
 
 const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '')))
+const modelOptions = computed(() => modelsForMake(make.value))
+
+function selectMake(value: string) {
+  if (value !== make.value) model.value = ''
+  make.value = value
+}
 
 const isValid = computed(() => {
   return (
@@ -61,29 +70,22 @@ function handleSubmit() {
     </div>
 
     <form class="card" @submit.prevent="handleSubmit">
-      <div class="field">
-        <label for="make">Марка</label>
-        <input
-          id="make"
-          v-model="make"
-          type="text"
-          placeholder="Toyota"
-          autocomplete="off"
-          autocapitalize="words"
-        />
-      </div>
+      <button type="button" class="field picker-field" @click="activePicker = 'make'">
+        <label>Марка</label>
+        <span class="picker-value" :class="{ placeholder: !make }">{{ make || 'Выбрать' }}</span>
+      </button>
       <div class="divider" />
-      <div class="field">
-        <label for="model">Модель</label>
-        <input
-          id="model"
-          v-model="model"
-          type="text"
-          placeholder="Camry"
-          autocomplete="off"
-          autocapitalize="words"
-        />
-      </div>
+      <button
+        type="button"
+        class="field picker-field"
+        :class="{ disabled: !make }"
+        @click="make && (activePicker = 'model')"
+      >
+        <label>Модель</label>
+        <span class="picker-value" :class="{ placeholder: !model }">
+          {{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}
+        </span>
+      </button>
       <div class="divider" />
       <div class="field">
         <label for="year">Год выпуска</label>
@@ -117,6 +119,27 @@ function handleSubmit() {
         Начать
       </button>
     </form>
+
+    <PickerSheet
+      v-if="activePicker === 'make'"
+      title="Марка"
+      :items="CAR_MAKES"
+      :selected="make"
+      placeholder="Поиск марки"
+      custom-label="Своя марка"
+      @close="activePicker = null"
+      @select="selectMake"
+    />
+    <PickerSheet
+      v-if="activePicker === 'model'"
+      title="Модель"
+      :items="modelOptions"
+      :selected="model"
+      placeholder="Поиск модели"
+      custom-label="Своя модель"
+      @close="activePicker = null"
+      @select="(value) => (model = value)"
+    />
   </div>
 </template>
 
@@ -200,6 +223,26 @@ function handleSubmit() {
 }
 
 .field input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.picker-field {
+  width: 100%;
+  text-align: left;
+  align-items: flex-start;
+}
+
+.picker-field.disabled {
+  opacity: 0.5;
+}
+
+.picker-value {
+  font-size: 17px;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.picker-value.placeholder {
   color: var(--text-tertiary);
 }
 

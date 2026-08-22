@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Car } from '../types'
+import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
+import PickerSheet from './PickerSheet.vue'
 import {
   getNotificationPermission,
   isNotificationApiSupported,
@@ -28,6 +30,8 @@ const model = ref(props.car.model)
 const year = ref(String(props.car.year))
 const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const activePicker = ref<'make' | 'model' | null>(null)
+const modelOptions = computed(() => modelsForMake(make.value))
 
 watch(
   () => props.car.id,
@@ -59,6 +63,17 @@ async function handleToggleNotifications(checked: boolean) {
     notificationsOn.value = false
     notificationsBlocked.value = permission === 'denied'
   }
+}
+
+function selectMake(value: string) {
+  if (value !== make.value) model.value = ''
+  make.value = value
+  commitCarInfo()
+}
+
+function selectModel(value: string) {
+  model.value = value
+  commitCarInfo()
 }
 
 function commitCarInfo() {
@@ -100,15 +115,21 @@ function handleFileSelected(event: Event) {
       <div class="car-zone">
         <div class="section-title">Автомобиль</div>
         <div class="group">
-          <div class="field">
+          <button class="field picker-field" @click="activePicker = 'make'">
             <label>Марка</label>
-            <input v-model="make" type="text" @blur="commitCarInfo" />
-          </div>
+            <span class="picker-value" :class="{ placeholder: !make }">{{ make || 'Выбрать' }}</span>
+          </button>
           <div class="divider" />
-          <div class="field">
+          <button
+            class="field picker-field"
+            :class="{ disabled: !make }"
+            @click="make && (activePicker = 'model')"
+          >
             <label>Модель</label>
-            <input v-model="model" type="text" @blur="commitCarInfo" />
-          </div>
+            <span class="picker-value" :class="{ placeholder: !model }">
+              {{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}
+            </span>
+          </button>
           <div class="divider" />
           <div class="field">
             <label>Год выпуска</label>
@@ -173,6 +194,27 @@ function handleFileSelected(event: Event) {
         </p>
       </div>
     </div>
+
+    <PickerSheet
+      v-if="activePicker === 'make'"
+      title="Марка"
+      :items="CAR_MAKES"
+      :selected="make"
+      placeholder="Поиск марки"
+      custom-label="Своя марка"
+      @close="activePicker = null"
+      @select="selectMake"
+    />
+    <PickerSheet
+      v-if="activePicker === 'model'"
+      title="Модель"
+      :items="modelOptions"
+      :selected="model"
+      placeholder="Поиск модели"
+      custom-label="Своя модель"
+      @close="activePicker = null"
+      @select="selectModel"
+    />
   </div>
 </template>
 
@@ -234,6 +276,25 @@ function handleFileSelected(event: Event) {
   font-size: 17px;
   color: var(--text);
   outline: none;
+}
+
+.picker-field {
+  width: 100%;
+  text-align: left;
+  align-items: flex-start;
+}
+
+.picker-field.disabled {
+  opacity: 0.5;
+}
+
+.picker-value {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.picker-value.placeholder {
+  color: var(--text-tertiary);
 }
 
 .divider {
