@@ -1,7 +1,7 @@
 import type { MaintenanceStatus } from '../types'
 
 const ENABLED_KEY = 'my-car-notifications-enabled'
-const ICON = '/icons/icon-192.png'
+const ICON = `${import.meta.env.BASE_URL}icons/icon-192.png`
 
 export function isNotificationApiSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window
