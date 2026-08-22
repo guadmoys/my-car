@@ -274,7 +274,12 @@ function fmtDate(ts: number): string {
       />
     </div>
 
-    <TabBar :active-tab="activeTab" :due-badge="dueCount" @change="activeTab = $event" />
+    <TabBar
+      :active-tab="activeTab"
+      :due-badge="dueCount"
+      :car-initial="car.make.charAt(0).toUpperCase()"
+      @change="activeTab = $event"
+    />
 
     <EditItemModal
       v-if="editingItem !== null"
