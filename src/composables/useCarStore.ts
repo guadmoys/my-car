@@ -150,7 +150,10 @@ async function toggleItem(id: string, enabled: boolean): Promise<void> {
 async function updateItem(
   id: string,
   patch: Partial<
-    Pick<MaintenanceItem, 'name' | 'intervalKm' | 'intervalKmMax' | 'lastServiceMileage' | 'note' | 'parts'>
+    Pick<
+      MaintenanceItem,
+      'name' | 'intervalKm' | 'intervalKmMax' | 'intervalMonths' | 'lastServiceMileage' | 'note' | 'parts'
+    >
   >,
 ): Promise<void> {
   const item = items.find((i) => i.id === id)
@@ -183,6 +186,7 @@ async function addCustomItem(input: {
   name: string
   intervalKm: number
   intervalKmMax?: number
+  intervalMonths?: number
   parts?: Part[]
 }): Promise<void> {
   if (!car.value) return
@@ -192,9 +196,10 @@ async function addCustomItem(input: {
     name: input.name.trim(),
     intervalKm: input.intervalKm,
     intervalKmMax: input.intervalKmMax,
+    intervalMonths: input.intervalMonths,
     enabled: true,
     lastServiceMileage: car.value.currentMileage,
-    lastServiceDate: null,
+    lastServiceDate: nowTs(),
     isCustom: true,
     order: items.length,
     parts: input.parts ?? [],
@@ -256,28 +261,51 @@ function getItemHistory(itemId: string): HistoryEntry[] {
     .sort((a, b) => b.date - a.date)
 }
 
-function statusFor(item: MaintenanceItem, currentMileage: number): MaintenanceStatus {
+function addMonths(ts: number, months: number): number {
+  const d = new Date(ts)
+  d.setMonth(d.getMonth() + months)
+  return d.getTime()
+}
+
+function stateRank(state: MaintenanceStatus['state']): number {
+  return state === 'due' ? 2 : state === 'soon' ? 1 : 0
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function statusFor(item: MaintenanceItem, currentMileage: number, now: number): MaintenanceStatus {
   const dueAtMileage = item.lastServiceMileage + item.intervalKm
   const remainingKm = dueAtMileage - currentMileage
   const traveled = currentMileage - item.lastServiceMileage
-  const progress = Math.min(1, Math.max(0, traveled / item.intervalKm))
+  const kmProgress = Math.min(1, Math.max(0, traveled / item.intervalKm))
+  const kmState: MaintenanceStatus['state'] = remainingKm <= 0 ? 'due' : kmProgress >= 0.9 ? 'soon' : 'ok'
 
-  let state: MaintenanceStatus['state'] = 'ok'
-  if (remainingKm <= 0) {
-    state = 'due'
-  } else if (progress >= 0.9) {
-    state = 'soon'
+  let dueAtDate: number | undefined
+  let remainingDays: number | undefined
+  let dateState: MaintenanceStatus['state'] | null = null
+  let dateProgress = 0
+
+  if (item.intervalMonths && item.lastServiceDate) {
+    dueAtDate = addMonths(item.lastServiceDate, item.intervalMonths)
+    remainingDays = Math.ceil((dueAtDate - now) / DAY_MS)
+    const totalSpan = dueAtDate - item.lastServiceDate
+    dateProgress = totalSpan > 0 ? Math.min(1, Math.max(0, (now - item.lastServiceDate) / totalSpan)) : 1
+    dateState = remainingDays <= 0 ? 'due' : dateProgress >= 0.9 ? 'soon' : 'ok'
   }
 
-  return { item, dueAtMileage, remainingKm, progress, state }
+  const state = dateState && stateRank(dateState) > stateRank(kmState) ? dateState : kmState
+  const progress = dateState ? Math.max(kmProgress, dateProgress) : kmProgress
+
+  return { item, dueAtMileage, remainingKm, dueAtDate, remainingDays, progress, state }
 }
 
 const statuses = computed<MaintenanceStatus[]>(() => {
   if (!car.value) return []
+  const now = Date.now()
   return items
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((item) => statusFor(item, car.value!.currentMileage))
+    .map((item) => statusFor(item, car.value!.currentMileage, now))
 })
 
 const enabledStatuses = computed(() => statuses.value.filter((s) => s.item.enabled))

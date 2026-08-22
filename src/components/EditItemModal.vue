@@ -28,11 +28,20 @@ const emit = defineEmits<{
       name: string
       intervalKm: number
       intervalKmMax?: number
+      intervalMonths?: number
       lastServiceMileage: number
       parts: Part[]
     },
   ]
-  create: [payload: { name: string; intervalKm: number; intervalKmMax?: number; parts: Part[] }]
+  create: [
+    payload: {
+      name: string
+      intervalKm: number
+      intervalKmMax?: number
+      intervalMonths?: number
+      parts: Part[]
+    },
+  ]
   delete: [id: string]
   updateHistoryCost: [id: string, cost: number | null]
 }>()
@@ -52,6 +61,7 @@ const isCreate = computed(() => props.item === null)
 const name = ref('')
 const interval = ref('')
 const intervalMax = ref('')
+const intervalMonths = ref('')
 const lastServiceMileage = ref('')
 const parts = ref<Part[]>([])
 
@@ -74,12 +84,14 @@ watch(
       name.value = item.name
       interval.value = String(item.intervalKm)
       intervalMax.value = item.intervalKmMax ? String(item.intervalKmMax) : ''
+      intervalMonths.value = item.intervalMonths ? String(item.intervalMonths) : ''
       lastServiceMileage.value = String(item.lastServiceMileage)
       parts.value = item.parts.map((p) => ({ ...p }))
     } else {
       name.value = ''
       interval.value = ''
       intervalMax.value = ''
+      intervalMonths.value = ''
       lastServiceMileage.value = String(props.currentMileage)
       parts.value = []
     }
@@ -93,6 +105,10 @@ const isValid = computed(() => {
   if (intervalMax.value.trim()) {
     const max = Number(intervalMax.value)
     if (Number.isNaN(max) || max <= i) return false
+  }
+  if (intervalMonths.value.trim()) {
+    const months = Number(intervalMonths.value)
+    if (Number.isNaN(months) || months <= 0) return false
   }
   if (!isCreate.value) {
     const l = Number(lastServiceMileage.value)
@@ -117,14 +133,24 @@ function handleSave() {
   if (!isValid.value) return
   const intervalKm = Math.round(Number(interval.value))
   const intervalKmMax = intervalMax.value.trim() ? Math.round(Number(intervalMax.value)) : undefined
+  const intervalMonthsValue = intervalMonths.value.trim()
+    ? Math.round(Number(intervalMonths.value))
+    : undefined
 
   if (isCreate.value) {
-    emit('create', { name: name.value.trim(), intervalKm, intervalKmMax, parts: cleanedParts() })
+    emit('create', {
+      name: name.value.trim(),
+      intervalKm,
+      intervalKmMax,
+      intervalMonths: intervalMonthsValue,
+      parts: cleanedParts(),
+    })
   } else if (props.item) {
     emit('save', {
       name: name.value.trim(),
       intervalKm,
       intervalKmMax,
+      intervalMonths: intervalMonthsValue,
       lastServiceMileage: Math.round(Number(lastServiceMileage.value)),
       parts: cleanedParts(),
     })
@@ -165,6 +191,11 @@ function handleDelete() {
           <div class="field">
             <label>До (необязательно, для диапазона)</label>
             <input v-model="intervalMax" type="text" inputmode="numeric" placeholder="—" />
+          </div>
+          <div class="divider" />
+          <div class="field">
+            <label>Или раз в N месяцев (необязательно)</label>
+            <input v-model="intervalMonths" type="text" inputmode="numeric" placeholder="—" />
           </div>
         </div>
 

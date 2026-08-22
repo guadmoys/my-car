@@ -26,6 +26,8 @@ export interface MaintenanceItem {
   intervalKm: number
   /** Upper bound of the interval, when the manufacturer gives a range instead of a single value. */
   intervalKmMax?: number
+  /** Optional time-based interval in months, checked alongside the km interval ("whichever comes first"). */
+  intervalMonths?: number
   enabled: boolean
   /** Odometer reading at which this item was last serviced. */
   lastServiceMileage: number
@@ -40,6 +42,9 @@ export interface MaintenanceStatus {
   item: MaintenanceItem
   dueAtMileage: number
   remainingKm: number
+  /** Set only when the item has a time-based interval. */
+  dueAtDate?: number
+  remainingDays?: number
   progress: number
   state: 'ok' | 'soon' | 'due'
 }

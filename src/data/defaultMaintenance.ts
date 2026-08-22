@@ -38,7 +38,7 @@ export function buildDefaultItems(initialMileage: number, carId: string): Mainte
     intervalKmMax: tpl.intervalKmMax,
     enabled: true,
     lastServiceMileage: initialMileage,
-    lastServiceDate: null,
+    lastServiceDate: Date.now(),
     isCustom: false,
     order: index,
     parts: [],

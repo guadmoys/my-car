@@ -49,8 +49,13 @@ const visibleFuelHistory = computed(() =>
   showAllFuel.value ? fuelHistory.value : fuelHistory.value.slice(0, 5),
 )
 
+const STATE_RANK: Record<string, number> = { due: 2, soon: 1, ok: 0 }
+
 const sortedStatuses = computed(() =>
-  enabledStatuses.value.slice().sort((a, b) => a.remainingKm - b.remainingKm),
+  enabledStatuses.value.slice().sort((a, b) => {
+    const rankDiff = STATE_RANK[b.state] - STATE_RANK[a.state]
+    return rankDiff !== 0 ? rankDiff : a.remainingKm - b.remainingKm
+  }),
 )
 
 const editModalItem = computed(() => (editingItem.value === 'new' ? null : editingItem.value))
@@ -86,6 +91,7 @@ async function handleSaveItem(payload: {
   name: string
   intervalKm: number
   intervalKmMax?: number
+  intervalMonths?: number
   lastServiceMileage: number
   parts: Part[]
 }) {
@@ -99,6 +105,7 @@ async function handleCreateItem(payload: {
   name: string
   intervalKm: number
   intervalKmMax?: number
+  intervalMonths?: number
   parts: Part[]
 }) {
   await store.addCustomItem(payload)

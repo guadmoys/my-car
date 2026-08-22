@@ -33,7 +33,7 @@ const rangeLabel = computed(() => {
 
 const statusLabel = computed(() => {
   const km = Math.abs(Math.round(props.status.remainingKm))
-  if (props.status.state === 'due') {
+  if (props.status.remainingKm <= 0) {
     return km === 0 ? 'Пора провести ТО' : `Просрочено на ${fmt(km)} км`
   }
   return `Осталось ${fmt(km)} км`
@@ -42,6 +42,14 @@ const statusLabel = computed(() => {
 const showBuyHint = computed(
   () => props.status.item.parts.length > 0 && props.status.state !== 'ok',
 )
+
+const dateLabel = computed(() => {
+  const { item, remainingDays } = props.status
+  if (!item.intervalMonths || remainingDays === undefined) return null
+  const days = Math.abs(remainingDays)
+  const prefix = remainingDays <= 0 ? `Просрочено на ${days} дн.` : `Осталось ${days} дн.`
+  return `${prefix} · раз в ${item.intervalMonths} мес.`
+})
 
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('ru-RU')
@@ -59,6 +67,9 @@ function fmt(n: number): string {
             <span>{{ statusLabel }}</span>
             <span class="sep">·</span>
             <span>каждые {{ rangeLabel }}</span>
+          </div>
+          <div v-if="dateLabel" class="meta date-meta">
+            <span>📅 {{ dateLabel }}</span>
           </div>
         </div>
         <div class="chevron">›</div>
