@@ -52,6 +52,8 @@ export interface HistoryEntry {
   itemName: string
   mileage: number
   date: number
+  /** Cost of this service (parts + labor), in the user's currency. Optional. */
+  cost?: number
 }
 
 export interface FuelEntry {
@@ -61,6 +63,8 @@ export interface FuelEntry {
   mileage: number
   liters: number
   date: number
+  /** Total cost of this fill-up. Optional. */
+  cost?: number
 }
 
 export interface FuelConsumption {

@@ -10,7 +10,8 @@ import SummaryCard from './SummaryCard.vue'
 import FuelSheet from './FuelSheet.vue'
 import CarSwitcherSheet from './CarSwitcherSheet.vue'
 import AddCarSheet from './AddCarSheet.vue'
-import type { MaintenanceItem, Part } from '../types'
+import CostEditSheet from './CostEditSheet.vue'
+import type { FuelEntry, MaintenanceItem, Part } from '../types'
 
 const store = useCarStore()
 const {
@@ -23,6 +24,10 @@ const {
   okCount,
   fuelHistory,
   averageConsumption,
+  totalFuelCost,
+  totalServiceCost,
+  totalCost,
+  hasAnyCost,
 } = store
 
 const showMileageSheet = ref(false)
@@ -33,7 +38,12 @@ const showAllFuel = ref(false)
 const showCarSwitcher = ref(false)
 const showAddCar = ref(false)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
+const editingFuelCostId = ref<string | null>(null)
 const importError = ref<string | null>(null)
+
+const editingFuelEntry = computed<FuelEntry | null>(
+  () => store.fuelEntries.find((e) => e.id === editingFuelCostId.value) ?? null,
+)
 
 const visibleFuelHistory = computed(() =>
   showAllFuel.value ? fuelHistory.value : fuelHistory.value.slice(0, 5),
@@ -105,13 +115,22 @@ async function handleSaveMileage(mileage: number) {
   showMileageSheet.value = false
 }
 
-async function handleSaveFuel(payload: { mileage: number; liters: number }) {
+async function handleSaveFuel(payload: { mileage: number; liters: number; cost?: number }) {
   await store.addFuelEntry(payload)
   showFuelSheet.value = false
 }
 
 async function handleDeleteFuel(id: string) {
   await store.deleteFuelEntry(id)
+}
+
+async function handleSaveFuelCost(cost: number | null) {
+  if (editingFuelCostId.value) await store.updateFuelCost(editingFuelCostId.value, cost)
+  editingFuelCostId.value = null
+}
+
+async function handleUpdateHistoryCost(id: string, cost: number | null) {
+  await store.updateHistoryCost(id, cost)
 }
 
 async function handleSaveCarInfo(payload: { make: string; model: string; year: number }) {
@@ -190,6 +209,10 @@ function fmt(n: number): string {
 function fmtDate(ts: number): string {
   return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 }
+
+function fmtCost(n: number): string {
+  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+}
 </script>
 
 <template>
@@ -225,6 +248,24 @@ function fmtDate(ts: number): string {
       @switch-car="showCarSwitcher = true"
     />
 
+    <section v-if="hasAnyCost" class="section">
+      <div class="section-title">Расходы</div>
+      <div class="card expenses-card">
+        <div class="expense-row">
+          <span>Топливо</span>
+          <span>{{ fmtCost(totalFuelCost) }}</span>
+        </div>
+        <div class="expense-row">
+          <span>ТО</span>
+          <span>{{ fmtCost(totalServiceCost) }}</span>
+        </div>
+        <div class="expense-row total">
+          <span>Итого</span>
+          <span>{{ fmtCost(totalCost) }}</span>
+        </div>
+      </div>
+    </section>
+
     <section class="section">
       <div class="section-title">Техобслуживание</div>
       <div class="card list">
@@ -246,21 +287,23 @@ function fmtDate(ts: number): string {
       <div class="section-title">Топливо</div>
       <div class="card list">
         <div v-for="row in visibleFuelHistory" :key="row.entry.id" class="fuel-row">
-          <div
-            class="quality-dot"
-            :class="row.quality"
-          />
-          <div class="fuel-info">
-            <div class="fuel-main">
-              {{ fmt(row.entry.liters) }} л
-              <span v-if="row.litersPer100km !== null" class="fuel-consumption">
-                · {{ row.litersPer100km.toFixed(1) }} л/100км
-              </span>
+          <button class="fuel-tap" @click="editingFuelCostId = row.entry.id">
+            <div class="quality-dot" :class="row.quality" />
+            <div class="fuel-info">
+              <div class="fuel-main">
+                {{ fmt(row.entry.liters) }} л
+                <span v-if="row.litersPer100km !== null" class="fuel-consumption">
+                  · {{ row.litersPer100km.toFixed(1) }} л/100км
+                </span>
+                <span v-if="row.entry.cost !== undefined" class="fuel-cost">
+                  · {{ fmtCost(row.entry.cost) }}
+                </span>
+              </div>
+              <div class="fuel-meta">
+                {{ fmt(row.entry.mileage) }} км · {{ fmtDate(row.entry.date) }}
+              </div>
             </div>
-            <div class="fuel-meta">
-              {{ fmt(row.entry.mileage) }} км · {{ fmtDate(row.entry.date) }}
-            </div>
-          </div>
+          </button>
           <button class="fuel-delete" aria-label="Удалить заправку" @click="handleDeleteFuel(row.entry.id)">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
               <path
@@ -317,6 +360,7 @@ function fmtDate(ts: number): string {
       @save="handleSaveItem"
       @create="handleCreateItem"
       @delete="handleDeleteItem"
+      @update-history-cost="handleUpdateHistoryCost"
     />
 
     <MileageSheet
@@ -331,6 +375,15 @@ function fmtDate(ts: number): string {
       :current-mileage="car.currentMileage"
       @close="showFuelSheet = false"
       @save="handleSaveFuel"
+    />
+
+    <CostEditSheet
+      v-if="editingFuelEntry"
+      title="Заправка"
+      :subtitle="fmtDate(editingFuelEntry.date)"
+      :current-cost="editingFuelEntry.cost"
+      @close="editingFuelCostId = null"
+      @save="handleSaveFuelCost"
     />
 
     <SettingsSheet
@@ -445,6 +498,31 @@ function fmtDate(ts: number): string {
   font-size: 15px;
 }
 
+.expenses-card {
+  padding: 4px 16px;
+}
+
+.expense-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--separator);
+  font-size: 16px;
+}
+
+.expense-row:last-child {
+  border-bottom: none;
+}
+
+.expense-row.total {
+  font-weight: 700;
+}
+
+.expense-row.total span:last-child {
+  color: var(--blue);
+}
+
 .disabled-row {
   display: flex;
   align-items: center;
@@ -525,13 +603,32 @@ function fmtDate(ts: number): string {
 .fuel-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 4px;
+  padding: 4px 8px 4px 16px;
   border-bottom: 1px solid var(--separator);
 }
 
 .fuel-row:last-child {
   border-bottom: none;
+}
+
+.fuel-tap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  text-align: left;
+}
+
+.fuel-tap:active {
+  opacity: 0.6;
+}
+
+.fuel-cost {
+  color: var(--blue);
+  font-weight: 400;
 }
 
 .quality-dot {

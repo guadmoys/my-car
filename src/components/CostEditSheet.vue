@@ -2,41 +2,24 @@
 import { computed, ref } from 'vue'
 
 const props = defineProps<{
-  currentMileage: number
+  title: string
+  subtitle: string
+  currentCost?: number
 }>()
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { mileage: number; liters: number; cost?: number }]
+  save: [cost: number | null]
 }>()
 
-const mileage = ref(String(props.currentMileage))
-const liters = ref('')
-const cost = ref('')
+const value = ref(props.currentCost !== undefined ? String(props.currentCost) : '')
 
-const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '').replace(',', '.')))
-const litersNumber = computed(() => Number(liters.value.replace(/\s/g, '').replace(',', '.')))
-const costNumber = computed(() => Number(cost.value.replace(/\s/g, '').replace(',', '.')))
-
-const isValid = computed(() => {
-  return (
-    mileage.value.trim().length > 0 &&
-    !Number.isNaN(mileageNumber.value) &&
-    mileageNumber.value >= props.currentMileage &&
-    liters.value.trim().length > 0 &&
-    !Number.isNaN(litersNumber.value) &&
-    litersNumber.value > 0 &&
-    (cost.value.trim() === '' || (!Number.isNaN(costNumber.value) && costNumber.value >= 0))
-  )
-})
+const costNumber = computed(() => Number(value.value.replace(/\s/g, '').replace(',', '.')))
+const isValid = computed(() => value.value.trim() === '' || (!Number.isNaN(costNumber.value) && costNumber.value >= 0))
 
 function handleSave() {
   if (!isValid.value) return
-  emit('save', {
-    mileage: Math.round(mileageNumber.value),
-    liters: litersNumber.value,
-    cost: cost.value.trim() === '' ? undefined : costNumber.value,
-  })
+  emit('save', value.value.trim() === '' ? null : costNumber.value)
 }
 </script>
 
@@ -46,7 +29,7 @@ function handleSave() {
       <div class="handle" />
       <div class="header">
         <button class="cancel" @click="emit('close')">Отмена</button>
-        <h2>Заправка</h2>
+        <h2>Стоимость</h2>
         <button class="save" :class="{ disabled: !isValid }" @click="handleSave">
           Готово
         </button>
@@ -55,23 +38,11 @@ function handleSave() {
       <div class="form">
         <div class="group">
           <div class="field">
-            <label>Пробег на заправке, км</label>
-            <input v-model="mileage" type="text" inputmode="numeric" />
-          </div>
-          <div class="divider" />
-          <div class="field">
-            <label>Литры</label>
-            <input v-model="liters" type="text" inputmode="decimal" placeholder="35.5" />
-          </div>
-          <div class="divider" />
-          <div class="field">
-            <label>Стоимость, ₽ (необязательно)</label>
-            <input v-model="cost" type="text" inputmode="decimal" placeholder="—" />
+            <label>{{ title }} · {{ subtitle }}</label>
+            <input v-model="value" type="text" inputmode="decimal" placeholder="Без стоимости" autofocus />
           </div>
         </div>
-        <p v-if="mileage.trim() && mileageNumber < currentMileage" class="hint">
-          Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
-        </p>
+        <p class="hint">Оставьте поле пустым, чтобы убрать стоимость</p>
       </div>
     </div>
   </div>
@@ -177,19 +148,20 @@ function handleSave() {
 .field input {
   border: none;
   background: transparent;
-  font-size: 17px;
+  font-size: 22px;
+  font-weight: 600;
   color: var(--text);
   outline: none;
 }
 
-.divider {
-  height: 1px;
-  background: var(--separator);
+.field input::placeholder {
+  color: var(--text-tertiary);
+  font-weight: 400;
 }
 
 .hint {
   font-size: 13px;
-  color: var(--red);
+  color: var(--text-secondary);
   margin: 10px 4px 0;
 }
 </style>

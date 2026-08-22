@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { HistoryEntry, MaintenanceItem, Part } from '../types'
+import CostEditSheet from './CostEditSheet.vue'
 
 const props = defineProps<{
   item: MaintenanceItem | null
@@ -16,6 +17,10 @@ function fmtMileage(n: number): string {
   return Math.round(n).toLocaleString('ru-RU')
 }
 
+function fmtCost(n: number): string {
+  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+}
+
 const emit = defineEmits<{
   close: []
   save: [
@@ -29,7 +34,18 @@ const emit = defineEmits<{
   ]
   create: [payload: { name: string; intervalKm: number; intervalKmMax?: number; parts: Part[] }]
   delete: [id: string]
+  updateHistoryCost: [id: string, cost: number | null]
 }>()
+
+const editingHistoryId = ref<string | null>(null)
+const editingHistoryEntry = computed(
+  () => props.history.find((h) => h.id === editingHistoryId.value) ?? null,
+)
+
+function handleSaveHistoryCost(cost: number | null) {
+  if (editingHistoryId.value) emit('updateHistoryCost', editingHistoryId.value, cost)
+  editingHistoryId.value = null
+}
 
 const isCreate = computed(() => props.item === null)
 
@@ -164,12 +180,29 @@ function handleDelete() {
             <span>История ТО</span>
           </div>
           <div class="group history-list">
-            <div v-for="entry in history" :key="entry.id" class="history-row">
+            <button
+              v-for="entry in history"
+              :key="entry.id"
+              class="history-row"
+              @click="editingHistoryId = entry.id"
+            >
               <span class="history-date">{{ fmtHistoryDate(entry.date) }}</span>
-              <span class="history-mileage">{{ fmtMileage(entry.mileage) }} км</span>
-            </div>
+              <span class="history-right">
+                <span v-if="entry.cost !== undefined" class="history-cost">{{ fmtCost(entry.cost) }}</span>
+                <span class="history-mileage">{{ fmtMileage(entry.mileage) }} км</span>
+              </span>
+            </button>
           </div>
         </div>
+
+        <CostEditSheet
+          v-if="editingHistoryEntry"
+          title="ТО"
+          :subtitle="fmtHistoryDate(editingHistoryEntry.date)"
+          :current-cost="editingHistoryEntry.cost"
+          @close="editingHistoryId = null"
+          @save="handleSaveHistoryCost"
+        />
 
         <div class="parts-block">
           <div class="parts-header">
@@ -346,9 +379,15 @@ function handleDelete() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   padding: 10px 0;
   border-bottom: 1px solid var(--separator);
   font-size: 15px;
+  text-align: left;
+}
+
+.history-row:active {
+  opacity: 0.6;
 }
 
 .history-row:last-child {
@@ -357,6 +396,17 @@ function handleDelete() {
 
 .history-date {
   color: var(--text);
+}
+
+.history-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-cost {
+  color: var(--blue);
+  font-weight: 600;
 }
 
 .history-mileage {

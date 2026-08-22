@@ -210,7 +210,7 @@ async function deleteItem(id: string): Promise<void> {
   await db.deleteMaintenanceItem(id)
 }
 
-async function addFuelEntry(input: { mileage: number; liters: number }): Promise<void> {
+async function addFuelEntry(input: { mileage: number; liters: number; cost?: number }): Promise<void> {
   if (!car.value) return
   const entry: FuelEntry = {
     id: makeId(),
@@ -218,6 +218,7 @@ async function addFuelEntry(input: { mileage: number; liters: number }): Promise
     mileage: input.mileage,
     liters: input.liters,
     date: nowTs(),
+    cost: input.cost,
   }
   fuelEntries.push(entry)
   await db.putFuelEntry(entry)
@@ -232,6 +233,20 @@ async function deleteFuelEntry(id: string): Promise<void> {
   if (index === -1) return
   fuelEntries.splice(index, 1)
   await db.deleteFuelEntry(id)
+}
+
+async function updateFuelCost(id: string, cost: number | null): Promise<void> {
+  const entry = fuelEntries.find((e) => e.id === id)
+  if (!entry) return
+  entry.cost = cost ?? undefined
+  await db.putFuelEntry({ ...entry })
+}
+
+async function updateHistoryCost(id: string, cost: number | null): Promise<void> {
+  const entry = historyEntries.find((h) => h.id === id)
+  if (!entry) return
+  entry.cost = cost ?? undefined
+  await db.putHistoryEntry({ ...entry })
 }
 
 function getItemHistory(itemId: string): HistoryEntry[] {
@@ -318,6 +333,17 @@ const fuelHistory = computed<FuelConsumption[]>(() => {
 
   return result.reverse()
 })
+
+const totalFuelCost = computed(() =>
+  fuelEntries.reduce((sum, e) => sum + (e.cost ?? 0), 0),
+)
+const totalServiceCost = computed(() =>
+  historyEntries.reduce((sum, h) => sum + (h.cost ?? 0), 0),
+)
+const totalCost = computed(() => totalFuelCost.value + totalServiceCost.value)
+const hasAnyCost = computed(
+  () => fuelEntries.some((e) => e.cost !== undefined) || historyEntries.some((h) => h.cost !== undefined),
+)
 
 function isMultiCarBackup(data: unknown): data is BackupData {
   if (!data || typeof data !== 'object') return false
@@ -417,6 +443,10 @@ export function useCarStore() {
     okCount,
     fuelHistory,
     averageConsumption,
+    totalFuelCost,
+    totalServiceCost,
+    totalCost,
+    hasAnyCost,
     load,
     switchCar,
     createCar,
@@ -430,6 +460,8 @@ export function useCarStore() {
     deleteItem,
     addFuelEntry,
     deleteFuelEntry,
+    updateFuelCost,
+    updateHistoryCost,
     getItemHistory,
     exportData,
     importData,
