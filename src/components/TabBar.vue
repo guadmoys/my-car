@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { haptic } from '../utils/haptics'
+
 export type TabKey = 'dashboard' | 'maintenance' | 'fuel' | 'settings'
 
 const props = defineProps<{
@@ -27,7 +29,7 @@ const tabs: { key: TabKey; label: string }[] = [
       class="tab"
       :class="{ active: activeTab === tab.key, avatar: tab.key === 'settings' }"
       :aria-label="tab.label"
-      @click="emit('change', tab.key)"
+      @click="haptic('tap'); emit('change', tab.key)"
     >
       <span v-if="tab.key === 'settings'" class="avatar-badge" :class="{ active: activeTab === tab.key }">
         {{ props.carInitial ?? '🚗' }}

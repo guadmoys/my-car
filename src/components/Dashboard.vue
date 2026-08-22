@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { useCarStore } from '../composables/useCarStore'
 import { checkAndNotify, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
+import { haptic } from '../utils/haptics'
+import { useToast } from '../composables/useToast'
 import DashboardTab from './DashboardTab.vue'
 import MaintenanceTab from './MaintenanceTab.vue'
 import FuelTab from './FuelTab.vue'
@@ -31,6 +33,8 @@ const {
   totalCost,
   hasAnyCost,
 } = store
+
+const toast = useToast()
 
 const activeTab = ref<TabKey>('dashboard')
 
@@ -86,11 +90,19 @@ function closeEdit() {
 }
 
 async function handleMarkServiced(id: string) {
-  await store.markServiced(id)
+  const item = store.items.find((i) => i.id === id)
+  const result = await store.markServiced(id)
   if (car.value) clearNotifiedItem(car.value.id, id)
+  if (!result) return
+  haptic('success')
+  toast.show(item ? `«${item.name}» — выполнено` : 'Отмечено как выполненное', {
+    label: 'Отменить',
+    onAction: () => store.undoMarkServiced(id, result),
+  })
 }
 
 async function handleToggle(id: string, enabled: boolean) {
+  haptic('tap')
   await store.toggleItem(id, enabled)
 }
 
@@ -120,6 +132,7 @@ async function handleCreateItem(payload: {
 }
 
 async function handleDeleteItem(id: string) {
+  haptic('delete')
   await store.deleteItem(id)
   closeEdit()
 }
@@ -135,7 +148,13 @@ async function handleSaveFuel(payload: { mileage: number; liters: number; cost?:
 }
 
 async function handleDeleteFuel(id: string) {
-  await store.deleteFuelEntry(id)
+  const removed = await store.deleteFuelEntry(id)
+  if (!removed) return
+  haptic('delete')
+  toast.show('Заправка удалена', {
+    label: 'Отменить',
+    onAction: () => store.restoreFuelEntry(removed),
+  })
 }
 
 async function handleSaveFuelCost(cost: number | null) {
@@ -217,7 +236,8 @@ function fmtDate(ts: number): string {
 
 <template>
   <div v-if="car" class="shell">
-    <div class="tabs">
+    <Transition name="tab-fade" mode="out-in">
+    <div class="tabs" :key="activeTab">
       <DashboardTab
         v-if="activeTab === 'dashboard'"
         :car="car"
@@ -252,6 +272,8 @@ function fmtDate(ts: number): string {
       <FuelTab
         v-if="activeTab === 'fuel'"
         :fuel-history="fuelHistory"
+        :history-entries="store.historyEntries"
+        :average-consumption="averageConsumption"
         :total-fuel-cost="totalFuelCost"
         :total-service-cost="totalServiceCost"
         :total-cost="totalCost"
@@ -273,6 +295,7 @@ function fmtDate(ts: number): string {
         @open-car-switcher="showCarSwitcher = true"
       />
     </div>
+    </Transition>
 
     <TabBar
       :active-tab="activeTab"
@@ -333,5 +356,20 @@ function fmtDate(ts: number): string {
 <style scoped>
 .shell {
   min-height: 100dvh;
+}
+
+.tab-fade-enter-active,
+.tab-fade-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.tab-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.tab-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 </style>

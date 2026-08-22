@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { MaintenanceItem, MaintenanceStatus } from '../types'
 import MaintenanceCard from './MaintenanceCard.vue'
 
-defineProps<{
+const props = defineProps<{
   sortedStatuses: MaintenanceStatus[]
   disabledItems: MaintenanceItem[]
 }>()
@@ -16,6 +16,25 @@ const emit = defineEmits<{
 }>()
 
 const showDisabled = ref(false)
+const search = ref('')
+
+type Filter = 'all' | 'due' | 'soon' | 'ok'
+const filter = ref<Filter>('all')
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all', label: 'Все' },
+  { key: 'due', label: 'Просрочено' },
+  { key: 'soon', label: 'Скоро' },
+  { key: 'ok', label: 'В порядке' },
+]
+
+const filteredStatuses = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  return props.sortedStatuses.filter((s) => {
+    if (filter.value !== 'all' && s.state !== filter.value) return false
+    if (query && !s.item.name.toLowerCase().includes(query)) return false
+    return true
+  })
+})
 </script>
 
 <template>
@@ -24,18 +43,39 @@ const showDisabled = ref(false)
       <h1>Замена</h1>
     </header>
 
+    <div class="search-row">
+      <svg class="search-icon" viewBox="0 0 24 24" width="17" height="17" fill="none">
+        <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8" />
+        <path d="M20 20l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      </svg>
+      <input v-model="search" type="text" placeholder="Поиск по параметрам" />
+      <button v-if="search" class="search-clear" aria-label="Очистить" @click="search = ''">✕</button>
+    </div>
+
+    <div class="filter-chips">
+      <button
+        v-for="f in FILTERS"
+        :key="f.key"
+        class="filter-chip"
+        :class="{ active: filter === f.key }"
+        @click="filter = f.key"
+      >
+        {{ f.label }}
+      </button>
+    </div>
+
     <section class="section">
       <div class="card list">
         <MaintenanceCard
-          v-for="status in sortedStatuses"
+          v-for="status in filteredStatuses"
           :key="status.item.id"
           :status="status"
           @mark-serviced="emit('markServiced', $event)"
           @toggle="(id, enabled) => emit('toggle', id, enabled)"
           @edit="emit('edit', $event)"
         />
-        <div v-if="sortedStatuses.length === 0" class="empty">
-          Все параметры отключены
+        <div v-if="filteredStatuses.length === 0" class="empty">
+          {{ sortedStatuses.length === 0 ? 'Все параметры отключены' : 'Ничего не найдено' }}
         </div>
       </div>
     </section>
@@ -80,6 +120,77 @@ const showDisabled = ref(false)
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  margin-bottom: 12px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--fill-secondary);
+}
+
+.search-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.search-row input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+}
+
+.search-row input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.search-clear {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  color: var(--bg-elevated);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 4px 2px;
+  margin-bottom: 20px;
+}
+
+.filter-chip {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 14px;
+  background: var(--fill-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.filter-chip.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.filter-chip:active {
+  opacity: 0.7;
 }
 
 .section {

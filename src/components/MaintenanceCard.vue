@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { MaintenanceStatus } from '../types'
+import SwipeRow from './SwipeRow.vue'
 
 const props = defineProps<{
   status: MaintenanceStatus
@@ -58,29 +59,33 @@ function fmt(n: number): string {
 
 <template>
   <div class="item" :class="{ dimmed: !status.item.enabled }">
-    <button class="tap-target" @click="emit('edit', status.item.id)">
-      <div class="row">
-        <div class="dot" :style="{ background: stateColor }" />
-        <div class="info">
-          <div class="name">{{ status.item.name }}</div>
-          <div class="meta">
-            <span>{{ statusLabel }}</span>
-            <span class="sep">·</span>
-            <span>каждые {{ rangeLabel }}</span>
+    <SwipeRow
+      :left-action="{ label: '✓ Готово', colorVar: 'var(--green)', onTrigger: () => emit('markServiced', status.item.id) }"
+    >
+      <button class="tap-target" @click="emit('edit', status.item.id)">
+        <div class="row">
+          <div class="dot" :style="{ background: stateColor }" />
+          <div class="info">
+            <div class="name">{{ status.item.name }}</div>
+            <div class="meta">
+              <span>{{ statusLabel }}</span>
+              <span class="sep">·</span>
+              <span>каждые {{ rangeLabel }}</span>
+            </div>
+            <div v-if="dateLabel" class="meta date-meta">
+              <span>📅 {{ dateLabel }}</span>
+            </div>
           </div>
-          <div v-if="dateLabel" class="meta date-meta">
-            <span>📅 {{ dateLabel }}</span>
-          </div>
+          <div class="chevron">›</div>
         </div>
-        <div class="chevron">›</div>
-      </div>
-      <div class="track">
-        <div
-          class="fill"
-          :style="{ width: `${status.progress * 100}%`, background: stateColor }"
-        />
-      </div>
-    </button>
+        <div class="track">
+          <div
+            class="fill"
+            :style="{ width: `${status.progress * 100}%`, background: stateColor }"
+          />
+        </div>
+      </button>
+    </SwipeRow>
     <div class="actions">
       <button class="done" @click="emit('markServiced', status.item.id)">
         Выполнено
@@ -141,6 +146,7 @@ function fmt(n: number): string {
   display: block;
   text-align: left;
   padding: 0;
+  background: var(--bg-elevated);
 }
 
 .row {
