@@ -7,16 +7,30 @@ import MileageSheet from './MileageSheet.vue'
 import SettingsSheet from './SettingsSheet.vue'
 import SummaryCard from './SummaryCard.vue'
 import FuelSheet from './FuelSheet.vue'
+import CarSwitcherSheet from './CarSwitcherSheet.vue'
+import AddCarSheet from './AddCarSheet.vue'
 import type { MaintenanceItem, Part } from '../types'
 
 const store = useCarStore()
-const { car, enabledStatuses, disabledItems, dueCount, soonCount, okCount, fuelHistory, averageConsumption } = store
+const {
+  car,
+  cars,
+  enabledStatuses,
+  disabledItems,
+  dueCount,
+  soonCount,
+  okCount,
+  fuelHistory,
+  averageConsumption,
+} = store
 
 const showMileageSheet = ref(false)
 const showSettingsSheet = ref(false)
 const showFuelSheet = ref(false)
 const showDisabled = ref(false)
 const showAllFuel = ref(false)
+const showCarSwitcher = ref(false)
+const showAddCar = ref(false)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
 const importError = ref<string | null>(null)
 
@@ -94,13 +108,33 @@ async function handleSaveCarInfo(payload: { make: string; model: string; year: n
   showSettingsSheet.value = false
 }
 
-async function handleReset() {
-  await store.resetAll()
+async function handleDeleteCar() {
+  if (!car.value) return
+  await store.deleteCar(car.value.id)
   showSettingsSheet.value = false
 }
 
-function handleExport() {
-  const data = store.exportData()
+async function handleSwitchCar(id: string) {
+  await store.switchCar(id)
+}
+
+async function handleDeleteCarFromSwitcher(id: string) {
+  await store.deleteCar(id)
+}
+
+async function handleCreateCar(payload: {
+  make: string
+  model: string
+  year: number
+  initialMileage: number
+}) {
+  await store.createCar(payload)
+  showAddCar.value = false
+  showCarSwitcher.value = false
+}
+
+async function handleExport() {
+  const data = await store.exportData()
   const json = JSON.stringify(data, null, 2)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -177,6 +211,7 @@ function fmtDate(ts: number): string {
       :due-count="dueCount"
       :average-consumption="averageConsumption"
       @edit-mileage="showMileageSheet = true"
+      @switch-car="showCarSwitcher = true"
     />
 
     <section class="section">
@@ -293,9 +328,25 @@ function fmtDate(ts: number): string {
       :import-error="importError"
       @close="showSettingsSheet = false"
       @save="handleSaveCarInfo"
-      @reset="handleReset"
+      @delete-car="handleDeleteCar"
       @export="handleExport"
       @import="handleImportFile"
+    />
+
+    <CarSwitcherSheet
+      v-if="showCarSwitcher"
+      :cars="cars"
+      :active-car-id="car.id"
+      @close="showCarSwitcher = false"
+      @switch="handleSwitchCar"
+      @delete="handleDeleteCarFromSwitcher"
+      @add-car="showAddCar = true"
+    />
+
+    <AddCarSheet
+      v-if="showAddCar"
+      @close="showAddCar = false"
+      @create="handleCreateCar"
     />
   </div>
 </template>

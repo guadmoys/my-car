@@ -2,29 +2,29 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { Car, FuelEntry, HistoryEntry, MaintenanceItem } from '../types'
 
 interface MyCarDB extends DBSchema {
-  car: {
+  cars: {
     key: string
     value: Car
   }
   maintenanceItems: {
     key: string
     value: MaintenanceItem
-    indexes: { 'by-order': number }
+    indexes: { 'by-order': number; 'by-car': string }
   }
   fuelEntries: {
     key: string
     value: FuelEntry
-    indexes: { 'by-mileage': number }
+    indexes: { 'by-mileage': number; 'by-car': string }
   }
   history: {
     key: string
     value: HistoryEntry
-    indexes: { 'by-date': number }
+    indexes: { 'by-date': number; 'by-car': string }
   }
 }
 
 const DB_NAME = 'my-car-db'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 /**
  * IndexedDB's structured clone can choke on Vue reactive proxies (nested
@@ -39,10 +39,7 @@ let dbPromise: Promise<IDBPDatabase<MyCarDB>> | null = null
 function getDB(): Promise<IDBPDatabase<MyCarDB>> {
   if (!dbPromise) {
     dbPromise = openDB<MyCarDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains('car')) {
-          db.createObjectStore('car', { keyPath: 'id' })
-        }
+      async upgrade(db, oldVersion, _newVersion, transaction) {
         if (!db.objectStoreNames.contains('maintenanceItems')) {
           const store = db.createObjectStore('maintenanceItems', { keyPath: 'id' })
           store.createIndex('by-order', 'order')
@@ -55,26 +52,100 @@ function getDB(): Promise<IDBPDatabase<MyCarDB>> {
           const store = db.createObjectStore('history', { keyPath: 'id' })
           store.createIndex('by-date', 'date')
         }
+
+        if (oldVersion < 4) {
+          const carsStore = db.objectStoreNames.contains('cars')
+            ? transaction.objectStore('cars')
+            : db.createObjectStore('cars', { keyPath: 'id' })
+
+          const itemsStore = transaction.objectStore('maintenanceItems')
+          if (!itemsStore.indexNames.contains('by-car')) itemsStore.createIndex('by-car', 'carId')
+
+          const fuelStore = transaction.objectStore('fuelEntries')
+          if (!fuelStore.indexNames.contains('by-car')) fuelStore.createIndex('by-car', 'carId')
+
+          const historyStore = transaction.objectStore('history')
+          if (!historyStore.indexNames.contains('by-car')) historyStore.createIndex('by-car', 'carId')
+
+          // Migrate the old single-car layout (v1-v3): one 'car' store keyed
+          // 'main', and items/fuel/history with no carId at all.
+          // 'car' isn't part of the current schema anymore, hence the casts below.
+          const looseDb = db as unknown as {
+            objectStoreNames: { contains(name: string): boolean }
+            deleteObjectStore(name: string): void
+          }
+          if (looseDb.objectStoreNames.contains('car')) {
+            const legacyStore = (transaction as unknown as { objectStore(name: string): any }).objectStore(
+              'car',
+            )
+            const legacyCar = await legacyStore.get('main')
+            if (legacyCar) {
+              const carId = `car-${Date.now()}`
+              await carsStore.put({ ...legacyCar, id: carId })
+
+              for (const storeName of ['maintenanceItems', 'fuelEntries', 'history'] as const) {
+                const store = transaction.objectStore(storeName)
+                let cursor = await store.openCursor()
+                while (cursor) {
+                  if (!cursor.value.carId) {
+                    await cursor.update({ ...cursor.value, carId })
+                  }
+                  cursor = await cursor.continue()
+                }
+              }
+            }
+            looseDb.deleteObjectStore('car')
+          }
+        }
       },
     })
   }
   return dbPromise
 }
 
-export async function getCar(): Promise<Car | undefined> {
+export async function getAllCars(): Promise<Car[]> {
   const db = await getDB()
-  return db.get('car', 'main')
+  return db.getAll('cars')
 }
 
 export async function putCar(car: Car): Promise<void> {
   const db = await getDB()
-  await db.put('car', toPlain(car))
+  await db.put('cars', toPlain(car))
 }
 
-export async function getAllMaintenanceItems(): Promise<MaintenanceItem[]> {
+export async function putCars(carsList: Car[]): Promise<void> {
   const db = await getDB()
-  const items = await db.getAllFromIndex('maintenanceItems', 'by-order')
-  return items
+  const tx = db.transaction('cars', 'readwrite')
+  await Promise.all(carsList.map((c) => tx.store.put(toPlain(c))))
+  await tx.done
+}
+
+export async function deleteCarCascade(carId: string): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction(['cars', 'maintenanceItems', 'fuelEntries', 'history'], 'readwrite')
+  await tx.objectStore('cars').delete(carId)
+
+  for (const storeName of ['maintenanceItems', 'fuelEntries', 'history'] as const) {
+    const store = tx.objectStore(storeName)
+    const index = store.index('by-car')
+    let cursor = await index.openCursor(IDBKeyRange.only(carId))
+    while (cursor) {
+      await cursor.delete()
+      cursor = await cursor.continue()
+    }
+  }
+  await tx.done
+}
+
+export async function getMaintenanceItemsForCar(carId: string): Promise<MaintenanceItem[]> {
+  const db = await getDB()
+  const items = await db.getAllFromIndex('maintenanceItems', 'by-car', carId)
+  return items.sort((a, b) => a.order - b.order)
+}
+
+export async function getAllMaintenanceItemsRaw(): Promise<MaintenanceItem[]> {
+  const db = await getDB()
+  return db.getAll('maintenanceItems')
 }
 
 export async function putMaintenanceItem(item: MaintenanceItem): Promise<void> {
@@ -94,9 +165,15 @@ export async function deleteMaintenanceItem(id: string): Promise<void> {
   await db.delete('maintenanceItems', id)
 }
 
-export async function getAllFuelEntries(): Promise<FuelEntry[]> {
+export async function getFuelEntriesForCar(carId: string): Promise<FuelEntry[]> {
   const db = await getDB()
-  return db.getAllFromIndex('fuelEntries', 'by-mileage')
+  const entries = await db.getAllFromIndex('fuelEntries', 'by-car', carId)
+  return entries.sort((a, b) => a.mileage - b.mileage)
+}
+
+export async function getAllFuelEntriesRaw(): Promise<FuelEntry[]> {
+  const db = await getDB()
+  return db.getAll('fuelEntries')
 }
 
 export async function putFuelEntry(entry: FuelEntry): Promise<void> {
@@ -116,9 +193,15 @@ export async function deleteFuelEntry(id: string): Promise<void> {
   await db.delete('fuelEntries', id)
 }
 
-export async function getAllHistoryEntries(): Promise<HistoryEntry[]> {
+export async function getHistoryForCar(carId: string): Promise<HistoryEntry[]> {
   const db = await getDB()
-  return db.getAllFromIndex('history', 'by-date')
+  const entries = await db.getAllFromIndex('history', 'by-car', carId)
+  return entries.sort((a, b) => b.date - a.date)
+}
+
+export async function getAllHistoryRaw(): Promise<HistoryEntry[]> {
+  const db = await getDB()
+  return db.getAll('history')
 }
 
 export async function putHistoryEntry(entry: HistoryEntry): Promise<void> {
@@ -140,9 +223,9 @@ export async function deleteHistoryEntry(id: string): Promise<void> {
 
 export async function clearAll(): Promise<void> {
   const db = await getDB()
-  const tx = db.transaction(['car', 'maintenanceItems', 'fuelEntries', 'history'], 'readwrite')
+  const tx = db.transaction(['cars', 'maintenanceItems', 'fuelEntries', 'history'], 'readwrite')
   await Promise.all([
-    tx.objectStore('car').clear(),
+    tx.objectStore('cars').clear(),
     tx.objectStore('maintenanceItems').clear(),
     tx.objectStore('fuelEntries').clear(),
     tx.objectStore('history').clear(),

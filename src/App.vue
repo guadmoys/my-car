@@ -5,7 +5,7 @@ import OnboardingView from './components/OnboardingView.vue'
 import Dashboard from './components/Dashboard.vue'
 
 const store = useCarStore()
-const { car, isLoaded } = store
+const { cars, isLoaded } = store
 
 onMounted(() => {
   store.load()
@@ -23,7 +23,7 @@ async function handleOnboardingSubmit(payload: {
 
 <template>
   <div v-if="!isLoaded" class="splash" />
-  <OnboardingView v-else-if="!car" @submit="handleOnboardingSubmit" />
+  <OnboardingView v-else-if="cars.length === 0" @submit="handleOnboardingSubmit" />
   <Dashboard v-else />
 </template>
 

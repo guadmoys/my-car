@@ -10,7 +10,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   save: [payload: { make: string; model: string; year: number }]
-  reset: []
+  deleteCar: []
   export: []
   import: [file: File]
 }>()
@@ -18,7 +18,7 @@ const emit = defineEmits<{
 const make = ref(props.car.make)
 const model = ref(props.car.model)
 const year = ref(String(props.car.year))
-const confirmingReset = ref(false)
+const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 function handleSave() {
@@ -27,12 +27,12 @@ function handleSave() {
   emit('save', { make: make.value.trim(), model: model.value.trim(), year: y })
 }
 
-function handleReset() {
-  if (!confirmingReset.value) {
-    confirmingReset.value = true
+function handleDelete() {
+  if (!confirmingDelete.value) {
+    confirmingDelete.value = true
     return
   }
-  emit('reset')
+  emit('deleteCar')
 }
 
 function triggerImport() {
@@ -94,11 +94,12 @@ function handleFileSelected(event: Event) {
         </div>
 
         <div class="danger-zone">
-          <button class="reset" @click="handleReset">
-            {{ confirmingReset ? 'Точно удалить все данные?' : 'Сбросить все данные' }}
+          <button class="reset" @click="handleDelete">
+            {{ confirmingDelete ? 'Точно удалить эту машину?' : 'Удалить эту машину' }}
           </button>
           <p class="hint">
-            Удалит информацию об автомобиле и все параметры ТО без возможности восстановления
+            Удалит эту машину, её параметры ТО, заправки и историю без возможности восстановления.
+            Другие ваши машины не затронет
           </p>
         </div>
       </div>

@@ -11,6 +11,7 @@ defineProps<{
 
 const emit = defineEmits<{
   editMileage: []
+  switchCar: []
 }>()
 
 function fmt(n: number): string {
@@ -20,7 +21,10 @@ function fmt(n: number): string {
 
 <template>
   <div class="summary">
-    <div class="identity">{{ car.year }} · {{ car.make }} {{ car.model }}</div>
+    <button class="identity" @click="emit('switchCar')">
+      {{ car.year }} · {{ car.make }} {{ car.model }}
+      <span class="identity-caret">›</span>
+    </button>
 
     <button class="mileage-row" @click="emit('editMileage')">
       <div>
@@ -61,12 +65,24 @@ function fmt(n: number): string {
 }
 
 .identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 13px;
   font-weight: 600;
   opacity: 0.85;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   margin-bottom: 10px;
+}
+
+.identity:active {
+  opacity: 0.6;
+}
+
+.identity-caret {
+  font-size: 13px;
+  transform: rotate(90deg);
 }
 
 .mileage-row {

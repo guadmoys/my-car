@@ -5,6 +5,7 @@ import type {
   FuelConsumption,
   FuelEntry,
   HistoryEntry,
+  LegacyBackupData,
   MaintenanceItem,
   MaintenanceStatus,
   Part,
@@ -12,32 +13,66 @@ import type {
 import { buildDefaultItems } from '../data/defaultMaintenance'
 import * as db from '../db/database'
 
-const car = ref<Car | null>(null)
+const ACTIVE_CAR_KEY = 'my-car-active-car-id'
+
+const cars = reactive<Car[]>([])
+const activeCarId = ref<string | null>(null)
 const items = reactive<MaintenanceItem[]>([])
 const fuelEntries = reactive<FuelEntry[]>([])
 const historyEntries = reactive<HistoryEntry[]>([])
 const isLoaded = ref(false)
+
+const car = computed(() => cars.find((c) => c.id === activeCarId.value) ?? null)
 
 function nowTs(): number {
   return Date.now()
 }
 
 function makeId(): string {
-  return `custom-${nowTs()}-${Math.random().toString(36).slice(2, 8)}`
+  return `id-${nowTs()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-async function load(): Promise<void> {
-  const [loadedCar, loadedItems, loadedFuel, loadedHistory] = await Promise.all([
-    db.getCar(),
-    db.getAllMaintenanceItems(),
-    db.getAllFuelEntries(),
-    db.getAllHistoryEntries(),
+function patchCar(carId: string, patch: Partial<Car>): Car | null {
+  const idx = cars.findIndex((c) => c.id === carId)
+  if (idx === -1) return null
+  const updated: Car = { ...cars[idx], ...patch, updatedAt: nowTs() }
+  cars[idx] = updated
+  return updated
+}
+
+async function loadCarData(carId: string): Promise<void> {
+  const [loadedItems, loadedFuel, loadedHistory] = await Promise.all([
+    db.getMaintenanceItemsForCar(carId),
+    db.getFuelEntriesForCar(carId),
+    db.getHistoryForCar(carId),
   ])
-  car.value = loadedCar ?? null
   items.splice(0, items.length, ...loadedItems.map((item) => ({ ...item, parts: item.parts ?? [] })))
   fuelEntries.splice(0, fuelEntries.length, ...loadedFuel)
   historyEntries.splice(0, historyEntries.length, ...loadedHistory)
+}
+
+async function load(): Promise<void> {
+  const loadedCars = await db.getAllCars()
+  cars.splice(0, cars.length, ...loadedCars)
+
+  if (cars.length > 0) {
+    const stored = localStorage.getItem(ACTIVE_CAR_KEY)
+    const validStored = stored && cars.some((c) => c.id === stored) ? stored : null
+    const nextActiveId = validStored ?? cars[0].id
+    activeCarId.value = nextActiveId
+    localStorage.setItem(ACTIVE_CAR_KEY, nextActiveId)
+    await loadCarData(nextActiveId)
+  }
+
   isLoaded.value = true
+}
+
+async function switchCar(carId: string): Promise<void> {
+  if (carId === activeCarId.value) return
+  if (!cars.some((c) => c.id === carId)) return
+  activeCarId.value = carId
+  localStorage.setItem(ACTIVE_CAR_KEY, carId)
+  await loadCarData(carId)
 }
 
 async function createCar(input: {
@@ -47,7 +82,7 @@ async function createCar(input: {
   initialMileage: number
 }): Promise<void> {
   const newCar: Car = {
-    id: 'main',
+    id: makeId(),
     make: input.make.trim(),
     model: input.model.trim(),
     year: input.year,
@@ -56,30 +91,53 @@ async function createCar(input: {
     createdAt: nowTs(),
     updatedAt: nowTs(),
   }
-  const defaults = buildDefaultItems(input.initialMileage)
+  const defaults = buildDefaultItems(input.initialMileage, newCar.id)
 
   await db.putCar(newCar)
   await db.putMaintenanceItems(defaults)
 
-  car.value = newCar
+  cars.push(newCar)
+  activeCarId.value = newCar.id
+  localStorage.setItem(ACTIVE_CAR_KEY, newCar.id)
   items.splice(0, items.length, ...defaults)
+  fuelEntries.splice(0, fuelEntries.length)
+  historyEntries.splice(0, historyEntries.length)
+}
+
+async function deleteCar(carId: string): Promise<void> {
+  await db.deleteCarCascade(carId)
+  const idx = cars.findIndex((c) => c.id === carId)
+  if (idx !== -1) cars.splice(idx, 1)
+
+  if (activeCarId.value !== carId) return
+
+  const next = cars[0] ?? null
+  if (next) {
+    activeCarId.value = next.id
+    localStorage.setItem(ACTIVE_CAR_KEY, next.id)
+    await loadCarData(next.id)
+  } else {
+    activeCarId.value = null
+    localStorage.removeItem(ACTIVE_CAR_KEY)
+    items.splice(0, items.length)
+    fuelEntries.splice(0, fuelEntries.length)
+    historyEntries.splice(0, historyEntries.length)
+  }
 }
 
 async function updateCarInfo(
   patch: Partial<Pick<Car, 'make' | 'model' | 'year'>>,
 ): Promise<void> {
-  if (!car.value) return
-  const updated: Car = { ...car.value, ...patch, updatedAt: nowTs() }
-  await db.putCar(updated)
-  car.value = updated
+  if (!activeCarId.value) return
+  const updated = patchCar(activeCarId.value, patch)
+  if (updated) await db.putCar(updated)
 }
 
 async function updateMileage(newMileage: number): Promise<void> {
   if (!car.value) return
   const clamped = Math.max(newMileage, car.value.initialMileage)
-  const updated: Car = { ...car.value, currentMileage: clamped, updatedAt: nowTs() }
-  await db.putCar(updated)
-  car.value = updated
+  const updated = patchCar(car.value.id, { currentMileage: clamped })
+  if (updated) await db.putCar(updated)
 }
 
 async function toggleItem(id: string, enabled: boolean): Promise<void> {
@@ -111,6 +169,7 @@ async function markServiced(id: string, atMileage?: number): Promise<void> {
 
   const entry: HistoryEntry = {
     id: makeId(),
+    carId: car.value.id,
     itemId: item.id,
     itemName: item.name,
     mileage,
@@ -129,6 +188,7 @@ async function addCustomItem(input: {
   if (!car.value) return
   const item: MaintenanceItem = {
     id: makeId(),
+    carId: car.value.id,
     name: input.name.trim(),
     intervalKm: input.intervalKm,
     intervalKmMax: input.intervalKmMax,
@@ -154,6 +214,7 @@ async function addFuelEntry(input: { mileage: number; liters: number }): Promise
   if (!car.value) return
   const entry: FuelEntry = {
     id: makeId(),
+    carId: car.value.id,
     mileage: input.mileage,
     liters: input.liters,
     date: nowTs(),
@@ -178,60 +239,6 @@ function getItemHistory(itemId: string): HistoryEntry[] {
     .filter((h) => h.itemId === itemId)
     .slice()
     .sort((a, b) => b.date - a.date)
-}
-
-async function resetAll(): Promise<void> {
-  await db.clearAll()
-  car.value = null
-  items.splice(0, items.length)
-  fuelEntries.splice(0, fuelEntries.length)
-  historyEntries.splice(0, historyEntries.length)
-}
-
-function exportData(): BackupData {
-  return {
-    version: 1,
-    exportedAt: nowTs(),
-    car: JSON.parse(JSON.stringify(car.value)),
-    items: JSON.parse(JSON.stringify(items)),
-    fuelEntries: JSON.parse(JSON.stringify(fuelEntries)),
-    historyEntries: JSON.parse(JSON.stringify(historyEntries)),
-  }
-}
-
-function isValidBackup(data: unknown): data is BackupData {
-  if (!data || typeof data !== 'object') return false
-  const d = data as Record<string, unknown>
-  return (
-    typeof d.car === 'object' &&
-    d.car !== null &&
-    typeof (d.car as Car).make === 'string' &&
-    Array.isArray(d.items)
-  )
-}
-
-async function importData(data: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isValidBackup(data)) {
-    return { ok: false, error: 'Файл повреждён или это не резервная копия «Моей машины»' }
-  }
-
-  const importedCar = data.car
-  const importedItems = data.items.map((item) => ({ ...item, parts: item.parts ?? [] }))
-  const importedFuel = Array.isArray(data.fuelEntries) ? data.fuelEntries : []
-  const importedHistory = Array.isArray(data.historyEntries) ? data.historyEntries : []
-
-  await db.clearAll()
-  await db.putCar(importedCar)
-  await db.putMaintenanceItems(importedItems)
-  if (importedFuel.length) await db.putFuelEntries(importedFuel)
-  if (importedHistory.length) await db.putHistoryEntries(importedHistory)
-
-  car.value = importedCar
-  items.splice(0, items.length, ...importedItems)
-  fuelEntries.splice(0, fuelEntries.length, ...importedFuel)
-  historyEntries.splice(0, historyEntries.length, ...importedHistory)
-
-  return { ok: true }
 }
 
 function statusFor(item: MaintenanceItem, currentMileage: number): MaintenanceStatus {
@@ -312,8 +319,91 @@ const fuelHistory = computed<FuelConsumption[]>(() => {
   return result.reverse()
 })
 
+function isMultiCarBackup(data: unknown): data is BackupData {
+  if (!data || typeof data !== 'object') return false
+  const d = data as Record<string, unknown>
+  return Array.isArray(d.cars) && Array.isArray(d.items)
+}
+
+function isLegacyBackup(data: unknown): data is LegacyBackupData {
+  if (!data || typeof data !== 'object') return false
+  const d = data as Record<string, unknown>
+  return typeof d.car === 'object' && d.car !== null && Array.isArray(d.items)
+}
+
+async function exportData(): Promise<BackupData> {
+  const [allCars, allItems, allFuel, allHistory] = await Promise.all([
+    db.getAllCars(),
+    db.getAllMaintenanceItemsRaw(),
+    db.getAllFuelEntriesRaw(),
+    db.getAllHistoryRaw(),
+  ])
+  return {
+    version: 2,
+    exportedAt: nowTs(),
+    cars: allCars,
+    activeCarId: activeCarId.value,
+    items: allItems,
+    fuelEntries: allFuel,
+    historyEntries: allHistory,
+  }
+}
+
+async function importData(data: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+  let importedCars: Car[]
+  let importedItems: MaintenanceItem[]
+  let importedFuel: FuelEntry[]
+  let importedHistory: HistoryEntry[]
+  let newActiveCarId: string | undefined
+
+  if (isMultiCarBackup(data)) {
+    importedCars = data.cars
+    importedItems = data.items.map((i) => ({ ...i, parts: i.parts ?? [] }))
+    importedFuel = Array.isArray(data.fuelEntries) ? data.fuelEntries : []
+    importedHistory = Array.isArray(data.historyEntries) ? data.historyEntries : []
+    newActiveCarId =
+      data.activeCarId && importedCars.some((c) => c.id === data.activeCarId)
+        ? data.activeCarId
+        : importedCars[0]?.id
+  } else if (isLegacyBackup(data)) {
+    const carId = data.car.id && data.car.id !== 'main' ? data.car.id : makeId()
+    importedCars = [{ ...data.car, id: carId }]
+    importedItems = data.items.map((i) => ({ ...i, carId, parts: i.parts ?? [] }))
+    importedFuel = (data.fuelEntries ?? []).map((f) => ({ ...f, carId }))
+    importedHistory = (data.historyEntries ?? []).map((h) => ({ ...h, carId }))
+    newActiveCarId = carId
+  } else {
+    return { ok: false, error: 'Файл повреждён или это не резервная копия «Моей машины»' }
+  }
+
+  if (!newActiveCarId || importedCars.length === 0) {
+    return { ok: false, error: 'В файле нет ни одной машины' }
+  }
+
+  await db.clearAll()
+  await db.putCars(importedCars)
+  await db.putMaintenanceItems(importedItems)
+  if (importedFuel.length) await db.putFuelEntries(importedFuel)
+  if (importedHistory.length) await db.putHistoryEntries(importedHistory)
+
+  cars.splice(0, cars.length, ...importedCars)
+  activeCarId.value = newActiveCarId
+  localStorage.setItem(ACTIVE_CAR_KEY, newActiveCarId)
+
+  items.splice(0, items.length, ...importedItems.filter((i) => i.carId === newActiveCarId))
+  fuelEntries.splice(0, fuelEntries.length, ...importedFuel.filter((f) => f.carId === newActiveCarId))
+  historyEntries.splice(
+    0,
+    historyEntries.length,
+    ...importedHistory.filter((h) => h.carId === newActiveCarId),
+  )
+
+  return { ok: true }
+}
+
 export function useCarStore() {
   return {
+    cars,
     car,
     items,
     fuelEntries,
@@ -328,7 +418,9 @@ export function useCarStore() {
     fuelHistory,
     averageConsumption,
     load,
+    switchCar,
     createCar,
+    deleteCar,
     updateCarInfo,
     updateMileage,
     toggleItem,
@@ -339,7 +431,6 @@ export function useCarStore() {
     addFuelEntry,
     deleteFuelEntry,
     getItemHistory,
-    resetAll,
     exportData,
     importData,
   }

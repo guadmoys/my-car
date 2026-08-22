@@ -29,9 +29,10 @@ export const DEFAULT_MAINTENANCE_TEMPLATES: MaintenanceTemplate[] = [
   { name: 'Ремень ГРМ', intervalKm: 95_000, intervalKmMax: 160_000 },
 ]
 
-export function buildDefaultItems(initialMileage: number): MaintenanceItem[] {
+export function buildDefaultItems(initialMileage: number, carId: string): MaintenanceItem[] {
   return DEFAULT_MAINTENANCE_TEMPLATES.map((tpl, index) => ({
-    id: `default-${index}`,
+    id: `${carId}-default-${index}`,
+    carId,
     name: tpl.name,
     intervalKm: tpl.intervalKm,
     intervalKmMax: tpl.intervalKmMax,

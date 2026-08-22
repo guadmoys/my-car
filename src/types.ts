@@ -1,5 +1,5 @@
 export interface Car {
-  id: 'main'
+  id: string
   make: string
   model: string
   year: number
@@ -20,6 +20,7 @@ export interface Part {
 
 export interface MaintenanceItem {
   id: string
+  carId: string
   name: string
   /** Interval in km used for progress calculations (the lower bound when a range is given). */
   intervalKm: number
@@ -45,6 +46,7 @@ export interface MaintenanceStatus {
 
 export interface HistoryEntry {
   id: string
+  carId: string
   itemId: string
   /** Name of the maintenance item at the time it was completed (item may later be renamed or deleted). */
   itemName: string
@@ -54,6 +56,7 @@ export interface HistoryEntry {
 
 export interface FuelEntry {
   id: string
+  carId: string
   /** Odometer reading at the time of this fill-up. */
   mileage: number
   liters: number
@@ -68,10 +71,21 @@ export interface FuelConsumption {
 }
 
 export interface BackupData {
-  version: 1
+  version: 2
   exportedAt: number
-  car: Car
+  cars: Car[]
+  activeCarId: string | null
   items: MaintenanceItem[]
   fuelEntries: FuelEntry[]
   historyEntries: HistoryEntry[]
+}
+
+/** Shape of a v1 backup (single car, no carId fields), kept only for import compatibility. */
+export interface LegacyBackupData {
+  version: 1
+  exportedAt: number
+  car: Car
+  items: Omit<MaintenanceItem, 'carId'>[]
+  fuelEntries: Omit<FuelEntry, 'carId'>[]
+  historyEntries: Omit<HistoryEntry, 'carId'>[]
 }
