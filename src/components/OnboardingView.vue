@@ -171,7 +171,7 @@ function handleSubmit() {
   width: 100%;
   max-width: 400px;
   background: var(--bg-elevated);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
   box-shadow: var(--shadow);
   padding: 4px 16px;
@@ -220,7 +220,7 @@ function handleSubmit() {
   width: 100%;
   margin: 20px 0 16px;
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: var(--blue);
   color: #fff;
   font-size: 17px;

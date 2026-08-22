@@ -20,7 +20,7 @@
 }
 
 .sk {
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: linear-gradient(
     100deg,
     var(--fill-secondary) 40%,

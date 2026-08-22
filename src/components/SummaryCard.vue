@@ -22,7 +22,8 @@ function fmt(n: number): string {
 <template>
   <div class="summary">
     <button class="identity" @click="emit('switchCar')">
-      {{ car.year }} · {{ car.make }} {{ car.model }}
+      <span class="identity-avatar">{{ car.make.charAt(0).toUpperCase() }}</span>
+      <span>{{ car.year }} · {{ car.make }} {{ car.model }}</span>
       <span class="identity-caret">›</span>
     </button>
 
@@ -58,7 +59,7 @@ function fmt(n: number): string {
 .summary {
   background: linear-gradient(135deg, var(--blue), #0040dd);
   color: #fff;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   padding: 18px 20px 20px;
   box-shadow: var(--shadow);
   margin-bottom: 28px;
@@ -83,6 +84,18 @@ function fmt(n: number): string {
 .identity-caret {
   font-size: 13px;
   transform: rotate(90deg);
+}
+
+.identity-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .mileage-row {

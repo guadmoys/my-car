@@ -126,10 +126,10 @@ const filteredStatuses = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 14px;
   margin-bottom: 12px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   background: var(--fill-secondary);
 }
 
@@ -225,7 +225,7 @@ const filteredStatuses = computed(() => {
 
 .card {
   background: var(--bg-elevated);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -303,7 +303,7 @@ const filteredStatuses = computed(() => {
   width: 100%;
   margin-top: 12px;
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: var(--fill-secondary);
   color: var(--blue);
   font-size: 16px;

@@ -31,8 +31,10 @@ const tabs: { key: TabKey; label: string }[] = [
       :aria-label="tab.label"
       @click="haptic('tap'); emit('change', tab.key)"
     >
-      <span v-if="tab.key === 'settings'" class="avatar-badge" :class="{ active: activeTab === tab.key }">
-        {{ props.carInitial ?? '🚗' }}
+      <span v-if="tab.key === 'settings'" class="avatar-ring" :class="{ attention: dueBadge > 0 }">
+        <span class="avatar-badge" :class="{ active: activeTab === tab.key }">
+          {{ props.carInitial ?? '🚗' }}
+        </span>
       </span>
       <span v-else class="icon-pill" :class="{ active: activeTab === tab.key }">
         <span class="icon-wrap">
@@ -145,6 +147,20 @@ const tabs: { key: TabKey; label: string }[] = [
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.avatar-ring {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.avatar-ring.attention {
+  background: var(--ring-attention);
 }
 
 .avatar-badge {

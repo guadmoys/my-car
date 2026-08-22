@@ -24,6 +24,21 @@
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Shape scale — bigger, rounder, "floating" surfaces and fully pill CTAs,
+     the two signature moves of the Instagram-style language this app uses. */
+  --radius-pill: 999px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+
+  /* Motion — the same spring/duration everywhere something slides or fades in. */
+  --motion-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --motion-fast: 0.15s ease;
+
+  /* Story-ring gradient — wraps an avatar to say "needs attention", the
+     Instagram unread-story cue. Neutral ring otherwise. */
+  --ring-attention: linear-gradient(135deg, var(--orange), var(--red));
 }
 
 @media (prefers-color-scheme: dark) {

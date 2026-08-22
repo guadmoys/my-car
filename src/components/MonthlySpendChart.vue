@@ -130,7 +130,7 @@ function toggle(key: string) {
 <style scoped>
 .chart-card {
   background: var(--bg-elevated);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--card-border);
   box-shadow: var(--shadow);
   padding: 14px 16px 12px;

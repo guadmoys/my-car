@@ -45,7 +45,7 @@ function handleAction(id: number, action: ToastAction) {
   justify-content: space-between;
   gap: 12px;
   padding: 13px 16px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, #1c1c1e 92%, transparent);
   color: #fff;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);

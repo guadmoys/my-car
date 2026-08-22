@@ -331,7 +331,7 @@ function handleAddToCalendar() {
   max-height: 88dvh;
   overflow-y: auto;
   background: var(--bg-grouped);
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 8px 0 calc(24px + var(--safe-bottom));
   animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -525,7 +525,7 @@ function handleAddToCalendar() {
 .add-part {
   width: 100%;
   padding: 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: var(--fill-secondary);
   color: var(--blue);
   font-size: 15px;
@@ -541,7 +541,7 @@ function handleAddToCalendar() {
   width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   padding: 13px;
   color: var(--blue);
   font-size: 15px;
@@ -556,7 +556,7 @@ function handleAddToCalendar() {
 .delete {
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   padding: 13px;
   color: var(--red);
   font-size: 17px;
