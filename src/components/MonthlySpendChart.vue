@@ -10,6 +10,10 @@ const props = defineProps<{
 const activeKey = ref<string | null>(null)
 
 const MONTHS_BACK = 6
+const W = 100
+const H = 40
+const PAD_TOP = 4
+const PAD_BOTTOM = 4
 
 function monthKey(ts: number): string {
   const d = new Date(ts)
@@ -18,15 +22,10 @@ function monthKey(ts: number): string {
 
 const months = computed(() => {
   const now = new Date()
-  const keys: { key: string; label: string; year: number; month: number }[] = []
+  const keys: { key: string; label: string }[] = []
   for (let i = MONTHS_BACK - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    keys.push({
-      key: `${d.getFullYear()}-${d.getMonth()}`,
-      label: d.toLocaleDateString('ru-RU', { month: 'short' }),
-      year: d.getFullYear(),
-      month: d.getMonth(),
-    })
+    keys.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString('ru-RU', { month: 'short' }) })
   }
   return keys
 })
@@ -45,12 +44,31 @@ const totals = computed(() => {
 })
 
 const hasData = computed(() => totals.value.some((m) => m.total > 0))
-const maxValue = computed(() => Math.max(...totals.value.map((m) => m.total), 1))
+const maxValue = computed(() => Math.max(...totals.value.map((m) => m.total), 1) * 1.15)
 const activeMonth = computed(() => totals.value.find((m) => m.key === activeKey.value) ?? null)
 
-function heightPct(value: number): number {
-  return value === 0 ? 2 : Math.max(4, (value / maxValue.value) * 100)
+function xAt(i: number): number {
+  const n = totals.value.length
+  return n <= 1 ? W / 2 : ((i + 0.5) / n) * W
 }
+
+function yAt(value: number): number {
+  const usable = H - PAD_TOP - PAD_BOTTOM
+  return PAD_TOP + (1 - value / maxValue.value) * usable
+}
+
+const coords = computed(() => totals.value.map((m, i) => ({ month: m, x: xAt(i), y: yAt(m.total) })))
+
+const linePath = computed(() =>
+  coords.value.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' '),
+)
+
+const areaPath = computed(() => {
+  if (coords.value.length === 0) return ''
+  const first = coords.value[0]
+  const last = coords.value[coords.value.length - 1]
+  return `${linePath.value} L ${last.x.toFixed(1)},${H} L ${first.x.toFixed(1)},${H} Z`
+})
 
 function fmtCost(n: number): string {
   return `${Math.round(n).toLocaleString('ru-RU')} ₽`
@@ -68,16 +86,39 @@ function toggle(key: string) {
     </div>
 
     <div class="chart-area">
-      <button
-        v-for="m in totals"
-        :key="m.key"
-        class="bar-col"
-        :aria-label="`${m.label}: ${fmtCost(m.total)}`"
-        @click="toggle(m.key)"
-      >
-        <div class="bar" :class="{ active: activeKey === m.key }" :style="{ height: `${heightPct(m.total)}%` }" />
-        <span class="bar-label">{{ m.label }}</span>
-      </button>
+      <svg class="chart-svg" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="spend-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--blue)" stop-opacity="0.28" />
+            <stop offset="100%" stop-color="var(--blue)" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        <path :d="areaPath" fill="url(#spend-area)" stroke="none" />
+        <path :d="linePath" fill="none" stroke="var(--blue)" stroke-width="1.6" vector-effect="non-scaling-stroke" />
+        <circle
+          v-for="c in coords"
+          :key="c.month.key"
+          :cx="c.x"
+          :cy="c.y"
+          :r="c.month.key === activeKey ? 2.6 : 2"
+          fill="var(--blue)"
+          stroke="var(--bg-elevated)"
+          stroke-width="1"
+        />
+      </svg>
+      <div class="hit-row">
+        <button
+          v-for="c in coords"
+          :key="c.month.key"
+          class="hit"
+          :aria-label="`${c.month.label}: ${fmtCost(c.month.total)}`"
+          @click="toggle(c.month.key)"
+        />
+      </div>
+    </div>
+
+    <div class="month-labels">
+      <span v-for="m in totals" :key="m.key" class="month-label">{{ m.label }}</span>
     </div>
 
     <div class="chart-footer">
@@ -106,43 +147,42 @@ function toggle(key: string) {
 
 .chart-area {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
   height: 92px;
 }
 
-.bar-col {
+.chart-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.hit-row {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.hit {
   flex: 1;
   height: 100%;
+}
+
+.month-labels {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  min-width: 0;
+  margin-top: 6px;
 }
 
-.bar {
-  width: 100%;
-  border-radius: 4px 4px 0 0;
-  background: var(--blue);
-  transition: opacity 0.15s ease;
-}
-
-.bar.active,
-.bar-col:active .bar {
-  opacity: 0.6;
-}
-
-.bar-label {
+.month-label {
+  flex: 1;
+  text-align: center;
   font-size: 11px;
   color: var(--text-secondary);
   text-transform: capitalize;
 }
 
 .chart-footer {
-  margin-top: 10px;
+  margin-top: 8px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text);

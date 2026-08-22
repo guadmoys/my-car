@@ -9,28 +9,49 @@ const props = defineProps<{
 
 const activeId = ref<string | null>(null)
 
-const bars = computed(() => {
-  return props.history
-    .filter((row) => row.litersPer100km !== null)
-    .slice(-10)
+const W = 100
+const H = 40
+const PAD_TOP = 4
+const PAD_BOTTOM = 4
+
+const points = computed(() => {
+  return props.history.filter((row) => row.litersPer100km !== null).slice(-10)
 })
 
-const maxValue = computed(() => {
-  const values = bars.value.map((b) => b.litersPer100km ?? 0)
+const domainMax = computed(() => {
+  const values = points.value.map((p) => p.litersPer100km ?? 0)
   const avg = props.average ?? 0
   return Math.max(avg, ...values, 1) * 1.15
 })
 
-const averagePct = computed(() =>
-  props.average !== null ? Math.min(100, (props.average / maxValue.value) * 100) : null,
+function xAt(i: number): number {
+  const n = points.value.length
+  return n <= 1 ? W / 2 : ((i + 0.5) / n) * W
+}
+
+function yAt(value: number): number {
+  const usable = H - PAD_TOP - PAD_BOTTOM
+  return PAD_TOP + (1 - value / domainMax.value) * usable
+}
+
+const coords = computed(() =>
+  points.value.map((p, i) => ({ row: p, x: xAt(i), y: yAt(p.litersPer100km ?? 0) })),
 )
 
-const activeRow = computed(() => bars.value.find((b) => b.entry.id === activeId.value) ?? null)
+const linePath = computed(() =>
+  coords.value.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' '),
+)
 
-function heightPct(value: number | null): number {
-  if (value === null) return 0
-  return Math.max(4, (value / maxValue.value) * 100)
-}
+const areaPath = computed(() => {
+  if (coords.value.length === 0) return ''
+  const first = coords.value[0]
+  const last = coords.value[coords.value.length - 1]
+  return `${linePath.value} L ${last.x.toFixed(1)},${H} L ${first.x.toFixed(1)},${H} Z`
+})
+
+const averageY = computed(() => (props.average !== null ? yAt(props.average) : null))
+
+const activeRow = computed(() => points.value.find((p) => p.entry.id === activeId.value) ?? null)
 
 function fmtDate(ts: number): string {
   return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
@@ -39,10 +60,14 @@ function fmtDate(ts: number): string {
 function toggle(id: string) {
   activeId.value = activeId.value === id ? null : id
 }
+
+function dotColor(quality: FuelConsumption['quality']): string {
+  return quality === 'good' ? 'var(--green)' : quality === 'bad' ? 'var(--red)' : 'var(--text-tertiary)'
+}
 </script>
 
 <template>
-  <div v-if="bars.length > 0" class="chart-card">
+  <div v-if="points.length > 0" class="chart-card">
     <div class="chart-header">
       <span class="chart-title">Расход, л/100км</span>
       <div class="legend">
@@ -52,20 +77,43 @@ function toggle(id: string) {
     </div>
 
     <div class="chart-area">
-      <div v-if="averagePct !== null" class="avg-line" :style="{ bottom: `${averagePct}%` }" />
-      <button
-        v-for="row in bars"
-        :key="row.entry.id"
-        class="bar-col"
-        :aria-label="`${fmtDate(row.entry.date)}: ${row.litersPer100km?.toFixed(1)} л/100км`"
-        @click="toggle(row.entry.id)"
-      >
-        <div
-          class="bar"
-          :class="[row.quality, { active: activeId === row.entry.id }]"
-          :style="{ height: `${heightPct(row.litersPer100km)}%` }"
+      <svg class="chart-svg" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="consumption-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--blue)" stop-opacity="0.28" />
+            <stop offset="100%" stop-color="var(--blue)" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        <line
+          v-if="averageY !== null"
+          class="avg-line"
+          :x1="0"
+          :x2="W"
+          :y1="averageY"
+          :y2="averageY"
         />
-      </button>
+        <path :d="areaPath" fill="url(#consumption-area)" stroke="none" />
+        <path :d="linePath" fill="none" stroke="var(--blue)" stroke-width="1.6" vector-effect="non-scaling-stroke" />
+        <circle
+          v-for="c in coords"
+          :key="c.row.entry.id"
+          :cx="c.x"
+          :cy="c.y"
+          :r="c.row.entry.id === activeId ? 2.6 : 2"
+          :fill="dotColor(c.row.quality)"
+          stroke="var(--bg-elevated)"
+          stroke-width="1"
+        />
+      </svg>
+      <div class="hit-row">
+        <button
+          v-for="c in coords"
+          :key="c.row.entry.id"
+          class="hit"
+          :aria-label="`${fmtDate(c.row.entry.date)}: ${c.row.litersPer100km?.toFixed(1)} л/100км`"
+          @click="toggle(c.row.entry.id)"
+        />
+      </div>
     </div>
 
     <div class="chart-footer">
@@ -128,46 +176,33 @@ function toggle(id: string) {
 
 .chart-area {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
   height: 100px;
 }
 
-.avg-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-top: 1.5px dashed var(--text-tertiary);
-  opacity: 0.6;
+.chart-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
 }
 
-.bar-col {
+.avg-line {
+  stroke: var(--text-tertiary);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  opacity: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.hit-row {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.hit {
   flex: 1;
   height: 100%;
-  display: flex;
-  align-items: flex-end;
-  min-width: 0;
-}
-
-.bar {
-  width: 100%;
-  border-radius: 4px 4px 0 0;
-  background: var(--text-tertiary);
-  transition: opacity 0.15s ease;
-}
-
-.bar.good {
-  background: var(--green);
-}
-
-.bar.bad {
-  background: var(--red);
-}
-
-.bar-col:active .bar,
-.bar.active {
-  opacity: 0.6;
 }
 
 .chart-footer {
