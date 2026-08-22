@@ -58,7 +58,7 @@ const sortedStatuses = computed(() =>
 const urgentStatuses = computed<MaintenanceStatus[]>(() =>
   sortedStatuses.value.filter((s) => s.state !== 'ok'),
 )
-const urgentPreview = computed(() => urgentStatuses.value.slice(0, 4))
+const urgentPreview = computed(() => urgentStatuses.value.slice(0, 3))
 
 const editModalItem = computed(() => (editingItem.value === 'new' ? null : editingItem.value))
 
