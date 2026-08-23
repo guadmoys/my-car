@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { FuelConsumption, FuelInsight, HistoryEntry } from '../types'
+import type { CostForecast, FuelConsumption, FuelInsight, HistoryEntry } from '../types'
 import { haptic } from '../utils/haptics'
 import SwipeRow from './SwipeRow.vue'
 import ConsumptionChart from './ConsumptionChart.vue'
@@ -18,6 +18,7 @@ const props = defineProps<{
   totalCost: number
   totalCo2Kg: number
   hasAnyCost: boolean
+  costForecast: { sixMonths: CostForecast | null; twelveMonths: CostForecast | null }
 }>()
 
 const fuelEntriesRaw = computed(() => props.fuelHistory.map((row) => row.entry))
@@ -96,6 +97,33 @@ function fmtCo2(kg: number): string {
           <span>{{ fmtCo2(totalCo2Kg) }}</span>
         </div>
       </div>
+    </section>
+
+    <section v-if="costForecast.sixMonths && costForecast.twelveMonths" class="section">
+      <div class="section-title">Прогноз расходов</div>
+      <div class="card expenses-card">
+        <div class="expense-row forecast-row">
+          <span>6 месяцев</span>
+          <span class="forecast-amount">
+            {{ fmtCost(costForecast.sixMonths.total) }}
+            <span class="forecast-breakdown">
+              ⛽ {{ fmtCost(costForecast.sixMonths.fuel) }} · 🔧 {{ fmtCost(costForecast.sixMonths.maintenance) }}
+            </span>
+          </span>
+        </div>
+        <div class="expense-row forecast-row">
+          <span>12 месяцев</span>
+          <span class="forecast-amount">
+            {{ fmtCost(costForecast.twelveMonths.total) }}
+            <span class="forecast-breakdown">
+              ⛽ {{ fmtCost(costForecast.twelveMonths.fuel) }} · 🔧 {{ fmtCost(costForecast.twelveMonths.maintenance) }}
+            </span>
+          </span>
+        </div>
+      </div>
+      <p class="hint forecast-hint">
+        Ориентировочно, по вашему текущему темпу трат на топливо и среднему чеку ТО — не бюджет
+      </p>
     </section>
 
     <section v-if="fuelHistory.length > 1 || hasAnyCost" class="section charts-section">
@@ -285,6 +313,31 @@ function fmtCo2(kg: number): string {
   font-size: 13px;
   color: var(--text-secondary);
   padding-top: 8px;
+}
+
+.forecast-row {
+  align-items: flex-start;
+}
+
+.forecast-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-weight: 700;
+  color: var(--blue);
+}
+
+.forecast-breakdown {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.forecast-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 8px 4px 0;
 }
 
 .empty {

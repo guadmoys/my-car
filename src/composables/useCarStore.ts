@@ -2,6 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import type {
   BackupData,
   Car,
+  CostForecast,
   FuelConsumption,
   FuelEntry,
   FuelInsight,
@@ -862,6 +863,64 @@ const hasAnyCost = computed(
   () => fuelEntries.some((e) => e.cost !== undefined) || historyEntries.some((h) => h.cost !== undefined),
 )
 
+const MONTH_DAYS = 30.44
+
+/**
+ * Expected number of times an enabled item will trigger within `days`.
+ * Items with a month-based interval use that cadence directly; purely
+ * km-based items need a driving-pace estimate (avgDailyKm) — without one,
+ * they're left out rather than guessed at.
+ */
+function expectedServicesIn(days: number, dailyKm: number | null): number {
+  let count = 0
+  for (const item of items) {
+    if (!item.enabled) continue
+    if (item.intervalMonths) {
+      count += days / (item.intervalMonths * MONTH_DAYS)
+    } else if (dailyKm !== null && dailyKm > 0) {
+      count += (dailyKm * days) / item.intervalKm
+    }
+  }
+  return count
+}
+
+/**
+ * Cost-of-ownership projection for 6 and 12 months out: a fuel-spend rate
+ * (recent 90-day window, falling back to the full tracked history) times
+ * the horizon, plus an expected maintenance cost — the average priced
+ * service times how many services the enabled items are expected to
+ * trigger in that horizon. A rough estimate by design (one flat average
+ * service cost, not a per-item one), not a budgeting tool.
+ */
+const costForecast = computed<{ sixMonths: CostForecast | null; twelveMonths: CostForecast | null }>(() => {
+  if (!car.value) return { sixMonths: null, twelveMonths: null }
+
+  const priced = fuelEntries.filter((e) => e.cost !== undefined).sort((a, b) => a.date - b.date)
+  if (priced.length < 2) return { sixMonths: null, twelveMonths: null }
+
+  const now = Date.now()
+  const recentWindow = priced.filter((e) => e.date >= now - 90 * DAY_MS)
+  const windowEntries = recentWindow.length >= 2 ? recentWindow : priced
+  const daysSpan = (now - windowEntries[0].date) / DAY_MS
+  if (daysSpan < 3) return { sixMonths: null, twelveMonths: null }
+  const dailyFuelRate =
+    windowEntries.reduce((sum, e) => sum + (e.cost as number), 0) / daysSpan
+
+  const pricedHistory = historyEntries.filter((h) => h.cost !== undefined)
+  const avgServiceCost =
+    pricedHistory.length > 0
+      ? pricedHistory.reduce((sum, h) => sum + (h.cost as number), 0) / pricedHistory.length
+      : 0
+
+  function forecastFor(days: number): CostForecast {
+    const fuel = dailyFuelRate * days
+    const maintenance = expectedServicesIn(days, avgDailyKm.value) * avgServiceCost
+    return { fuel, maintenance, total: fuel + maintenance }
+  }
+
+  return { sixMonths: forecastFor(6 * MONTH_DAYS), twelveMonths: forecastFor(12 * MONTH_DAYS) }
+})
+
 function isMultiCarBackup(data: unknown): data is BackupData {
   if (!data || typeof data !== 'object') return false
   const d = data as Record<string, unknown>
@@ -968,6 +1027,7 @@ export function useCarStore() {
     totalServiceCost,
     totalCost,
     hasAnyCost,
+    costForecast,
     load,
     switchCar,
     createCar,

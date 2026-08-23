@@ -38,6 +38,7 @@ const {
   totalServiceCost,
   totalCost,
   hasAnyCost,
+  costForecast,
 } = store
 
 const toast = useToast()
@@ -416,6 +417,7 @@ function fmtDate(ts: number): string {
         :total-service-cost="totalServiceCost"
         :total-cost="totalCost"
         :has-any-cost="hasAnyCost"
+        :cost-forecast="costForecast"
         @add-fuel="showFuelSheet = true"
         @delete-fuel="handleDeleteFuel"
         @edit-cost="editingFuelCostId = $event"
