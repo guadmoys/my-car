@@ -233,7 +233,11 @@ function handleFileSelected(event: Event) {
               <span class="notif-label">Уведомлять о ТО</span>
               <span class="hint notif-hint">Когда параметр становится «скоро» или «просрочено»</span>
             </span>
-            <ToggleSwitch :checked="notificationsOn" @update:checked="handleToggleNotifications" />
+            <ToggleSwitch
+              :checked="notificationsOn"
+              aria-label="Уведомлять о ТО"
+              @update:checked="handleToggleNotifications"
+            />
           </div>
         </div>
         <p v-if="notificationsBlocked" class="hint error">
@@ -259,7 +263,7 @@ function handleFileSelected(event: Event) {
           <div class="divider" />
           <div class="field notif-row">
             <span class="notif-label">Показывать год</span>
-            <ToggleSwitch :checked="showYear" @update:checked="handleToggleShowYear" />
+            <ToggleSwitch :checked="showYear" aria-label="Показывать год" @update:checked="handleToggleShowYear" />
           </div>
         </div>
         <p class="hint">

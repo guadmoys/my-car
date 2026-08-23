@@ -7,6 +7,8 @@ import ToggleSwitch from './ToggleSwitch.vue'
 
 const props = defineProps<{
   status: MaintenanceStatus
+  selectable?: boolean
+  selected?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -14,6 +16,7 @@ const emit = defineEmits<{
   toggle: [id: string, enabled: boolean]
   edit: [id: string]
   delete: [id: string]
+  select: [id: string]
 }>()
 
 const stateColor = computed(() => {
@@ -70,8 +73,27 @@ function fmt(n: number): string {
 </script>
 
 <template>
-  <div class="item" :class="{ dimmed: !status.item.enabled }">
+  <div class="item" :class="{ dimmed: !status.item.enabled && !selectable }">
+    <button v-if="selectable" class="tap-target select-target" @click="emit('select', status.item.id)">
+      <div class="row">
+        <div class="checkbox" :class="{ checked: selected }">
+          <svg v-if="selected" viewBox="0 0 24 24" width="13" height="13" fill="none">
+            <path d="M5 13l4.5 4.5L19 8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+        <div class="dot" :style="{ background: stateColor }" />
+        <div class="info">
+          <div class="name">{{ status.item.name }}</div>
+          <div class="meta">
+            <span>{{ statusLabel }}</span>
+            <span class="sep">·</span>
+            <span>каждые {{ rangeLabel }}</span>
+          </div>
+        </div>
+      </div>
+    </button>
     <SwipeRow
+      v-else
       :left-action="{ label: '✓ Готово', colorVar: 'var(--green)', onTrigger: () => emit('markServiced', status.item.id) }"
       :right-action="{ label: '🗑 Удалить', colorVar: 'var(--red)', onTrigger: () => emit('delete', status.item.id) }"
     >
@@ -99,14 +121,18 @@ function fmt(n: number): string {
         </div>
       </button>
     </SwipeRow>
-    <div class="actions">
+    <div v-if="!selectable" class="actions">
       <button class="done" @click="emit('markServiced', status.item.id)">
         Выполнено
       </button>
-      <ToggleSwitch :checked="status.item.enabled" @update:checked="(v) => emit('toggle', status.item.id, v)" />
+      <ToggleSwitch
+        :checked="status.item.enabled"
+        :aria-label="`Учитывать «${status.item.name}»`"
+        @update:checked="(v) => emit('toggle', status.item.id, v)"
+      />
     </div>
 
-    <div v-if="showBuyHint" class="buy-hint" :style="{ borderColor: stateColor }">
+    <div v-if="showBuyHint && !selectable" class="buy-hint" :style="{ borderColor: stateColor }">
       <div class="buy-hint-title" :style="{ color: stateColor }">
         🛒 Пора купить {{ status.item.parts.length > 1 ? 'детали' : 'деталь' }}
       </div>
@@ -162,6 +188,27 @@ function fmt(n: number): string {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.select-target {
+  background: var(--bg-elevated);
+}
+
+.checkbox {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--separator);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--motion-fast), border-color var(--motion-fast);
+}
+
+.checkbox.checked {
+  background: var(--blue);
+  border-color: var(--blue);
 }
 
 .dot {

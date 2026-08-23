@@ -152,6 +152,16 @@ async function handleToggle(id: string, enabled: boolean) {
   await store.toggleItem(id, enabled)
 }
 
+async function handleBulkToggle(ids: string[], enabled: boolean) {
+  if (ids.length === 0) return
+  haptic('tap')
+  await Promise.all(ids.map((id) => store.toggleItem(id, enabled)))
+}
+
+async function handleReorderDisabled(id: string, direction: 'up' | 'down') {
+  await store.reorderDisabledItem(id, direction)
+}
+
 async function handleSaveItem(payload: {
   name: string
   intervalKm: number
@@ -374,8 +384,10 @@ function fmtDate(ts: number): string {
         :disabled-items="disabledItems"
         @mark-serviced="handleMarkServiced"
         @toggle="handleToggle"
+        @bulk-toggle="handleBulkToggle"
         @edit="openEdit"
         @delete="handleDeleteItem"
+        @reorder-disabled="handleReorderDisabled"
         @add-item="editingItem = 'new'"
       />
 

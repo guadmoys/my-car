@@ -255,6 +255,20 @@ async function restoreItem(item: MaintenanceItem): Promise<void> {
   await db.putMaintenanceItem(item)
 }
 
+async function reorderDisabledItem(id: string, direction: 'up' | 'down'): Promise<void> {
+  const disabled = items.filter((i) => !i.enabled).sort((a, b) => a.order - b.order)
+  const idx = disabled.findIndex((i) => i.id === id)
+  if (idx === -1) return
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+  if (swapIdx < 0 || swapIdx >= disabled.length) return
+  const a = disabled[idx]
+  const b = disabled[swapIdx]
+  const aOrder = a.order
+  a.order = b.order
+  b.order = aOrder
+  await Promise.all([db.putMaintenanceItem({ ...a }), db.putMaintenanceItem({ ...b })])
+}
+
 async function addFuelEntry(input: {
   mileage: number
   liters: number
@@ -925,6 +939,7 @@ export function useCarStore() {
     addCustomItem,
     deleteItem,
     restoreItem,
+    reorderDisabledItem,
     addFuelEntry,
     deleteFuelEntry,
     restoreFuelEntry,

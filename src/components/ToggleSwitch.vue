@@ -2,6 +2,7 @@
 defineProps<{
   checked: boolean
   disabled?: boolean
+  ariaLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -15,6 +16,7 @@ const emit = defineEmits<{
       type="checkbox"
       :checked="checked"
       :disabled="disabled"
+      :aria-label="ariaLabel"
       @change="emit('update:checked', ($event.target as HTMLInputElement).checked)"
     />
     <span class="slider" />
