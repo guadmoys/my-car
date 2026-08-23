@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Car, MaintenanceStatus } from '../types'
 import SummaryCard from './SummaryCard.vue'
 
-defineProps<{
+const props = defineProps<{
   car: Car
   okCount: number
   soonCount: number
@@ -14,7 +15,33 @@ defineProps<{
   hasAnyCost: boolean
   urgentStatuses: MaintenanceStatus[]
   urgentTotal: number
+  estimatedRangeKm: number | null
 }>()
+
+// Low-fuel threshold matches the "скоро на заправку" cutoff already used
+// for the fuelInsights range warning, so this card and that insight agree.
+const LOW_FUEL_RANGE_KM = 60
+
+type PriorityAction =
+  | { kind: 'maintenance'; status: MaintenanceStatus }
+  | { kind: 'fuel'; rangeKm: number }
+  | { kind: 'ok' }
+
+// A single top recommendation, folding maintenance urgency and fuel range
+// into one place instead of making the user check both the urgent-items
+// list and the Заправки tab separately. urgentStatuses is already
+// urgency-sorted (due before soon, most overdue first), so its first
+// matching entry is the single most urgent one of that kind.
+const priorityAction = computed<PriorityAction>(() => {
+  const topDue = props.urgentStatuses.find((s) => s.state === 'due')
+  if (topDue) return { kind: 'maintenance', status: topDue }
+  if (props.estimatedRangeKm !== null && props.estimatedRangeKm <= LOW_FUEL_RANGE_KM) {
+    return { kind: 'fuel', rangeKm: props.estimatedRangeKm }
+  }
+  const topSoon = props.urgentStatuses.find((s) => s.state === 'soon')
+  if (topSoon) return { kind: 'maintenance', status: topSoon }
+  return { kind: 'ok' }
+})
 
 const emit = defineEmits<{
   editMileage: []
@@ -78,6 +105,32 @@ function fmtCost(n: number): string {
         Заправка
       </button>
     </div>
+
+    <section v-if="priorityAction.kind !== 'ok'" class="section">
+      <div class="section-title">Сделать сейчас</div>
+      <button
+        class="priority-card"
+        :class="priorityAction.kind === 'fuel' ? 'fuel' : priorityAction.status.state"
+        @click="
+          priorityAction.kind === 'fuel' ? emit('quickFuel') : emit('openItem', priorityAction.status.item.id)
+        "
+      >
+        <span class="priority-icon">{{ priorityAction.kind === 'fuel' ? '⛽' : '🔧' }}</span>
+        <span class="priority-info">
+          <span class="priority-title">
+            {{ priorityAction.kind === 'fuel' ? 'Залить топливо' : priorityAction.status.item.name }}
+          </span>
+          <span class="priority-meta">
+            {{
+              priorityAction.kind === 'fuel'
+                ? `Осталось ~${Math.round(priorityAction.rangeKm)} км хода`
+                : statusText(priorityAction.status)
+            }}
+          </span>
+        </span>
+        <span class="chevron">›</span>
+      </button>
+    </section>
 
     <section v-if="hasAnyCost" class="section">
       <div class="section-title">Расходы</div>
@@ -191,6 +244,60 @@ function fmtCost(n: number): string {
   box-shadow: var(--shadow);
   overflow: hidden;
   text-align: left;
+}
+
+.priority-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow);
+  background: var(--bg-elevated);
+  text-align: left;
+}
+
+.priority-card.due,
+.priority-card.fuel {
+  background: color-mix(in srgb, var(--red) 8%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--red) 30%, var(--card-border));
+}
+
+.priority-card.soon {
+  background: color-mix(in srgb, var(--orange) 8%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--orange) 30%, var(--card-border));
+}
+
+.priority-card:active {
+  opacity: 0.7;
+}
+
+.priority-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.priority-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.priority-title {
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.priority-meta {
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
 .expenses-card {

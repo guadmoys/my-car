@@ -385,6 +385,7 @@ function fmtDate(ts: number): string {
         :has-any-cost="hasAnyCost"
         :urgent-statuses="urgentPreview"
         :urgent-total="urgentStatuses.length"
+        :estimated-range-km="estimatedRangeKm"
         @edit-mileage="showMileageSheet = true"
         @switch-car="showCarSwitcher = true"
         @quick-fuel="showFuelSheet = true"
