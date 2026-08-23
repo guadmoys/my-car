@@ -95,6 +95,14 @@ export interface FuelConsumption {
   quality: 'good' | 'bad' | 'neutral'
 }
 
+/** An auto-generated observation or recommendation derived from fuel history. */
+export interface FuelInsight {
+  id: string
+  icon: string
+  text: string
+  tone: 'good' | 'bad' | 'neutral'
+}
+
 export interface BackupData {
   version: 2
   exportedAt: number

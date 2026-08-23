@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { FuelConsumption, HistoryEntry } from '../types'
+import type { FuelConsumption, FuelInsight, HistoryEntry } from '../types'
 import SwipeRow from './SwipeRow.vue'
 import ConsumptionChart from './ConsumptionChart.vue'
 import MonthlySpendChart from './MonthlySpendChart.vue'
@@ -10,6 +10,7 @@ const props = defineProps<{
   fuelHistory: FuelConsumption[]
   historyEntries: HistoryEntry[]
   averageConsumption: number | null
+  fuelInsights: FuelInsight[]
   totalFuelCost: number
   totalServiceCost: number
   totalCost: number
@@ -82,6 +83,16 @@ function fmtCost(n: number): string {
     <section v-if="fuelHistory.length > 1 || hasAnyCost" class="section charts-section">
       <ConsumptionChart :history="fuelHistory" :average="averageConsumption" />
       <MonthlySpendChart :fuel-entries="fuelEntriesRaw" :history-entries="historyEntries" />
+    </section>
+
+    <section v-if="fuelInsights.length > 0" class="section">
+      <div class="section-title">Наблюдения</div>
+      <div class="card insights-card">
+        <div v-for="insight in fuelInsights" :key="insight.id" class="insight-row" :class="insight.tone">
+          <span class="insight-icon">{{ insight.icon }}</span>
+          <span class="insight-text">{{ insight.text }}</span>
+        </div>
+      </div>
     </section>
 
     <section class="section">
@@ -252,6 +263,43 @@ function fmtCost(n: number): string {
   text-align: center;
   color: var(--text-secondary);
   font-size: 15px;
+}
+
+.insights-card {
+  padding: 4px 16px;
+}
+
+.insight-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--separator);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.insight-row:last-child {
+  border-bottom: none;
+}
+
+.insight-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.insight-text {
+  flex: 1;
+  color: var(--text);
+}
+
+.insight-row.good .insight-text {
+  color: var(--green);
+}
+
+.insight-row.bad .insight-text {
+  color: var(--red);
 }
 
 .list :deep(.swipe-row) {

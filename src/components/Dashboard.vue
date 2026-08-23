@@ -30,6 +30,7 @@ const {
   okCount,
   fuelHistory,
   averageConsumption,
+  fuelInsights,
   totalFuelCost,
   totalServiceCost,
   totalCost,
@@ -314,6 +315,7 @@ function fmtDate(ts: number): string {
         :fuel-history="fuelHistory"
         :history-entries="store.historyEntries"
         :average-consumption="averageConsumption"
+        :fuel-insights="fuelInsights"
         :total-fuel-cost="totalFuelCost"
         :total-service-cost="totalServiceCost"
         :total-cost="totalCost"
