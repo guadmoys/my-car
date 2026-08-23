@@ -32,6 +32,7 @@ const emit = defineEmits<{
   export: []
   import: [file: File]
   openCarSwitcher: []
+  sharePassport: []
 }>()
 
 const make = ref(props.car.make)
@@ -161,6 +162,9 @@ function handleFileSelected(event: Event) {
         </div>
         <button class="backup-btn" @click="emit('openCarSwitcher')">
           Мои машины ({{ carCount }})
+        </button>
+        <button class="backup-btn" @click="emit('sharePassport')">
+          Поделиться паспортом машины
         </button>
       </div>
 
