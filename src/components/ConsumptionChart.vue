@@ -127,6 +127,10 @@ function dotColor(quality: FuelConsumption['quality']): string {
       </span>
       <span v-else-if="average !== null" class="muted">В среднем {{ average.toFixed(1) }} л/100км</span>
     </div>
+    <p class="method-note">
+      Расход считается между заправками «под пробку» — неполные заправки не искажают цифру, но
+      сами не получают точного значения (если не указан остаток в баке)
+    </p>
   </div>
 </template>
 
@@ -222,5 +226,13 @@ function dotColor(quality: FuelConsumption['quality']): string {
 .chart-footer .muted {
   font-weight: 500;
   color: var(--text-secondary);
+}
+
+.method-note {
+  margin: 8px 4px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+  text-align: center;
 }
 </style>

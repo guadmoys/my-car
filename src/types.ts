@@ -7,6 +7,8 @@ export interface Car {
   currentMileage: number
   createdAt: number
   updatedAt: number
+  /** Fuel tank volume, in liters. Optional; when set, enables precise consumption tracking for partial fill-ups via `FuelEntry.remainingLiters`. */
+  tankCapacity?: number
 }
 
 export interface Part {
@@ -49,6 +51,12 @@ export interface MaintenanceStatus {
   /** Set only when the item has a time-based interval. */
   dueAtDate?: number
   remainingDays?: number
+  /**
+   * A soft calendar-date guess for a purely km-based item, derived from the
+   * car's average daily mileage (from fuel history). Only set when there's
+   * no explicit `dueAtDate` and enough driving data to estimate a pace.
+   */
+  estimatedDueDate?: number
   progress: number
   state: 'ok' | 'soon' | 'due'
 }
@@ -74,6 +82,16 @@ export interface FuelEntry {
   date: number
   /** Total cost of this fill-up. Optional. */
   cost?: number
+  /** Fuel grade, e.g. "АИ-95", "Дизель". Informational only. */
+  fuelType?: string
+  /** Whether the tank was filled to the top. Defaults to true when absent (matches legacy entries), since the consumption formula anchors on full-tank fill-ups. */
+  isFullTank?: boolean
+  /** Estimated liters left in the tank right before this fill-up. Lets partial (non-full) fill-ups act as a precise consumption anchor too, on par with a full-tank fill. Ignored when isFullTank is true. */
+  remainingLiters?: number
+  /** Gas station name/location. Informational only. */
+  station?: string
+  /** Free-text note. Informational only. */
+  comment?: string
 }
 
 export interface FuelConsumption {
@@ -81,6 +99,14 @@ export interface FuelConsumption {
   distanceKm: number
   litersPer100km: number | null
   quality: 'good' | 'bad' | 'neutral'
+}
+
+/** An auto-generated observation or recommendation derived from fuel history. */
+export interface FuelInsight {
+  id: string
+  icon: string
+  text: string
+  tone: 'good' | 'bad' | 'neutral'
 }
 
 export interface BackupData {

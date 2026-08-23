@@ -30,7 +30,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  save: [payload: { make: string; model: string; year: number }]
+  save: [payload: { make: string; model: string; year: number; tankCapacity?: number }]
   deleteCar: []
   export: []
   import: [file: File]
@@ -41,6 +41,7 @@ const emit = defineEmits<{
 const make = ref(props.car.make)
 const model = ref(props.car.model)
 const year = ref(String(props.car.year))
+const tankCapacity = ref(props.car.tankCapacity !== undefined ? String(props.car.tankCapacity) : '')
 const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const activePicker = ref<'make' | 'model' | null>(null)
@@ -52,6 +53,7 @@ watch(
     make.value = props.car.make
     model.value = props.car.model
     year.value = String(props.car.year)
+    tankCapacity.value = props.car.tankCapacity !== undefined ? String(props.car.tankCapacity) : ''
     confirmingDelete.value = false
   },
 )
@@ -106,10 +108,20 @@ function selectModel(value: string) {
 function commitCarInfo() {
   const y = Number(year.value)
   if (!make.value.trim() || !model.value.trim() || Number.isNaN(y)) return
-  if (make.value.trim() === props.car.make && model.value.trim() === props.car.model && y === props.car.year) {
+
+  const capacityTrimmed = tankCapacity.value.trim().replace(',', '.')
+  const capacityNumber = capacityTrimmed === '' ? undefined : Number(capacityTrimmed)
+  if (capacityNumber !== undefined && (Number.isNaN(capacityNumber) || capacityNumber < 0)) return
+
+  if (
+    make.value.trim() === props.car.make &&
+    model.value.trim() === props.car.model &&
+    y === props.car.year &&
+    capacityNumber === props.car.tankCapacity
+  ) {
     return
   }
-  emit('save', { make: make.value.trim(), model: model.value.trim(), year: y })
+  emit('save', { make: make.value.trim(), model: model.value.trim(), year: y, tankCapacity: capacityNumber })
 }
 
 function handleDelete() {
@@ -186,7 +198,24 @@ function handleFileSelected(event: Event) {
             <label>Год выпуска</label>
             <input v-model="year" type="text" inputmode="numeric" @blur="commitCarInfo" />
           </div>
+          <div class="divider" />
+          <div class="field">
+            <label>Объём бака, л (необязательно)</label>
+            <input
+              v-model="tankCapacity"
+              type="text"
+              inputmode="decimal"
+              placeholder="—"
+              @blur="commitCarInfo"
+            />
+          </div>
         </div>
+        <p class="hint">
+          Зная объём бака, можно точно считать расход и по неполным заправкам — если отмечать
+          остаток в баке. Не знаете точное значение — посмотрите в ПТС, руководстве по
+          эксплуатации или на крышке бензобака. Ориентировочно: седаны и хэтчбеки — 40–55 л,
+          кроссоверы — 55–65 л, крупные внедорожники — 70–95 л.
+        </p>
         <button class="backup-btn" @click="emit('openCarSwitcher')">
           Мои машины ({{ carCount }})
         </button>

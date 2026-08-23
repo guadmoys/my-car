@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { FuelConsumption, HistoryEntry } from '../types'
+import type { FuelConsumption, FuelInsight, HistoryEntry } from '../types'
 import SwipeRow from './SwipeRow.vue'
 import ConsumptionChart from './ConsumptionChart.vue'
 import MonthlySpendChart from './MonthlySpendChart.vue'
+import StationPricesCard from './StationPricesCard.vue'
 import { formatDate } from '../utils/dateFormat'
 
 const props = defineProps<{
   fuelHistory: FuelConsumption[]
   historyEntries: HistoryEntry[]
   averageConsumption: number | null
+  fuelInsights: FuelInsight[]
   totalFuelCost: number
   totalServiceCost: number
   totalCost: number
+  totalCo2Kg: number
   hasAnyCost: boolean
 }>()
 
@@ -22,6 +25,7 @@ const emit = defineEmits<{
   addFuel: []
   deleteFuel: [id: string]
   editCost: [id: string]
+  exportCsv: []
 }>()
 
 const showAll = ref(false)
@@ -53,6 +57,10 @@ function fmt(n: number): string {
 function fmtCost(n: number): string {
   return `${Math.round(n).toLocaleString('ru-RU')} ₽`
 }
+
+function fmtCo2(kg: number): string {
+  return kg >= 1000 ? `${(kg / 1000).toFixed(2)} т` : `${Math.round(kg)} кг`
+}
 </script>
 
 <template>
@@ -76,6 +84,10 @@ function fmtCost(n: number): string {
           <span>Итого</span>
           <span>{{ fmtCost(totalCost) }}</span>
         </div>
+        <div v-if="totalCo2Kg > 0" class="expense-row co2-row">
+          <span>Выбросы CO₂</span>
+          <span>{{ fmtCo2(totalCo2Kg) }}</span>
+        </div>
       </div>
     </section>
 
@@ -83,6 +95,18 @@ function fmtCost(n: number): string {
       <ConsumptionChart :history="fuelHistory" :average="averageConsumption" />
       <MonthlySpendChart :fuel-entries="fuelEntriesRaw" :history-entries="historyEntries" />
     </section>
+
+    <section v-if="fuelInsights.length > 0" class="section">
+      <div class="section-title">Наблюдения</div>
+      <div class="card insights-card">
+        <div v-for="insight in fuelInsights" :key="insight.id" class="insight-row" :class="insight.tone">
+          <span class="insight-icon">{{ insight.icon }}</span>
+          <span class="insight-text">{{ insight.text }}</span>
+        </div>
+      </div>
+    </section>
+
+    <StationPricesCard :fuel-entries="fuelEntriesRaw" />
 
     <section class="section">
       <div class="section-title">Заправки</div>
@@ -109,16 +133,20 @@ function fmtCost(n: number): string {
               <div class="fuel-info">
                 <div class="fuel-main">
                   {{ fmt(row.entry.liters) }} л
+                  <span v-if="row.entry.fuelType" class="fuel-type">{{ row.entry.fuelType }}</span>
                   <span v-if="row.litersPer100km !== null" class="fuel-consumption">
                     · {{ row.litersPer100km.toFixed(1) }} л/100км
                   </span>
+                  <span v-else-if="row.entry.isFullTank === false" class="fuel-partial">· неполный бак</span>
                   <span v-if="row.entry.cost !== undefined" class="fuel-cost">
                     · {{ fmtCost(row.entry.cost) }}
                   </span>
                 </div>
                 <div class="fuel-meta">
                   {{ fmt(row.entry.mileage) }} км · {{ formatDate(row.entry.date) }}
+                  <template v-if="row.entry.station"> · {{ row.entry.station }}</template>
                 </div>
+                <div v-if="row.entry.comment" class="fuel-comment">{{ row.entry.comment }}</div>
               </div>
             </button>
             <button class="fuel-delete" aria-label="Удалить заправку" @click="emit('deleteFuel', row.entry.id)">
@@ -141,6 +169,9 @@ function fmtCost(n: number): string {
         </button>
       </div>
       <button class="add-item" @click="emit('addFuel')">+ Добавить заправку</button>
+      <button v-if="fuelHistory.length > 0" class="export-btn" @click="emit('exportCsv')">
+        Экспорт в CSV
+      </button>
     </section>
   </div>
 </template>
@@ -243,11 +274,54 @@ function fmtCost(n: number): string {
   color: var(--blue);
 }
 
+.expense-row.co2-row {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-top: 8px;
+}
+
 .empty {
   padding: 24px 16px;
   text-align: center;
   color: var(--text-secondary);
   font-size: 15px;
+}
+
+.insights-card {
+  padding: 4px 16px;
+}
+
+.insight-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--separator);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.insight-row:last-child {
+  border-bottom: none;
+}
+
+.insight-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.insight-text {
+  flex: 1;
+  color: var(--text);
+}
+
+.insight-row.good .insight-text {
+  color: var(--green);
+}
+
+.insight-row.bad .insight-text {
+  color: var(--red);
 }
 
 .list :deep(.swipe-row) {
@@ -316,10 +390,33 @@ function fmtCost(n: number): string {
   font-weight: 400;
 }
 
+.fuel-partial {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.fuel-type {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--fill-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
 .fuel-meta {
   font-size: 13px;
   color: var(--text-secondary);
   margin-top: 1px;
+}
+
+.fuel-comment {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
 }
 
 .fuel-delete {
@@ -364,6 +461,23 @@ function fmtCost(n: number): string {
 }
 
 .add-item:active {
+  opacity: 0.6;
+}
+
+.export-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  color: var(--blue);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.export-btn:active {
   opacity: 0.6;
 }
 </style>

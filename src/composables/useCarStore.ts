@@ -4,6 +4,7 @@ import type {
   Car,
   FuelConsumption,
   FuelEntry,
+  FuelInsight,
   HistoryEntry,
   LegacyBackupData,
   MaintenanceItem,
@@ -126,7 +127,7 @@ async function deleteCar(carId: string): Promise<void> {
 }
 
 async function updateCarInfo(
-  patch: Partial<Pick<Car, 'make' | 'model' | 'year'>>,
+  patch: Partial<Pick<Car, 'make' | 'model' | 'year' | 'tankCapacity'>>,
 ): Promise<void> {
   if (!activeCarId.value) return
   const updated = patchCar(activeCarId.value, patch)
@@ -247,7 +248,16 @@ async function deleteItem(id: string): Promise<void> {
   await db.deleteMaintenanceItem(id)
 }
 
-async function addFuelEntry(input: { mileage: number; liters: number; cost?: number }): Promise<void> {
+async function addFuelEntry(input: {
+  mileage: number
+  liters: number
+  cost?: number
+  fuelType?: string
+  isFullTank?: boolean
+  remainingLiters?: number
+  station?: string
+  comment?: string
+}): Promise<void> {
   if (!car.value) return
   const entry: FuelEntry = {
     id: makeId(),
@@ -256,6 +266,11 @@ async function addFuelEntry(input: { mileage: number; liters: number; cost?: num
     liters: input.liters,
     date: nowTs(),
     cost: input.cost,
+    fuelType: input.fuelType,
+    isFullTank: input.isFullTank,
+    remainingLiters: input.remainingLiters,
+    station: input.station,
+    comment: input.comment,
   }
   fuelEntries.push(entry)
   await db.putFuelEntry(entry)
@@ -312,7 +327,28 @@ function stateRank(state: MaintenanceStatus['state']): number {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function statusFor(item: MaintenanceItem, currentMileage: number, now: number): MaintenanceStatus {
+/**
+ * Average km driven per day, from the span of the fuel history. Guarded
+ * against a short/burst date span the same way the budget forecast is, so
+ * backfilling several fill-ups in one sitting doesn't produce a wild rate.
+ */
+const avgDailyKm = computed<number | null>(() => {
+  if (fuelEntries.length < 2) return null
+  const sorted = fuelEntries.slice().sort((a, b) => a.date - b.date)
+  const first = sorted[0]
+  const last = sorted[sorted.length - 1]
+  const days = (last.date - first.date) / DAY_MS
+  const distance = last.mileage - first.mileage
+  if (days < 3 || distance <= 0) return null
+  return distance / days
+})
+
+function statusFor(
+  item: MaintenanceItem,
+  currentMileage: number,
+  now: number,
+  dailyKm: number | null,
+): MaintenanceStatus {
   const dueAtMileage = item.lastServiceMileage + item.intervalKm
   const remainingKm = dueAtMileage - currentMileage
   const traveled = currentMileage - item.lastServiceMileage
@@ -335,19 +371,28 @@ function statusFor(item: MaintenanceItem, currentMileage: number, now: number): 
     dateState = remainingDays <= 0 ? 'due' : remainingDays <= daySoonThreshold ? 'soon' : 'ok'
   }
 
+  // Capped to a ~3-year horizon: beyond that, a daily-pace guess for a
+  // long-interval item (e.g. a timing belt) is just noise, not a useful date.
+  let estimatedDueDate: number | undefined
+  if (dueAtDate === undefined && dailyKm !== null && dailyKm > 0 && remainingKm > 0) {
+    const daysUntil = remainingKm / dailyKm
+    if (daysUntil <= 1095) estimatedDueDate = now + daysUntil * DAY_MS
+  }
+
   const state = dateState && stateRank(dateState) > stateRank(kmState) ? dateState : kmState
   const progress = dateState ? Math.max(kmProgress, dateProgress) : kmProgress
 
-  return { item, dueAtMileage, remainingKm, dueAtDate, remainingDays, progress, state }
+  return { item, dueAtMileage, remainingKm, dueAtDate, remainingDays, estimatedDueDate, progress, state }
 }
 
 const statuses = computed<MaintenanceStatus[]>(() => {
   if (!car.value) return []
   const now = Date.now()
+  const dailyKm = avgDailyKm.value
   return items
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((item) => statusFor(item, car.value!.currentMileage, now))
+    .map((item) => statusFor(item, car.value!.currentMileage, now, dailyKm))
 })
 
 const enabledStatuses = computed(() => statuses.value.filter((s) => s.item.enabled))
@@ -365,43 +410,382 @@ const okCount = computed(
   () => enabledStatuses.value.filter((s) => s.state === 'ok').length,
 )
 
-const averageConsumption = computed<number | null>(() => {
-  if (!car.value) return null
-  const sorted = fuelEntries.slice().sort((a, b) => a.mileage - b.mileage)
-  let totalLiters = 0
-  let totalDistance = 0
-  let previousMileage = car.value.initialMileage
-  for (const entry of sorted) {
-    const distance = entry.mileage - previousMileage
-    if (distance > 0) {
-      totalLiters += entry.liters
-      totalDistance += distance
-    }
-    previousMileage = entry.mileage
+/**
+ * A tank level expressed as `c + k * tankCapacity` liters, so a full-tank
+ * reading stays exact even when the car's tank capacity isn't known: as
+ * long as a segment both starts and ends on a full tank, the `k` terms
+ * cancel out and the capacity is never actually needed.
+ */
+interface TankLevel {
+  c: number
+  k: number
+}
+
+function fuelLevels(entry: FuelEntry): { before: TankLevel; after: TankLevel } | null {
+  const isFull = entry.isFullTank ?? true
+  if (isFull) {
+    return { before: { c: -entry.liters, k: 1 }, after: { c: 0, k: 1 } }
   }
-  return totalDistance > 0 ? (totalLiters / totalDistance) * 100 : null
-})
+  if (entry.remainingLiters !== undefined) {
+    return {
+      before: { c: entry.remainingLiters, k: 0 },
+      after: { c: entry.remainingLiters + entry.liters, k: 0 },
+    }
+  }
+  return null
+}
 
-const fuelHistory = computed<FuelConsumption[]>(() => {
-  if (!car.value) return []
+function resolveLevel(level: TankLevel, tankCapacity: number | undefined): number | null {
+  if (level.k === 0) return level.c
+  return tankCapacity !== undefined ? level.c + level.k * tankCapacity : null
+}
+
+const consumptionAnalysis = computed<{
+  history: FuelConsumption[]
+  average: number | null
+  currentLevelLiters: number | null
+}>(() => {
+  if (!car.value) return { history: [], average: null, currentLevelLiters: null }
+  const capacity = car.value.tankCapacity
   const sorted = fuelEntries.slice().sort((a, b) => a.mileage - b.mileage)
-  const avg = averageConsumption.value
+
+  let anchorAfter: TankLevel = { c: 0, k: 1 }
+  let anchorMileage = car.value.initialMileage
+  let interimLiters = 0
   let previousMileage = car.value.initialMileage
 
-  const result: FuelConsumption[] = sorted.map((entry) => {
+  let totalBurned = 0
+  let totalDistance = 0
+
+  const rows = sorted.map((entry) => {
     const distanceKm = entry.mileage - previousMileage
     previousMileage = entry.mileage
-    const litersPer100km = distanceKm > 0 ? (entry.liters / distanceKm) * 100 : null
 
-    let quality: FuelConsumption['quality'] = 'neutral'
-    if (litersPer100km !== null && avg !== null) {
-      quality = litersPer100km <= avg * 1.03 ? 'good' : 'bad'
+    const levels = fuelLevels(entry)
+    let litersPer100km: number | null = null
+
+    if (levels) {
+      const combined: TankLevel = {
+        c: anchorAfter.c + interimLiters - levels.before.c,
+        k: anchorAfter.k - levels.before.k,
+      }
+      const burned = resolveLevel(combined, capacity)
+      const distance = entry.mileage - anchorMileage
+      if (burned !== null && burned >= 0 && distance > 0) {
+        litersPer100km = (burned / distance) * 100
+        totalBurned += burned
+        totalDistance += distance
+      }
+      anchorAfter = levels.after
+      anchorMileage = entry.mileage
+      interimLiters = 0
+    } else {
+      interimLiters += entry.liters
     }
 
-    return { entry, distanceKm, litersPer100km, quality }
+    return { entry, distanceKm, litersPer100km }
   })
 
-  return result.reverse()
+  const average = totalDistance > 0 ? (totalBurned / totalDistance) * 100 : null
+  const currentLevelLiters = resolveLevel({ c: anchorAfter.c + interimLiters, k: anchorAfter.k }, capacity)
+
+  const history: FuelConsumption[] = rows
+    .map(({ entry, distanceKm, litersPer100km }) => {
+      let quality: FuelConsumption['quality'] = 'neutral'
+      if (litersPer100km !== null && average !== null) {
+        quality = litersPer100km <= average * 1.03 ? 'good' : 'bad'
+      }
+      return { entry, distanceKm, litersPer100km, quality }
+    })
+    .reverse()
+
+  return { history, average, currentLevelLiters }
+})
+
+const averageConsumption = computed<number | null>(() => consumptionAnalysis.value.average)
+const fuelHistory = computed<FuelConsumption[]>(() => consumptionAnalysis.value.history)
+
+/**
+ * Estimated remaining range, when the current tank level is known (needs
+ * either a full-tank fill-up or a tracked tank capacity) and there's an
+ * average consumption to project it against.
+ */
+const estimatedRangeKm = computed<number | null>(() => {
+  const currentLevel = consumptionAnalysis.value.currentLevelLiters
+  const avg = averageConsumption.value
+  if (currentLevel === null || currentLevel < 0 || avg === null || avg <= 0) return null
+  return (currentLevel / avg) * 100
+})
+
+const averageFuelPrice = computed<number | null>(() => {
+  const priced = fuelEntries.filter((e) => e.cost !== undefined && e.liters > 0)
+  if (priced.length === 0) return null
+  const totalCost = priced.reduce((sum, e) => sum + (e.cost as number), 0)
+  const totalLiters = priced.reduce((sum, e) => sum + e.liters, 0)
+  return totalCost / totalLiters
+})
+
+function co2FactorForFuelType(fuelType: string | undefined): number {
+  if (fuelType?.includes('Дизель')) return 2.68
+  if (fuelType?.includes('Газ')) return 1.51
+  return 2.31 // gasoline (АИ-92/95/98), also the default when the grade wasn't recorded
+}
+
+const totalCo2Kg = computed<number>(() =>
+  fuelEntries.reduce((sum, e) => sum + e.liters * co2FactorForFuelType(e.fuelType), 0),
+)
+
+function average(values: number[]): number {
+  return values.reduce((sum, v) => sum + v, 0) / values.length
+}
+
+function daysWord(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return 'день'
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'дня'
+  return 'дней'
+}
+
+function fillupsWord(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return 'заправка'
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'заправки'
+  return 'заправок'
+}
+
+const fuelInsights = computed<FuelInsight[]>(() => {
+  if (!car.value) return []
+  const insights: FuelInsight[] = []
+  const history = fuelHistory.value
+  const validSegments = history.filter((row) => row.litersPer100km !== null)
+  const byDate = fuelEntries.slice().sort((a, b) => a.date - b.date)
+
+  // Consumption trend: last 3 valid segments vs the 3 before them.
+  if (validSegments.length >= 5) {
+    const recent = validSegments.slice(0, 3).map((r) => r.litersPer100km as number)
+    const prior = validSegments.slice(3, 6).map((r) => r.litersPer100km as number)
+    if (prior.length >= 2) {
+      const avgRecent = average(recent)
+      const avgPrior = average(prior)
+      const diffPct = ((avgRecent - avgPrior) / avgPrior) * 100
+      if (diffPct <= -5) {
+        insights.push({
+          id: 'trend',
+          icon: '📉',
+          text: `Расход снижается: последние заправки в среднем на ${Math.abs(diffPct).toFixed(0)}% экономичнее, чем раньше`,
+          tone: 'good',
+        })
+      } else if (diffPct >= 15) {
+        insights.push({
+          id: 'trend',
+          icon: '⚠️',
+          text: `Расход заметно вырос (+${diffPct.toFixed(0)}%) — стоит проверить давление в шинах, воздушный фильтр или стиль вождения`,
+          tone: 'bad',
+        })
+      } else if (diffPct >= 5) {
+        insights.push({
+          id: 'trend',
+          icon: '📈',
+          text: `Расход растёт: последние заправки в среднем на ${diffPct.toFixed(0)}% больше, чем раньше`,
+          tone: 'bad',
+        })
+      }
+    }
+  }
+
+  // Efficiency streak: consecutive recent fill-ups better than average.
+  let streak = 0
+  for (const row of validSegments) {
+    if (row.quality !== 'good') break
+    streak++
+  }
+  if (streak >= 3) {
+    insights.push({
+      id: 'streak',
+      icon: '🔥',
+      text: `${streak} ${fillupsWord(streak)} подряд экономичнее среднего — отличная динамика!`,
+      tone: 'good',
+    })
+  }
+
+  // Estimated remaining range, when the current tank level is known
+  // (needs either a full-tank fill-up or a tracked tank capacity), plus a
+  // days-until-empty guess when there's enough driving history for a pace.
+  const rangeKm = estimatedRangeKm.value
+  if (rangeKm !== null) {
+    const daily = avgDailyKm.value
+    const daysUntilEmpty = daily !== null && daily > 0 ? rangeKm / daily : null
+    const daysSuffix =
+      daysUntilEmpty !== null ? ` (~${Math.round(daysUntilEmpty)} ${daysWord(Math.round(daysUntilEmpty))} при вашем темпе)` : ''
+    if (rangeKm <= 60) {
+      insights.push({
+        id: 'range',
+        icon: '⛽',
+        text: `Топлива осталось примерно на ${Math.round(rangeKm)} км${daysSuffix} — скоро на заправку`,
+        tone: 'bad',
+      })
+    } else {
+      insights.push({
+        id: 'range',
+        icon: '🛣',
+        text: `Ориентировочный запас хода: ~${Math.round(rangeKm)} км${daysSuffix}`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  // Fuel budget forecast: rolling 30-day spend rate, projected forward.
+  // Needs a real spread of dates — otherwise a batch of fill-ups entered
+  // all at once (e.g. backfilling history) would wildly inflate the rate.
+  const now = Date.now()
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const recentPriced = fuelEntries.filter((e) => e.date >= now - 30 * DAY_MS && e.cost !== undefined)
+  if (recentPriced.length >= 2) {
+    const earliestDate = Math.min(...recentPriced.map((e) => e.date))
+    const daysSpan = (now - earliestDate) / DAY_MS
+    if (daysSpan >= 3) {
+      const totalSpent = recentPriced.reduce((sum, e) => sum + (e.cost as number), 0)
+      const projected = (totalSpent / daysSpan) * 30
+      insights.push({
+        id: 'budget',
+        icon: '📊',
+        text: `За последние ${Math.round(daysSpan)} дн. на топливо потрачено ${Math.round(totalSpent).toLocaleString('ru-RU')} ₽ — при таком темпе выйдет ~${Math.round(projected).toLocaleString('ru-RU')} ₽ за 30 дней`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  // Seasonal comparison: winter (Dec-Feb) vs summer (Jun-Aug) consumption.
+  const winterVals = validSegments
+    .filter((r) => [11, 0, 1].includes(new Date(r.entry.date).getMonth()))
+    .map((r) => r.litersPer100km as number)
+  const summerVals = validSegments
+    .filter((r) => [5, 6, 7].includes(new Date(r.entry.date).getMonth()))
+    .map((r) => r.litersPer100km as number)
+  if (winterVals.length >= 2 && summerVals.length >= 2) {
+    const winterAvg = average(winterVals)
+    const summerAvg = average(summerVals)
+    const diffPct = ((winterAvg - summerAvg) / summerAvg) * 100
+    if (diffPct >= 8) {
+      insights.push({
+        id: 'seasonal',
+        icon: '❄️',
+        text: `Зимой расход в среднем на ${diffPct.toFixed(0)}% выше, чем летом (${winterAvg.toFixed(1)} против ${summerAvg.toFixed(1)} л/100км)`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  // Price trend: latest fill vs the historical average price per liter.
+  const priced = byDate
+    .filter((e) => e.cost !== undefined && e.liters > 0)
+    .map((e) => ({ entry: e, price: (e.cost as number) / e.liters }))
+  if (priced.length >= 3) {
+    const last = priced[priced.length - 1]
+    const prevAvg = average(priced.slice(0, -1).map((p) => p.price))
+    const diffPct = ((last.price - prevAvg) / prevAvg) * 100
+    if (diffPct >= 7) {
+      insights.push({
+        id: 'price',
+        icon: '💸',
+        text: `Последняя заправка дороже обычного на ${diffPct.toFixed(0)}% (${last.price.toFixed(1)} ₽/л против ${prevAvg.toFixed(1)} ₽/л в среднем)`,
+        tone: 'bad',
+      })
+    } else if (diffPct <= -7) {
+      insights.push({
+        id: 'price',
+        icon: '💰',
+        text: `Последняя заправка дешевле обычного на ${Math.abs(diffPct).toFixed(0)}% (${last.price.toFixed(1)} ₽/л против ${prevAvg.toFixed(1)} ₽/л в среднем)`,
+        tone: 'good',
+      })
+    }
+  }
+
+  // Cheapest gas station, when at least two stations have price data.
+  const stationGroups = new Map<string, { total: number; liters: number }>()
+  for (const e of fuelEntries) {
+    if (!e.station || e.cost === undefined || e.liters <= 0) continue
+    const g = stationGroups.get(e.station) ?? { total: 0, liters: 0 }
+    g.total += e.cost
+    g.liters += e.liters
+    stationGroups.set(e.station, g)
+  }
+  if (stationGroups.size >= 2) {
+    const ranked = Array.from(stationGroups.entries())
+      .map(([station, g]) => ({ station, avgPrice: g.total / g.liters }))
+      .sort((a, b) => a.avgPrice - b.avgPrice)
+    const best = ranked[0]
+    const worst = ranked[ranked.length - 1]
+    if (best.avgPrice <= worst.avgPrice * 0.97) {
+      insights.push({
+        id: 'station',
+        icon: '📍',
+        text: `Самая выгодная АЗС — «${best.station}»: в среднем ${best.avgPrice.toFixed(1)} ₽/л`,
+        tone: 'good',
+      })
+    }
+  }
+
+  // Fuel grade comparison, when at least two grades have consumption data.
+  const typeGroups = new Map<string, number[]>()
+  for (const row of history) {
+    if (row.litersPer100km === null || !row.entry.fuelType) continue
+    const arr = typeGroups.get(row.entry.fuelType) ?? []
+    arr.push(row.litersPer100km)
+    typeGroups.set(row.entry.fuelType, arr)
+  }
+  const rankedTypes = Array.from(typeGroups.entries())
+    .filter(([, arr]) => arr.length >= 2)
+    .map(([type, arr]) => ({ type, avg: average(arr) }))
+    .sort((a, b) => a.avg - b.avg)
+  if (rankedTypes.length >= 2) {
+    const best = rankedTypes[0]
+    const worst = rankedTypes[rankedTypes.length - 1]
+    const diffPct = ((worst.avg - best.avg) / worst.avg) * 100
+    if (diffPct >= 5) {
+      insights.push({
+        id: 'fuel-type',
+        icon: '🔬',
+        text: `На ${best.type} расход в среднем на ${diffPct.toFixed(0)}% ниже, чем на ${worst.type}`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  // Fill-up frequency.
+  if (byDate.length >= 3) {
+    const gapsDays: number[] = []
+    for (let i = 1; i < byDate.length; i++) {
+      gapsDays.push((byDate[i].date - byDate[i - 1].date) / (24 * 60 * 60 * 1000))
+    }
+    const avgGapDays = Math.round(average(gapsDays))
+    if (avgGapDays >= 1) {
+      insights.push({
+        id: 'frequency',
+        icon: '🗓',
+        text: `В среднем вы заправляетесь раз в ${avgGapDays} ${daysWord(avgGapDays)}`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  // Cost per km driven, over the whole fuel-tracked mileage span.
+  if (byDate.length >= 2) {
+    const distance = byDate[byDate.length - 1].mileage - byDate[0].mileage
+    const totalSpent = fuelEntries.reduce((sum, e) => sum + (e.cost ?? 0), 0)
+    if (distance > 0 && totalSpent > 0) {
+      insights.push({
+        id: 'cost-per-km',
+        icon: '🧮',
+        text: `Топливо обходится примерно в ${(totalSpent / distance).toFixed(2)} ₽/км пробега`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  return insights.slice(0, 6)
 })
 
 const totalFuelCost = computed(() =>
@@ -513,6 +897,10 @@ export function useCarStore() {
     okCount,
     fuelHistory,
     averageConsumption,
+    estimatedRangeKm,
+    averageFuelPrice,
+    totalCo2Kg,
+    fuelInsights,
     totalFuelCost,
     totalServiceCost,
     totalCost,

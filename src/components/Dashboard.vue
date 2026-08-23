@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useCarStore } from '../composables/useCarStore'
-import { checkAndNotify, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
+import { checkAndNotify, checkAndNotifyLowFuel, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
 import { haptic } from '../utils/haptics'
 import { useToast } from '../composables/useToast'
 import DashboardTab from './DashboardTab.vue'
@@ -30,6 +30,10 @@ const {
   okCount,
   fuelHistory,
   averageConsumption,
+  estimatedRangeKm,
+  averageFuelPrice,
+  totalCo2Kg,
+  fuelInsights,
   totalFuelCost,
   totalServiceCost,
   totalCost,
@@ -52,6 +56,18 @@ const importError = ref<string | null>(null)
 const editingFuelEntry = computed<FuelEntry | null>(
   () => store.fuelEntries.find((e) => e.id === editingFuelCostId.value) ?? null,
 )
+
+const lastFuelEntry = computed<FuelEntry | null>(() => {
+  if (store.fuelEntries.length === 0) return null
+  return store.fuelEntries.slice().sort((a, b) => b.date - a.date)[0]
+})
+const lastFuelType = computed(() => lastFuelEntry.value?.fuelType)
+const lastStation = computed(() => lastFuelEntry.value?.station)
+const lastPrice = computed<number | null>(() => {
+  const e = lastFuelEntry.value
+  if (!e || e.cost === undefined || e.liters <= 0) return null
+  return e.cost / e.liters
+})
 
 const STATE_RANK: Record<string, number> = { due: 2, soon: 1, ok: 0 }
 
@@ -93,6 +109,14 @@ watch(
   ([carVal, statusesVal]) => {
     updateAppBadge(dueCount.value + soonCount.value)
     if (carVal) checkAndNotify(carVal.id, statusesVal)
+  },
+  { immediate: true },
+)
+
+watch(
+  [car, estimatedRangeKm],
+  ([carVal, rangeVal]) => {
+    if (carVal) checkAndNotifyLowFuel(carVal.id, rangeVal)
   },
   { immediate: true },
 )
@@ -168,7 +192,16 @@ async function handleSaveMileage(mileage: number) {
   showMileageSheet.value = false
 }
 
-async function handleSaveFuel(payload: { mileage: number; liters: number; cost?: number }) {
+async function handleSaveFuel(payload: {
+  mileage: number
+  liters: number
+  cost?: number
+  fuelType?: string
+  isFullTank?: boolean
+  remainingLiters?: number
+  station?: string
+  comment?: string
+}) {
   await store.addFuelEntry(payload)
   showFuelSheet.value = false
 }
@@ -192,7 +225,12 @@ async function handleUpdateHistoryCost(id: string, cost: number | null) {
   await store.updateHistoryCost(id, cost)
 }
 
-async function handleSaveCarInfo(payload: { make: string; model: string; year: number }) {
+async function handleSaveCarInfo(payload: {
+  make: string
+  model: string
+  year: number
+  tankCapacity?: number
+}) {
   await store.updateCarInfo(payload)
 }
 
@@ -230,6 +268,45 @@ async function handleExport() {
   const link = document.createElement('a')
   link.href = url
   link.download = `moya-mashina-backup-${dateStr}.json`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function csvEscape(value: string): string {
+  return /["\n,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+function handleExportFuelCsv() {
+  const rows = store.fuelEntries.slice().sort((a, b) => a.date - b.date)
+  const header = ['Дата', 'Пробег, км', 'Литры', 'Стоимость, ₽', 'Цена, ₽/л', 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
+  const lines = [header.join(',')]
+  for (const e of rows) {
+    const price = e.cost !== undefined && e.liters > 0 ? (e.cost / e.liters).toFixed(2) : ''
+    lines.push(
+      [
+        new Date(e.date).toLocaleDateString('ru-RU'),
+        String(e.mileage),
+        String(e.liters),
+        e.cost !== undefined ? String(e.cost) : '',
+        price,
+        csvEscape(e.fuelType ?? ''),
+        e.isFullTank === false ? 'нет' : 'да',
+        csvEscape(e.station ?? ''),
+        csvEscape(e.comment ?? ''),
+      ].join(','),
+    )
+  }
+
+  const csv = '\uFEFF' + lines.join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const dateStr = new Date().toISOString().slice(0, 10)
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `zapravki-${dateStr}.csv`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -300,6 +377,8 @@ function fmtDate(ts: number): string {
         :fuel-history="fuelHistory"
         :history-entries="store.historyEntries"
         :average-consumption="averageConsumption"
+        :fuel-insights="fuelInsights"
+        :total-co2-kg="totalCo2Kg"
         :total-fuel-cost="totalFuelCost"
         :total-service-cost="totalServiceCost"
         :total-cost="totalCost"
@@ -307,6 +386,7 @@ function fmtDate(ts: number): string {
         @add-fuel="showFuelSheet = true"
         @delete-fuel="handleDeleteFuel"
         @edit-cost="editingFuelCostId = $event"
+        @export-csv="handleExportFuelCsv"
       />
 
       <SettingsTab
@@ -353,6 +433,11 @@ function fmtDate(ts: number): string {
     <FuelSheet
       v-if="showFuelSheet"
       :current-mileage="car.currentMileage"
+      :tank-capacity="car.tankCapacity"
+      :average-price="averageFuelPrice"
+      :last-fuel-type="lastFuelType"
+      :last-station="lastStation"
+      :last-price="lastPrice"
       @close="showFuelSheet = false"
       @save="handleSaveFuel"
     />

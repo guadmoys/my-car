@@ -45,12 +45,21 @@ const showBuyHint = computed(
   () => props.status.item.parts.length > 0 && props.status.state !== 'ok',
 )
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
 const dateLabel = computed(() => {
-  const { item, remainingDays } = props.status
-  if (!item.intervalMonths || remainingDays === undefined) return null
-  const days = Math.abs(remainingDays)
-  const prefix = remainingDays <= 0 ? `Просрочено на ${days} дн.` : `Осталось ${days} дн.`
-  return `${prefix} · раз в ${item.intervalMonths} мес.`
+  const { item, remainingDays, estimatedDueDate } = props.status
+  if (item.intervalMonths && remainingDays !== undefined) {
+    const days = Math.abs(remainingDays)
+    const prefix = remainingDays <= 0 ? `Просрочено на ${days} дн.` : `Осталось ${days} дн.`
+    return `${prefix} · раз в ${item.intervalMonths} мес.`
+  }
+  if (estimatedDueDate !== undefined) {
+    const daysUntil = Math.round((estimatedDueDate - Date.now()) / DAY_MS)
+    if (daysUntil <= 0) return null
+    return `≈ через ${daysUntil} дн. при вашем темпе езды`
+  }
+  return null
 })
 
 function fmt(n: number): string {
