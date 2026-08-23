@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import type { HistoryEntry, MaintenanceItem, Part } from '../types'
 import CostEditSheet from './CostEditSheet.vue'
+import PartQuickLinks from './PartQuickLinks.vue'
 import { downloadIcsReminder } from '../utils/ics'
 
 function addMonths(ts: number, months: number): number {
@@ -38,6 +39,8 @@ const emit = defineEmits<{
       intervalMonths?: number
       lastServiceMileage: number
       parts: Part[]
+      notifyBeforeKm?: number
+      notifyBeforeDays?: number
     },
   ]
   create: [
@@ -47,6 +50,8 @@ const emit = defineEmits<{
       intervalKmMax?: number
       intervalMonths?: number
       parts: Part[]
+      notifyBeforeKm?: number
+      notifyBeforeDays?: number
     },
   ]
   delete: [id: string]
@@ -71,6 +76,9 @@ const intervalMax = ref('')
 const intervalMonths = ref('')
 const lastServiceMileage = ref('')
 const parts = ref<Part[]>([])
+const notifyBeforeKm = ref('')
+const notifyBeforeDays = ref('')
+const showAdvanced = ref(false)
 
 function makePartId(): string {
   return `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -94,6 +102,9 @@ watch(
       intervalMonths.value = item.intervalMonths ? String(item.intervalMonths) : ''
       lastServiceMileage.value = String(item.lastServiceMileage)
       parts.value = item.parts.map((p) => ({ ...p }))
+      notifyBeforeKm.value = item.notifyBeforeKm ? String(item.notifyBeforeKm) : ''
+      notifyBeforeDays.value = item.notifyBeforeDays ? String(item.notifyBeforeDays) : ''
+      showAdvanced.value = Boolean(item.notifyBeforeKm || item.notifyBeforeDays)
     } else {
       name.value = ''
       interval.value = ''
@@ -101,6 +112,9 @@ watch(
       intervalMonths.value = ''
       lastServiceMileage.value = String(props.currentMileage)
       parts.value = []
+      notifyBeforeKm.value = ''
+      notifyBeforeDays.value = ''
+      showAdvanced.value = false
     }
   },
   { immediate: true },
@@ -120,6 +134,14 @@ const isValid = computed(() => {
   if (!isCreate.value) {
     const l = Number(lastServiceMileage.value)
     if (Number.isNaN(l) || l < 0) return false
+  }
+  if (notifyBeforeKm.value.trim()) {
+    const n = Number(notifyBeforeKm.value)
+    if (Number.isNaN(n) || n <= 0) return false
+  }
+  if (notifyBeforeDays.value.trim()) {
+    const n = Number(notifyBeforeDays.value)
+    if (Number.isNaN(n) || n <= 0) return false
   }
   return true
 })
@@ -143,6 +165,12 @@ function handleSave() {
   const intervalMonthsValue = intervalMonths.value.trim()
     ? Math.round(Number(intervalMonths.value))
     : undefined
+  const notifyBeforeKmValue = notifyBeforeKm.value.trim()
+    ? Math.round(Number(notifyBeforeKm.value))
+    : undefined
+  const notifyBeforeDaysValue = notifyBeforeDays.value.trim()
+    ? Math.round(Number(notifyBeforeDays.value))
+    : undefined
 
   if (isCreate.value) {
     emit('create', {
@@ -151,6 +179,8 @@ function handleSave() {
       intervalKmMax,
       intervalMonths: intervalMonthsValue,
       parts: cleanedParts(),
+      notifyBeforeKm: notifyBeforeKmValue,
+      notifyBeforeDays: notifyBeforeDaysValue,
     })
   } else if (props.item) {
     emit('save', {
@@ -160,6 +190,8 @@ function handleSave() {
       intervalMonths: intervalMonthsValue,
       lastServiceMileage: Math.round(Number(lastServiceMileage.value)),
       parts: cleanedParts(),
+      notifyBeforeKm: notifyBeforeKmValue,
+      notifyBeforeDays: notifyBeforeDaysValue,
     })
   }
 }
@@ -218,6 +250,34 @@ function handleAddToCalendar() {
             <label>Или раз в N месяцев (необязательно)</label>
             <input v-model="intervalMonths" type="text" inputmode="numeric" placeholder="—" />
           </div>
+        </div>
+
+        <div class="advanced-block">
+          <button class="section-title toggleable" @click="showAdvanced = !showAdvanced">
+            <span>Дополнительно</span>
+            <span class="caret" :class="{ open: showAdvanced }">›</span>
+          </button>
+          <div v-if="showAdvanced" class="group">
+            <div class="field">
+              <label>Уведомлять за, км до ТО</label>
+              <input
+                v-model="notifyBeforeKm"
+                type="text"
+                inputmode="numeric"
+                :placeholder="`по умолчанию ${Math.round((Number(interval) || 0) * 0.1)}`"
+              />
+            </div>
+            <template v-if="intervalMonths.trim()">
+              <div class="divider" />
+              <div class="field">
+                <label>Уведомлять за, дней до ТО</label>
+                <input v-model="notifyBeforeDays" type="text" inputmode="numeric" placeholder="—" />
+              </div>
+            </template>
+          </div>
+          <p v-if="showAdvanced" class="hint advanced-hint">
+            Определяет, когда параметр станет «скоро» и придёт уведомление (если оно включено в настройках)
+          </p>
         </div>
 
         <div v-if="!isCreate" class="group">
@@ -292,6 +352,10 @@ function handleAddToCalendar() {
             <div class="field">
               <label>Ссылка на покупку (необязательно)</label>
               <input v-model="part.url" type="url" placeholder="https://..." />
+            </div>
+            <div class="divider" />
+            <div class="part-links">
+              <PartQuickLinks :part="part" />
             </div>
           </div>
 
@@ -469,6 +533,47 @@ function handleAddToCalendar() {
   color: var(--text-secondary);
 }
 
+.advanced-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0 4px;
+}
+
+.section-title.toggleable {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.caret {
+  display: inline-block;
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+}
+
+.caret.open {
+  transform: rotate(270deg);
+}
+
+.advanced-hint {
+  padding: 0 4px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
 .parts-block {
   display: flex;
   flex-direction: column;
@@ -520,6 +625,10 @@ function handleAddToCalendar() {
 
 .part-remove:active {
   opacity: 0.6;
+}
+
+.part-links {
+  padding: 10px 0;
 }
 
 .add-part {

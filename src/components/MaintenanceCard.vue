@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { MaintenanceStatus } from '../types'
 import SwipeRow from './SwipeRow.vue'
+import PartQuickLinks from './PartQuickLinks.vue'
 
 const props = defineProps<{
   status: MaintenanceStatus
@@ -105,22 +106,25 @@ function fmt(n: number): string {
         🛒 Пора купить {{ status.item.parts.length > 1 ? 'детали' : 'деталь' }}
       </div>
       <div v-for="part in status.item.parts" :key="part.id" class="part-row">
-        <div class="part-info">
-          <div class="part-name">{{ part.name }}</div>
-          <div class="part-meta">
-            {{ [part.articleNumber, part.platform].filter(Boolean).join(' · ') || '—' }}
+        <div class="part-row-top">
+          <div class="part-info">
+            <div class="part-name">{{ part.name }}</div>
+            <div class="part-meta">
+              {{ [part.articleNumber, part.platform].filter(Boolean).join(' · ') || '—' }}
+            </div>
           </div>
+          <a
+            v-if="part.url"
+            :href="part.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="part-buy"
+            @click.stop
+          >
+            Купить ›
+          </a>
         </div>
-        <a
-          v-if="part.url"
-          :href="part.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="part-buy"
-          @click.stop
-        >
-          Купить ›
-        </a>
+        <PartQuickLinks :part="part" />
       </div>
     </div>
   </div>
@@ -284,10 +288,16 @@ function fmt(n: number): string {
 
 .part-row {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px 0;
+}
+
+.part-row-top {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 5px 0;
 }
 
 .part-info {

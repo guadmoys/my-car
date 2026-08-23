@@ -10,6 +10,15 @@ import {
   requestNotificationPermission,
   setNotificationsEnabled,
 } from '../utils/notifications'
+import {
+  DATE_FORMAT_OPTIONS,
+  formatDate,
+  getDateFormat,
+  isShowYearEnabled,
+  setDateFormat,
+  setShowYearEnabled,
+} from '../utils/dateFormat'
+import type { DateFormatId } from '../utils/dateFormat'
 
 const props = defineProps<{
   car: Car
@@ -23,6 +32,7 @@ const emit = defineEmits<{
   export: []
   import: [file: File]
   openCarSwitcher: []
+  sharePassport: []
 }>()
 
 const make = ref(props.car.make)
@@ -63,6 +73,20 @@ async function handleToggleNotifications(checked: boolean) {
     notificationsOn.value = false
     notificationsBlocked.value = permission === 'denied'
   }
+}
+
+const dateFormat = ref<DateFormatId>(getDateFormat())
+const showYear = ref(isShowYearEnabled())
+const datePreview = computed(() => formatDate(Date.now()))
+
+function selectDateFormat(value: DateFormatId) {
+  dateFormat.value = value
+  setDateFormat(value)
+}
+
+function handleToggleShowYear(checked: boolean) {
+  showYear.value = checked
+  setShowYearEnabled(checked)
 }
 
 function selectMake(value: string) {
@@ -139,6 +163,9 @@ function handleFileSelected(event: Event) {
         <button class="backup-btn" @click="emit('openCarSwitcher')">
           Мои машины ({{ carCount }})
         </button>
+        <button class="backup-btn" @click="emit('sharePassport')">
+          Поделиться паспортом машины
+        </button>
       </div>
 
       <div v-if="notificationsSupported" class="notifications-zone">
@@ -162,6 +189,39 @@ function handleFileSelected(event: Event) {
         <p v-if="notificationsBlocked" class="hint error">
           Уведомления заблокированы в браузере — включите их в настройках сайта, чтобы приложение
           могло их показывать
+        </p>
+      </div>
+
+      <div class="date-format-zone">
+        <div class="section-title">Формат даты</div>
+        <div class="group">
+          <div class="format-chips">
+            <button
+              v-for="opt in DATE_FORMAT_OPTIONS"
+              :key="opt.value"
+              class="format-chip"
+              :class="{ active: dateFormat === opt.value }"
+              @click="selectDateFormat(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+          <div class="divider" />
+          <label class="field notif-row">
+            <span class="notif-label">Показывать год</span>
+            <label class="switch">
+              <input
+                type="checkbox"
+                :checked="showYear"
+                @change="handleToggleShowYear(($event.target as HTMLInputElement).checked)"
+              />
+              <span class="slider" />
+            </label>
+          </label>
+        </div>
+        <p class="hint">
+          «Авто» использует формат вашего региона. Пример: {{ datePreview }}. Применяется к датам
+          заправок
         </p>
       </div>
 
@@ -304,11 +364,38 @@ function handleFileSelected(event: Event) {
 
 .car-zone,
 .notifications-zone,
+.date-format-zone,
 .backup-zone,
 .danger-zone {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.format-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.format-chip {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--fill-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.format-chip.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.format-chip:active {
+  opacity: 0.7;
 }
 
 .notif-row {

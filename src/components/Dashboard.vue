@@ -15,6 +15,8 @@ import FuelSheet from './FuelSheet.vue'
 import CarSwitcherSheet from './CarSwitcherSheet.vue'
 import AddCarSheet from './AddCarSheet.vue'
 import CostEditSheet from './CostEditSheet.vue'
+import CarPassportSheet from './CarPassportSheet.vue'
+import type { PassportData } from '../utils/carPassport'
 import type { FuelEntry, MaintenanceItem, MaintenanceStatus, Part } from '../types'
 
 const store = useCarStore()
@@ -42,6 +44,7 @@ const showMileageSheet = ref(false)
 const showFuelSheet = ref(false)
 const showCarSwitcher = ref(false)
 const showAddCar = ref(false)
+const showPassportSheet = ref(false)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
 const editingFuelCostId = ref<string | null>(null)
 const importError = ref<string | null>(null)
@@ -65,6 +68,25 @@ const urgentStatuses = computed<MaintenanceStatus[]>(() =>
 const urgentPreview = computed(() => urgentStatuses.value.slice(0, 3))
 
 const editModalItem = computed(() => (editingItem.value === 'new' ? null : editingItem.value))
+
+const passportData = computed<PassportData | null>(() => {
+  if (!car.value) return null
+  return {
+    car: car.value,
+    okCount: okCount.value,
+    soonCount: soonCount.value,
+    dueCount: dueCount.value,
+    averageConsumption: averageConsumption.value,
+    totalFuelCost: totalFuelCost.value,
+    totalServiceCost: totalServiceCost.value,
+    totalCost: totalCost.value,
+    hasAnyCost: hasAnyCost.value,
+    recentHistory: store.historyEntries
+      .slice()
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 5),
+  }
+})
 
 watch(
   [car, enabledStatuses],
@@ -113,6 +135,8 @@ async function handleSaveItem(payload: {
   intervalMonths?: number
   lastServiceMileage: number
   parts: Part[]
+  notifyBeforeKm?: number
+  notifyBeforeDays?: number
 }) {
   if (editModalItem.value) {
     await store.updateItem(editModalItem.value.id, payload)
@@ -126,6 +150,8 @@ async function handleCreateItem(payload: {
   intervalKmMax?: number
   intervalMonths?: number
   parts: Part[]
+  notifyBeforeKm?: number
+  notifyBeforeDays?: number
 }) {
   await store.addCustomItem(payload)
   closeEdit()
@@ -293,6 +319,7 @@ function fmtDate(ts: number): string {
         @export="handleExport"
         @import="handleImportFile"
         @open-car-switcher="showCarSwitcher = true"
+        @share-passport="showPassportSheet = true"
       />
     </div>
     </Transition>
@@ -337,6 +364,12 @@ function fmtDate(ts: number): string {
       :current-cost="editingFuelEntry.cost"
       @close="editingFuelCostId = null"
       @save="handleSaveFuelCost"
+    />
+
+    <CarPassportSheet
+      v-if="showPassportSheet && passportData"
+      :data="passportData"
+      @close="showPassportSheet = false"
     />
 
     <CarSwitcherSheet

@@ -4,6 +4,7 @@ import type { FuelConsumption, HistoryEntry } from '../types'
 import SwipeRow from './SwipeRow.vue'
 import ConsumptionChart from './ConsumptionChart.vue'
 import MonthlySpendChart from './MonthlySpendChart.vue'
+import { formatDate } from '../utils/dateFormat'
 
 const props = defineProps<{
   fuelHistory: FuelConsumption[]
@@ -47,10 +48,6 @@ const visible = computed(() => (showAll.value ? periodFiltered.value : periodFil
 
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('ru-RU')
-}
-
-function fmtDate(ts: number): string {
-  return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 }
 
 function fmtCost(n: number): string {
@@ -120,7 +117,7 @@ function fmtCost(n: number): string {
                   </span>
                 </div>
                 <div class="fuel-meta">
-                  {{ fmt(row.entry.mileage) }} км · {{ fmtDate(row.entry.date) }}
+                  {{ fmt(row.entry.mileage) }} км · {{ formatDate(row.entry.date) }}
                 </div>
               </div>
             </button>
