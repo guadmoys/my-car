@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { MaintenanceStatus } from '../types'
 import SwipeRow from './SwipeRow.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
+import ToggleSwitch from './ToggleSwitch.vue'
 
 const props = defineProps<{
   status: MaintenanceStatus
@@ -12,6 +13,7 @@ const emit = defineEmits<{
   markServiced: [id: string]
   toggle: [id: string, enabled: boolean]
   edit: [id: string]
+  delete: [id: string]
 }>()
 
 const stateColor = computed(() => {
@@ -71,6 +73,7 @@ function fmt(n: number): string {
   <div class="item" :class="{ dimmed: !status.item.enabled }">
     <SwipeRow
       :left-action="{ label: '✓ Готово', colorVar: 'var(--green)', onTrigger: () => emit('markServiced', status.item.id) }"
+      :right-action="{ label: '🗑 Удалить', colorVar: 'var(--red)', onTrigger: () => emit('delete', status.item.id) }"
     >
       <button class="tap-target" @click="emit('edit', status.item.id)">
         <div class="row">
@@ -100,14 +103,7 @@ function fmt(n: number): string {
       <button class="done" @click="emit('markServiced', status.item.id)">
         Выполнено
       </button>
-      <label class="switch">
-        <input
-          type="checkbox"
-          :checked="status.item.enabled"
-          @change="emit('toggle', status.item.id, ($event.target as HTMLInputElement).checked)"
-        />
-        <span class="slider" />
-      </label>
+      <ToggleSwitch :checked="status.item.enabled" @update:checked="(v) => emit('toggle', status.item.id, v)" />
     </div>
 
     <div v-if="showBuyHint" class="buy-hint" :style="{ borderColor: stateColor }">
@@ -238,53 +234,10 @@ function fmt(n: number): string {
   opacity: 0.6;
 }
 
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 26px;
-  flex-shrink: 0;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  inset: 0;
-  background: var(--fill-secondary);
-  border-radius: 13px;
-  transition: background 0.2s;
-}
-
-.slider::before {
-  content: '';
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  left: 2px;
-  top: 2px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
-.switch input:checked + .slider {
-  background: var(--green);
-}
-
-.switch input:checked + .slider::before {
-  transform: translateX(18px);
-}
-
 .buy-hint {
   margin-top: 12px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 1px solid;
   background: var(--fill-secondary);
 }
@@ -336,7 +289,7 @@ function fmt(n: number): string {
   color: var(--blue);
   background: color-mix(in srgb, var(--blue) 12%, transparent);
   padding: 5px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   text-decoration: none;
 }
 

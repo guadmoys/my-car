@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { FuelConsumption, FuelInsight, HistoryEntry } from '../types'
+import { haptic } from '../utils/haptics'
 import SwipeRow from './SwipeRow.vue'
 import ConsumptionChart from './ConsumptionChart.vue'
 import MonthlySpendChart from './MonthlySpendChart.vue'
@@ -38,6 +39,12 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: '90', label: '90 дней' },
   { key: 'year', label: 'Год' },
 ]
+
+function selectPeriod(key: Period) {
+  if (period.value === key) return
+  haptic('tap')
+  period.value = key
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -116,7 +123,7 @@ function fmtCo2(kg: number): string {
           :key="p.key"
           class="period-chip"
           :class="{ active: period === p.key }"
-          @click="period = p.key"
+          @click="selectPeriod(p.key)"
         >
           {{ p.label }}
         </button>

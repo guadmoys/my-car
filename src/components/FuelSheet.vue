@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { haptic } from '../utils/haptics'
+import ToggleSwitch from './ToggleSwitch.vue'
 
 const props = defineProps<{
   currentMileage: number
@@ -238,21 +239,15 @@ function handleSave() {
               <input v-model="pricePerLiter" type="text" inputmode="decimal" placeholder="—" />
             </div>
             <div class="divider" />
-            <label class="field switch-row">
+            <div class="field switch-row">
               <span>Полный бак</span>
-              <span class="switch">
-                <input type="checkbox" :checked="isFullTank" @change="toggleFullTank" />
-                <span class="slider" />
-              </span>
-            </label>
+              <ToggleSwitch :checked="isFullTank" @update:checked="toggleFullTank" />
+            </div>
             <div class="divider" />
-            <label class="field switch-row" :class="{ disabled: isFullTank }">
+            <div class="field switch-row" :class="{ disabled: isFullTank }">
               <span>Остаток в баке</span>
-              <span class="switch">
-                <input type="checkbox" :checked="hasRemaining" :disabled="isFullTank" @change="toggleHasRemaining" />
-                <span class="slider" />
-              </span>
-            </label>
+              <ToggleSwitch :checked="hasRemaining" :disabled="isFullTank" @update:checked="toggleHasRemaining" />
+            </div>
             <template v-if="hasRemaining && !isFullTank">
               <div class="divider" />
               <div class="field">
@@ -507,50 +502,4 @@ function handleSave() {
   color: var(--text-tertiary);
 }
 
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 26px;
-  flex-shrink: 0;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  inset: 0;
-  background: var(--fill-secondary);
-  border-radius: 13px;
-  transition: background 0.2s;
-}
-
-.slider::before {
-  content: '';
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  left: 2px;
-  top: 2px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
-.switch input:checked + .slider {
-  background: var(--green);
-}
-
-.switch input:checked + .slider::before {
-  transform: translateX(18px);
-}
-
-.switch input:disabled + .slider {
-  opacity: 0.4;
-}
 </style>

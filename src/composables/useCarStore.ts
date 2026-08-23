@@ -241,11 +241,18 @@ async function addCustomItem(input: {
   await db.putMaintenanceItem(item)
 }
 
-async function deleteItem(id: string): Promise<void> {
+async function deleteItem(id: string): Promise<MaintenanceItem | null> {
   const index = items.findIndex((i) => i.id === id)
-  if (index === -1) return
-  items.splice(index, 1)
+  if (index === -1) return null
+  const [removed] = items.splice(index, 1)
   await db.deleteMaintenanceItem(id)
+  return removed
+}
+
+async function restoreItem(item: MaintenanceItem): Promise<void> {
+  if (items.some((i) => i.id === item.id)) return
+  items.push(item)
+  await db.putMaintenanceItem(item)
 }
 
 async function addFuelEntry(input: {
@@ -917,6 +924,7 @@ export function useCarStore() {
     undoMarkServiced,
     addCustomItem,
     deleteItem,
+    restoreItem,
     addFuelEntry,
     deleteFuelEntry,
     restoreFuelEntry,

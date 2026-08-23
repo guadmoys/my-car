@@ -182,9 +182,15 @@ async function handleCreateItem(payload: {
 }
 
 async function handleDeleteItem(id: string) {
-  haptic('delete')
-  await store.deleteItem(id)
+  const item = store.items.find((i) => i.id === id)
+  const removed = await store.deleteItem(id)
   closeEdit()
+  if (!removed) return
+  haptic('delete')
+  toast.show(item ? `«${item.name}» удалён` : 'Параметр удалён', {
+    label: 'Отменить',
+    onAction: () => store.restoreItem(removed),
+  })
 }
 
 async function handleSaveMileage(mileage: number) {
@@ -369,6 +375,7 @@ function fmtDate(ts: number): string {
         @mark-serviced="handleMarkServiced"
         @toggle="handleToggle"
         @edit="openEdit"
+        @delete="handleDeleteItem"
         @add-item="editingItem = 'new'"
       />
 

@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import type { MaintenanceItem, MaintenanceStatus } from '../types'
 import MaintenanceCard from './MaintenanceCard.vue'
+import ToggleSwitch from './ToggleSwitch.vue'
+import { haptic } from '../utils/haptics'
 
 const props = defineProps<{
   sortedStatuses: MaintenanceStatus[]
@@ -12,6 +14,7 @@ const emit = defineEmits<{
   markServiced: [id: string]
   toggle: [id: string, enabled: boolean]
   edit: [id: string]
+  delete: [id: string]
   addItem: []
 }>()
 
@@ -27,11 +30,24 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'ok', label: 'В порядке' },
 ]
 
+function selectFilter(key: Filter) {
+  if (filter.value === key) return
+  haptic('tap')
+  filter.value = key
+}
+
+function matchesQuery(item: MaintenanceItem, query: string): boolean {
+  if (item.name.toLowerCase().includes(query)) return true
+  return item.parts.some(
+    (p) => p.name.toLowerCase().includes(query) || p.articleNumber.toLowerCase().includes(query),
+  )
+}
+
 const filteredStatuses = computed(() => {
   const query = search.value.trim().toLowerCase()
   return props.sortedStatuses.filter((s) => {
     if (filter.value !== 'all' && s.state !== filter.value) return false
-    if (query && !s.item.name.toLowerCase().includes(query)) return false
+    if (query && !matchesQuery(s.item, query)) return false
     return true
   })
 })
@@ -58,7 +74,7 @@ const filteredStatuses = computed(() => {
         :key="f.key"
         class="filter-chip"
         :class="{ active: filter === f.key }"
-        @click="filter = f.key"
+        @click="selectFilter(f.key)"
       >
         {{ f.label }}
       </button>
@@ -73,6 +89,7 @@ const filteredStatuses = computed(() => {
           @mark-serviced="emit('markServiced', $event)"
           @toggle="(id, enabled) => emit('toggle', id, enabled)"
           @edit="emit('edit', $event)"
+          @delete="emit('delete', $event)"
         />
         <div v-if="filteredStatuses.length === 0" class="empty">
           {{ sortedStatuses.length === 0 ? 'Все параметры отключены' : 'Ничего не найдено' }}
@@ -88,14 +105,7 @@ const filteredStatuses = computed(() => {
       <div v-if="showDisabled" class="card list">
         <div v-for="item in disabledItems" :key="item.id" class="disabled-row">
           <button class="disabled-name" @click="emit('edit', item.id)">{{ item.name }}</button>
-          <label class="switch">
-            <input
-              type="checkbox"
-              :checked="item.enabled"
-              @change="emit('toggle', item.id, ($event.target as HTMLInputElement).checked)"
-            />
-            <span class="slider" />
-          </label>
+          <ToggleSwitch :checked="item.enabled" @update:checked="(v) => emit('toggle', item.id, v)" />
         </div>
       </div>
     </section>
@@ -254,49 +264,6 @@ const filteredStatuses = computed(() => {
   font-size: 16px;
   color: var(--text-secondary);
   text-align: left;
-}
-
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 26px;
-  flex-shrink: 0;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  inset: 0;
-  background: var(--fill-secondary);
-  border-radius: 13px;
-  transition: background 0.2s;
-}
-
-.slider::before {
-  content: '';
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  left: 2px;
-  top: 2px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
-.switch input:checked + .slider {
-  background: var(--green);
-}
-
-.switch input:checked + .slider::before {
-  transform: translateX(18px);
 }
 
 .add-item {
