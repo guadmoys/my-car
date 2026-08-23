@@ -122,6 +122,7 @@ function handleDelete() {
 
 const toast = useToast()
 const checkingUpdate = ref(false)
+const appVersion = __APP_VERSION__
 
 async function handleCheckForUpdate() {
   if (checkingUpdate.value) return
@@ -260,6 +261,7 @@ function handleFileSelected(event: Event) {
           Приложение само проверяет обновления в фоне. Нажмите, чтобы проверить прямо сейчас — если
           вышла новая версия, скрипты скачаются заново и приложение перезапустится
         </p>
+        <p class="hint version-hint">Версия {{ appVersion }}</p>
       </div>
 
       <div class="backup-zone">
@@ -522,6 +524,10 @@ function handleFileSelected(event: Event) {
 
 .hint.error {
   color: var(--red);
+}
+
+.version-hint {
+  color: var(--text-tertiary);
 }
 
 .reset {
