@@ -4,6 +4,8 @@ import { haptic } from '../utils/haptics'
 
 const props = defineProps<{
   currentMileage: number
+  tankCapacity?: number
+  averagePrice: number | null
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +64,48 @@ const isValid = computed(() => {
     return false
   }
   return true
+})
+
+// Non-blocking sanity checks: catch likely typos without stopping the save.
+const litersExceedTank = computed(() => {
+  if (props.tankCapacity === undefined || liters.value.trim() === '' || Number.isNaN(litersNumber.value)) {
+    return false
+  }
+  return litersNumber.value > props.tankCapacity
+})
+
+const remainingExceedsTank = computed(() => {
+  if (
+    props.tankCapacity === undefined ||
+    isFullTank.value ||
+    !hasRemaining.value ||
+    remainingLiters.value.trim() === '' ||
+    Number.isNaN(remainingLitersNumber.value)
+  ) {
+    return false
+  }
+  return remainingLitersNumber.value > props.tankCapacity
+})
+
+const effectivePrice = computed<number | null>(() => {
+  if (pricePerLiter.value.trim() !== '' && !Number.isNaN(priceNumber.value) && priceNumber.value > 0) {
+    return priceNumber.value
+  }
+  if (
+    cost.value.trim() !== '' &&
+    !Number.isNaN(costNumber.value) &&
+    liters.value.trim() !== '' &&
+    !Number.isNaN(litersNumber.value) &&
+    litersNumber.value > 0
+  ) {
+    return costNumber.value / litersNumber.value
+  }
+  return null
+})
+
+const priceLooksOff = computed(() => {
+  if (props.averagePrice === null || props.averagePrice <= 0 || effectivePrice.value === null) return false
+  return Math.abs(effectivePrice.value - props.averagePrice) / props.averagePrice >= 0.4
 })
 
 function selectFuelType(value: string) {
@@ -136,6 +180,12 @@ function handleSave() {
         <p v-if="mileage.trim() && mileageNumber < currentMileage" class="hint">
           Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
         </p>
+        <p v-if="litersExceedTank" class="hint warn">
+          ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
+        </p>
+        <p v-if="priceLooksOff" class="hint warn">
+          ⚠ Цена сильно отличается от обычной (~{{ averagePrice?.toFixed(1) }} ₽/л) — проверьте значение
+        </p>
 
         <div class="more-block">
           <button class="section-title toggleable" @click="showMore = !showMore">
@@ -198,6 +248,9 @@ function handleSave() {
               <input v-model="comment" type="text" placeholder="—" />
             </div>
           </div>
+          <p v-if="remainingExceedsTank" class="hint warn advanced-hint">
+            ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
+          </p>
           <p v-if="showMore && !isFullTank" class="hint advanced-hint">
             Точный расход считается между заправками «под пробку». Если бак не полный, отметьте
             «Остаток в баке», чтобы эта заправка тоже участвовала в расчёте
@@ -328,6 +381,10 @@ function handleSave() {
   font-size: 13px;
   color: var(--red);
   margin: 10px 4px 0;
+}
+
+.hint.warn {
+  color: var(--orange);
 }
 
 .more-block {

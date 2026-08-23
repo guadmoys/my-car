@@ -475,6 +475,36 @@ const consumptionAnalysis = computed<{
 const averageConsumption = computed<number | null>(() => consumptionAnalysis.value.average)
 const fuelHistory = computed<FuelConsumption[]>(() => consumptionAnalysis.value.history)
 
+/**
+ * Estimated remaining range, when the current tank level is known (needs
+ * either a full-tank fill-up or a tracked tank capacity) and there's an
+ * average consumption to project it against.
+ */
+const estimatedRangeKm = computed<number | null>(() => {
+  const currentLevel = consumptionAnalysis.value.currentLevelLiters
+  const avg = averageConsumption.value
+  if (currentLevel === null || currentLevel < 0 || avg === null || avg <= 0) return null
+  return (currentLevel / avg) * 100
+})
+
+const averageFuelPrice = computed<number | null>(() => {
+  const priced = fuelEntries.filter((e) => e.cost !== undefined && e.liters > 0)
+  if (priced.length === 0) return null
+  const totalCost = priced.reduce((sum, e) => sum + (e.cost as number), 0)
+  const totalLiters = priced.reduce((sum, e) => sum + e.liters, 0)
+  return totalCost / totalLiters
+})
+
+function co2FactorForFuelType(fuelType: string | undefined): number {
+  if (fuelType?.includes('Дизель')) return 2.68
+  if (fuelType?.includes('Газ')) return 1.51
+  return 2.31 // gasoline (АИ-92/95/98), also the default when the grade wasn't recorded
+}
+
+const totalCo2Kg = computed<number>(() =>
+  fuelEntries.reduce((sum, e) => sum + e.liters * co2FactorForFuelType(e.fuelType), 0),
+)
+
 function average(values: number[]): number {
   return values.reduce((sum, v) => sum + v, 0) / values.length
 }
@@ -529,10 +559,8 @@ const fuelInsights = computed<FuelInsight[]>(() => {
 
   // Estimated remaining range, when the current tank level is known
   // (needs either a full-tank fill-up or a tracked tank capacity).
-  const currentLevel = consumptionAnalysis.value.currentLevelLiters
-  const avg = averageConsumption.value
-  if (currentLevel !== null && currentLevel >= 0 && avg !== null && avg > 0) {
-    const rangeKm = (currentLevel / avg) * 100
+  const rangeKm = estimatedRangeKm.value
+  if (rangeKm !== null) {
     if (rangeKm <= 60) {
       insights.push({
         id: 'range',
@@ -545,6 +573,48 @@ const fuelInsights = computed<FuelInsight[]>(() => {
         id: 'range',
         icon: '🛣',
         text: `Ориентировочный запас хода: ~${Math.round(rangeKm)} км на текущем остатке топлива`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  // Fuel budget forecast: rolling 30-day spend rate, projected forward.
+  // Needs a real spread of dates — otherwise a batch of fill-ups entered
+  // all at once (e.g. backfilling history) would wildly inflate the rate.
+  const now = Date.now()
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const recentPriced = fuelEntries.filter((e) => e.date >= now - 30 * DAY_MS && e.cost !== undefined)
+  if (recentPriced.length >= 2) {
+    const earliestDate = Math.min(...recentPriced.map((e) => e.date))
+    const daysSpan = (now - earliestDate) / DAY_MS
+    if (daysSpan >= 3) {
+      const totalSpent = recentPriced.reduce((sum, e) => sum + (e.cost as number), 0)
+      const projected = (totalSpent / daysSpan) * 30
+      insights.push({
+        id: 'budget',
+        icon: '📊',
+        text: `За последние ${Math.round(daysSpan)} дн. на топливо потрачено ${Math.round(totalSpent).toLocaleString('ru-RU')} ₽ — при таком темпе выйдет ~${Math.round(projected).toLocaleString('ru-RU')} ₽ за 30 дней`,
+        tone: 'neutral',
+      })
+    }
+  }
+
+  // Seasonal comparison: winter (Dec-Feb) vs summer (Jun-Aug) consumption.
+  const winterVals = validSegments
+    .filter((r) => [11, 0, 1].includes(new Date(r.entry.date).getMonth()))
+    .map((r) => r.litersPer100km as number)
+  const summerVals = validSegments
+    .filter((r) => [5, 6, 7].includes(new Date(r.entry.date).getMonth()))
+    .map((r) => r.litersPer100km as number)
+  if (winterVals.length >= 2 && summerVals.length >= 2) {
+    const winterAvg = average(winterVals)
+    const summerAvg = average(summerVals)
+    const diffPct = ((winterAvg - summerAvg) / summerAvg) * 100
+    if (diffPct >= 8) {
+      insights.push({
+        id: 'seasonal',
+        icon: '❄️',
+        text: `Зимой расход в среднем на ${diffPct.toFixed(0)}% выше, чем летом (${winterAvg.toFixed(1)} против ${summerAvg.toFixed(1)} л/100км)`,
         tone: 'neutral',
       })
     }
@@ -657,7 +727,7 @@ const fuelInsights = computed<FuelInsight[]>(() => {
     }
   }
 
-  return insights.slice(0, 5)
+  return insights.slice(0, 6)
 })
 
 const totalFuelCost = computed(() =>
@@ -769,6 +839,9 @@ export function useCarStore() {
     okCount,
     fuelHistory,
     averageConsumption,
+    estimatedRangeKm,
+    averageFuelPrice,
+    totalCo2Kg,
     fuelInsights,
     totalFuelCost,
     totalServiceCost,

@@ -87,6 +87,30 @@ export async function checkAndNotify(carId: string, statuses: MaintenanceStatus[
   saveNotifiedIds(carId, notifiedIds)
 }
 
+const LOW_FUEL_RANGE_KM = 60
+
+function lowFuelNotifiedKey(carId: string): string {
+  return `my-car-low-fuel-notified-${carId}`
+}
+
+/**
+ * Notifies once when the estimated range drops at or below the threshold,
+ * then stays quiet until it recovers above it (a refill) so it can fire
+ * again next time fuel runs low.
+ */
+export async function checkAndNotifyLowFuel(carId: string, rangeKm: number | null): Promise<void> {
+  const key = lowFuelNotifiedKey(carId)
+  if (rangeKm === null || rangeKm > LOW_FUEL_RANGE_KM) {
+    localStorage.removeItem(key)
+    return
+  }
+  if (!isNotificationsEnabled() || getNotificationPermission() !== 'granted') return
+  if (localStorage.getItem(key) === 'true') return
+
+  await showLocalNotification('Заканчивается топливо', `Прогноз запаса хода: ~${Math.round(rangeKm)} км`)
+  localStorage.setItem(key, 'true')
+}
+
 export function updateAppBadge(count: number): void {
   const nav = navigator as Navigator & {
     setAppBadge?: (count?: number) => Promise<void>

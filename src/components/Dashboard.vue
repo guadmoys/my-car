@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useCarStore } from '../composables/useCarStore'
-import { checkAndNotify, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
+import { checkAndNotify, checkAndNotifyLowFuel, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
 import { haptic } from '../utils/haptics'
 import { useToast } from '../composables/useToast'
 import DashboardTab from './DashboardTab.vue'
@@ -30,6 +30,9 @@ const {
   okCount,
   fuelHistory,
   averageConsumption,
+  estimatedRangeKm,
+  averageFuelPrice,
+  totalCo2Kg,
   fuelInsights,
   totalFuelCost,
   totalServiceCost,
@@ -94,6 +97,14 @@ watch(
   ([carVal, statusesVal]) => {
     updateAppBadge(dueCount.value + soonCount.value)
     if (carVal) checkAndNotify(carVal.id, statusesVal)
+  },
+  { immediate: true },
+)
+
+watch(
+  [car, estimatedRangeKm],
+  ([carVal, rangeVal]) => {
+    if (carVal) checkAndNotifyLowFuel(carVal.id, rangeVal)
   },
   { immediate: true },
 )
@@ -316,6 +327,7 @@ function fmtDate(ts: number): string {
         :history-entries="store.historyEntries"
         :average-consumption="averageConsumption"
         :fuel-insights="fuelInsights"
+        :total-co2-kg="totalCo2Kg"
         :total-fuel-cost="totalFuelCost"
         :total-service-cost="totalServiceCost"
         :total-cost="totalCost"
@@ -369,6 +381,8 @@ function fmtDate(ts: number): string {
     <FuelSheet
       v-if="showFuelSheet"
       :current-mileage="car.currentMileage"
+      :tank-capacity="car.tankCapacity"
+      :average-price="averageFuelPrice"
       @close="showFuelSheet = false"
       @save="handleSaveFuel"
     />

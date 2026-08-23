@@ -4,6 +4,7 @@ import type { FuelConsumption, FuelInsight, HistoryEntry } from '../types'
 import SwipeRow from './SwipeRow.vue'
 import ConsumptionChart from './ConsumptionChart.vue'
 import MonthlySpendChart from './MonthlySpendChart.vue'
+import StationPricesCard from './StationPricesCard.vue'
 import { formatDate } from '../utils/dateFormat'
 
 const props = defineProps<{
@@ -14,6 +15,7 @@ const props = defineProps<{
   totalFuelCost: number
   totalServiceCost: number
   totalCost: number
+  totalCo2Kg: number
   hasAnyCost: boolean
 }>()
 
@@ -54,6 +56,10 @@ function fmt(n: number): string {
 function fmtCost(n: number): string {
   return `${Math.round(n).toLocaleString('ru-RU')} ₽`
 }
+
+function fmtCo2(kg: number): string {
+  return kg >= 1000 ? `${(kg / 1000).toFixed(2)} т` : `${Math.round(kg)} кг`
+}
 </script>
 
 <template>
@@ -77,6 +83,10 @@ function fmtCost(n: number): string {
           <span>Итого</span>
           <span>{{ fmtCost(totalCost) }}</span>
         </div>
+        <div v-if="totalCo2Kg > 0" class="expense-row co2-row">
+          <span>Выбросы CO₂</span>
+          <span>{{ fmtCo2(totalCo2Kg) }}</span>
+        </div>
       </div>
     </section>
 
@@ -94,6 +104,8 @@ function fmtCost(n: number): string {
         </div>
       </div>
     </section>
+
+    <StationPricesCard :fuel-entries="fuelEntriesRaw" />
 
     <section class="section">
       <div class="section-title">Заправки</div>
@@ -256,6 +268,12 @@ function fmtCost(n: number): string {
 
 .expense-row.total span:last-child {
   color: var(--blue);
+}
+
+.expense-row.co2-row {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-top: 8px;
 }
 
 .empty {
