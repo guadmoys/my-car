@@ -113,6 +113,8 @@ async function handleSaveItem(payload: {
   intervalMonths?: number
   lastServiceMileage: number
   parts: Part[]
+  notifyBeforeKm?: number
+  notifyBeforeDays?: number
 }) {
   if (editModalItem.value) {
     await store.updateItem(editModalItem.value.id, payload)
@@ -126,6 +128,8 @@ async function handleCreateItem(payload: {
   intervalKmMax?: number
   intervalMonths?: number
   parts: Part[]
+  notifyBeforeKm?: number
+  notifyBeforeDays?: number
 }) {
   await store.addCustomItem(payload)
   closeEdit()

@@ -36,6 +36,10 @@ export interface MaintenanceItem {
   order: number
   note?: string
   parts: Part[]
+  /** Override for how many km before the due mileage this item becomes "soon" (and notifies). Defaults to 10% of the interval. */
+  notifyBeforeKm?: number
+  /** Override for how many days before the due date this item becomes "soon" (and notifies). Only relevant when intervalMonths is set; defaults to 10% of the interval span. */
+  notifyBeforeDays?: number
 }
 
 export interface MaintenanceStatus {

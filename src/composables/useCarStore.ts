@@ -152,7 +152,15 @@ async function updateItem(
   patch: Partial<
     Pick<
       MaintenanceItem,
-      'name' | 'intervalKm' | 'intervalKmMax' | 'intervalMonths' | 'lastServiceMileage' | 'note' | 'parts'
+      | 'name'
+      | 'intervalKm'
+      | 'intervalKmMax'
+      | 'intervalMonths'
+      | 'lastServiceMileage'
+      | 'note'
+      | 'parts'
+      | 'notifyBeforeKm'
+      | 'notifyBeforeDays'
     >
   >,
 ): Promise<void> {
@@ -208,6 +216,8 @@ async function addCustomItem(input: {
   intervalKmMax?: number
   intervalMonths?: number
   parts?: Part[]
+  notifyBeforeKm?: number
+  notifyBeforeDays?: number
 }): Promise<void> {
   if (!car.value) return
   const item: MaintenanceItem = {
@@ -223,6 +233,8 @@ async function addCustomItem(input: {
     isCustom: true,
     order: items.length,
     parts: input.parts ?? [],
+    notifyBeforeKm: input.notifyBeforeKm,
+    notifyBeforeDays: input.notifyBeforeDays,
   }
   items.push(item)
   await db.putMaintenanceItem(item)
@@ -305,7 +317,9 @@ function statusFor(item: MaintenanceItem, currentMileage: number, now: number): 
   const remainingKm = dueAtMileage - currentMileage
   const traveled = currentMileage - item.lastServiceMileage
   const kmProgress = Math.min(1, Math.max(0, traveled / item.intervalKm))
-  const kmState: MaintenanceStatus['state'] = remainingKm <= 0 ? 'due' : kmProgress >= 0.9 ? 'soon' : 'ok'
+  const kmSoonThreshold = item.notifyBeforeKm ?? item.intervalKm * 0.1
+  const kmState: MaintenanceStatus['state'] =
+    remainingKm <= 0 ? 'due' : remainingKm <= kmSoonThreshold ? 'soon' : 'ok'
 
   let dueAtDate: number | undefined
   let remainingDays: number | undefined
@@ -317,7 +331,8 @@ function statusFor(item: MaintenanceItem, currentMileage: number, now: number): 
     remainingDays = Math.ceil((dueAtDate - now) / DAY_MS)
     const totalSpan = dueAtDate - item.lastServiceDate
     dateProgress = totalSpan > 0 ? Math.min(1, Math.max(0, (now - item.lastServiceDate) / totalSpan)) : 1
-    dateState = remainingDays <= 0 ? 'due' : dateProgress >= 0.9 ? 'soon' : 'ok'
+    const daySoonThreshold = item.notifyBeforeDays ?? (totalSpan / DAY_MS) * 0.1
+    dateState = remainingDays <= 0 ? 'due' : remainingDays <= daySoonThreshold ? 'soon' : 'ok'
   }
 
   const state = dateState && stateRank(dateState) > stateRank(kmState) ? dateState : kmState
