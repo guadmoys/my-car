@@ -6,6 +6,9 @@ const props = defineProps<{
   currentMileage: number
   tankCapacity?: number
   averagePrice: number | null
+  lastFuelType?: string
+  lastStation?: string
+  lastPrice: number | null
 }>()
 
 const emit = defineEmits<{
@@ -125,6 +128,23 @@ function toggleHasRemaining() {
   hasRemaining.value = !hasRemaining.value
 }
 
+const suggestionLabel = computed(() => {
+  const parts: string[] = []
+  if (props.lastFuelType) parts.push(props.lastFuelType)
+  if (props.lastStation) parts.push(props.lastStation)
+  if (props.lastPrice !== null) parts.push(`${props.lastPrice.toFixed(1)} ₽/л`)
+  return parts.join(' · ')
+})
+
+function applySuggestion() {
+  if (!suggestionLabel.value) return
+  haptic('tap')
+  if (props.lastFuelType) fuelType.value = props.lastFuelType
+  if (props.lastStation) station.value = props.lastStation
+  if (props.lastPrice !== null) pricePerLiter.value = props.lastPrice.toFixed(2)
+  showMore.value = true
+}
+
 function handleSave() {
   if (!isValid.value) return
 
@@ -161,6 +181,9 @@ function handleSave() {
       </div>
 
       <div class="form">
+        <button v-if="suggestionLabel" type="button" class="suggestion-chip" @click="applySuggestion">
+          Как в прошлый раз: {{ suggestionLabel }}
+        </button>
         <div class="group">
           <div class="field">
             <label>Пробег на заправке, км</label>
@@ -346,6 +369,23 @@ function handleSave() {
   border-radius: var(--radius-md);
   padding: 0 14px;
   border: 1px solid var(--card-border);
+}
+
+.suggestion-chip {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--blue) 12%, transparent);
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.suggestion-chip:active {
+  opacity: 0.7;
 }
 
 .field {

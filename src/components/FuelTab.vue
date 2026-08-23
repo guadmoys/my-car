@@ -25,6 +25,7 @@ const emit = defineEmits<{
   addFuel: []
   deleteFuel: [id: string]
   editCost: [id: string]
+  exportCsv: []
 }>()
 
 const showAll = ref(false)
@@ -168,6 +169,9 @@ function fmtCo2(kg: number): string {
         </button>
       </div>
       <button class="add-item" @click="emit('addFuel')">+ Добавить заправку</button>
+      <button v-if="fuelHistory.length > 0" class="export-btn" @click="emit('exportCsv')">
+        Экспорт в CSV
+      </button>
     </section>
   </div>
 </template>
@@ -457,6 +461,23 @@ function fmtCo2(kg: number): string {
 }
 
 .add-item:active {
+  opacity: 0.6;
+}
+
+.export-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  color: var(--blue);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.export-btn:active {
   opacity: 0.6;
 }
 </style>

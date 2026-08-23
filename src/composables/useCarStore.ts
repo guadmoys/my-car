@@ -327,7 +327,28 @@ function stateRank(state: MaintenanceStatus['state']): number {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function statusFor(item: MaintenanceItem, currentMileage: number, now: number): MaintenanceStatus {
+/**
+ * Average km driven per day, from the span of the fuel history. Guarded
+ * against a short/burst date span the same way the budget forecast is, so
+ * backfilling several fill-ups in one sitting doesn't produce a wild rate.
+ */
+const avgDailyKm = computed<number | null>(() => {
+  if (fuelEntries.length < 2) return null
+  const sorted = fuelEntries.slice().sort((a, b) => a.date - b.date)
+  const first = sorted[0]
+  const last = sorted[sorted.length - 1]
+  const days = (last.date - first.date) / DAY_MS
+  const distance = last.mileage - first.mileage
+  if (days < 3 || distance <= 0) return null
+  return distance / days
+})
+
+function statusFor(
+  item: MaintenanceItem,
+  currentMileage: number,
+  now: number,
+  dailyKm: number | null,
+): MaintenanceStatus {
   const dueAtMileage = item.lastServiceMileage + item.intervalKm
   const remainingKm = dueAtMileage - currentMileage
   const traveled = currentMileage - item.lastServiceMileage
@@ -350,19 +371,28 @@ function statusFor(item: MaintenanceItem, currentMileage: number, now: number): 
     dateState = remainingDays <= 0 ? 'due' : remainingDays <= daySoonThreshold ? 'soon' : 'ok'
   }
 
+  // Capped to a ~3-year horizon: beyond that, a daily-pace guess for a
+  // long-interval item (e.g. a timing belt) is just noise, not a useful date.
+  let estimatedDueDate: number | undefined
+  if (dueAtDate === undefined && dailyKm !== null && dailyKm > 0 && remainingKm > 0) {
+    const daysUntil = remainingKm / dailyKm
+    if (daysUntil <= 1095) estimatedDueDate = now + daysUntil * DAY_MS
+  }
+
   const state = dateState && stateRank(dateState) > stateRank(kmState) ? dateState : kmState
   const progress = dateState ? Math.max(kmProgress, dateProgress) : kmProgress
 
-  return { item, dueAtMileage, remainingKm, dueAtDate, remainingDays, progress, state }
+  return { item, dueAtMileage, remainingKm, dueAtDate, remainingDays, estimatedDueDate, progress, state }
 }
 
 const statuses = computed<MaintenanceStatus[]>(() => {
   if (!car.value) return []
   const now = Date.now()
+  const dailyKm = avgDailyKm.value
   return items
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((item) => statusFor(item, car.value!.currentMileage, now))
+    .map((item) => statusFor(item, car.value!.currentMileage, now, dailyKm))
 })
 
 const enabledStatuses = computed(() => statuses.value.filter((s) => s.item.enabled))
@@ -517,6 +547,14 @@ function daysWord(n: number): string {
   return 'дней'
 }
 
+function fillupsWord(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return 'заправка'
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'заправки'
+  return 'заправок'
+}
+
 const fuelInsights = computed<FuelInsight[]>(() => {
   if (!car.value) return []
   const insights: FuelInsight[] = []
@@ -557,22 +595,42 @@ const fuelInsights = computed<FuelInsight[]>(() => {
     }
   }
 
+  // Efficiency streak: consecutive recent fill-ups better than average.
+  let streak = 0
+  for (const row of validSegments) {
+    if (row.quality !== 'good') break
+    streak++
+  }
+  if (streak >= 3) {
+    insights.push({
+      id: 'streak',
+      icon: '🔥',
+      text: `${streak} ${fillupsWord(streak)} подряд экономичнее среднего — отличная динамика!`,
+      tone: 'good',
+    })
+  }
+
   // Estimated remaining range, when the current tank level is known
-  // (needs either a full-tank fill-up or a tracked tank capacity).
+  // (needs either a full-tank fill-up or a tracked tank capacity), plus a
+  // days-until-empty guess when there's enough driving history for a pace.
   const rangeKm = estimatedRangeKm.value
   if (rangeKm !== null) {
+    const daily = avgDailyKm.value
+    const daysUntilEmpty = daily !== null && daily > 0 ? rangeKm / daily : null
+    const daysSuffix =
+      daysUntilEmpty !== null ? ` (~${Math.round(daysUntilEmpty)} ${daysWord(Math.round(daysUntilEmpty))} при вашем темпе)` : ''
     if (rangeKm <= 60) {
       insights.push({
         id: 'range',
         icon: '⛽',
-        text: `Топлива осталось примерно на ${Math.round(rangeKm)} км — скоро на заправку`,
+        text: `Топлива осталось примерно на ${Math.round(rangeKm)} км${daysSuffix} — скоро на заправку`,
         tone: 'bad',
       })
     } else {
       insights.push({
         id: 'range',
         icon: '🛣',
-        text: `Ориентировочный запас хода: ~${Math.round(rangeKm)} км на текущем остатке топлива`,
+        text: `Ориентировочный запас хода: ~${Math.round(rangeKm)} км${daysSuffix}`,
         tone: 'neutral',
       })
     }

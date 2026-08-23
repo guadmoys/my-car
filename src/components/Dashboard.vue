@@ -57,6 +57,18 @@ const editingFuelEntry = computed<FuelEntry | null>(
   () => store.fuelEntries.find((e) => e.id === editingFuelCostId.value) ?? null,
 )
 
+const lastFuelEntry = computed<FuelEntry | null>(() => {
+  if (store.fuelEntries.length === 0) return null
+  return store.fuelEntries.slice().sort((a, b) => b.date - a.date)[0]
+})
+const lastFuelType = computed(() => lastFuelEntry.value?.fuelType)
+const lastStation = computed(() => lastFuelEntry.value?.station)
+const lastPrice = computed<number | null>(() => {
+  const e = lastFuelEntry.value
+  if (!e || e.cost === undefined || e.liters <= 0) return null
+  return e.cost / e.liters
+})
+
 const STATE_RANK: Record<string, number> = { due: 2, soon: 1, ok: 0 }
 
 const sortedStatuses = computed(() =>
@@ -262,6 +274,45 @@ async function handleExport() {
   URL.revokeObjectURL(url)
 }
 
+function csvEscape(value: string): string {
+  return /["\n,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+function handleExportFuelCsv() {
+  const rows = store.fuelEntries.slice().sort((a, b) => a.date - b.date)
+  const header = ['Дата', 'Пробег, км', 'Литры', 'Стоимость, ₽', 'Цена, ₽/л', 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
+  const lines = [header.join(',')]
+  for (const e of rows) {
+    const price = e.cost !== undefined && e.liters > 0 ? (e.cost / e.liters).toFixed(2) : ''
+    lines.push(
+      [
+        new Date(e.date).toLocaleDateString('ru-RU'),
+        String(e.mileage),
+        String(e.liters),
+        e.cost !== undefined ? String(e.cost) : '',
+        price,
+        csvEscape(e.fuelType ?? ''),
+        e.isFullTank === false ? 'нет' : 'да',
+        csvEscape(e.station ?? ''),
+        csvEscape(e.comment ?? ''),
+      ].join(','),
+    )
+  }
+
+  const csv = '\uFEFF' + lines.join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const dateStr = new Date().toISOString().slice(0, 10)
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `zapravki-${dateStr}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
 async function handleImportFile(file: File) {
   importError.value = null
   let parsed: unknown
@@ -335,6 +386,7 @@ function fmtDate(ts: number): string {
         @add-fuel="showFuelSheet = true"
         @delete-fuel="handleDeleteFuel"
         @edit-cost="editingFuelCostId = $event"
+        @export-csv="handleExportFuelCsv"
       />
 
       <SettingsTab
@@ -383,6 +435,9 @@ function fmtDate(ts: number): string {
       :current-mileage="car.currentMileage"
       :tank-capacity="car.tankCapacity"
       :average-price="averageFuelPrice"
+      :last-fuel-type="lastFuelType"
+      :last-station="lastStation"
+      :last-price="lastPrice"
       @close="showFuelSheet = false"
       @save="handleSaveFuel"
     />

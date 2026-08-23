@@ -51,6 +51,12 @@ export interface MaintenanceStatus {
   /** Set only when the item has a time-based interval. */
   dueAtDate?: number
   remainingDays?: number
+  /**
+   * A soft calendar-date guess for a purely km-based item, derived from the
+   * car's average daily mileage (from fuel history). Only set when there's
+   * no explicit `dueAtDate` and enough driving data to estimate a pace.
+   */
+  estimatedDueDate?: number
   progress: number
   state: 'ok' | 'soon' | 'due'
 }
