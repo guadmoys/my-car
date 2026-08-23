@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useCarStore } from '../composables/useCarStore'
 import { checkAndNotify, checkAndNotifyLowFuel, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
 import { haptic } from '../utils/haptics'
@@ -56,6 +56,20 @@ const importError = ref<string | null>(null)
 const editingFuelEntry = computed<FuelEntry | null>(
   () => store.fuelEntries.find((e) => e.id === editingFuelCostId.value) ?? null,
 )
+
+// Opens the matching sheet when launched from a PWA shortcut (manifest.shortcuts
+// links to "?action=fuel"/"?action=mileage"), then strips the param so a
+// later reload of the same tab doesn't reopen it.
+onMounted(() => {
+  const url = new URL(window.location.href)
+  const action = url.searchParams.get('action')
+  if (action === 'fuel') showFuelSheet.value = true
+  else if (action === 'mileage') showMileageSheet.value = true
+  if (action) {
+    url.searchParams.delete('action')
+    window.history.replaceState({}, '', url)
+  }
+})
 
 const lastFuelEntry = computed<FuelEntry | null>(() => {
   if (store.fuelEntries.length === 0) return null

@@ -52,6 +52,20 @@ export default defineConfig(({ command, isPreview }) => {
               purpose: 'maskable',
             },
           ],
+          shortcuts: [
+            {
+              name: 'Заправка',
+              short_name: 'Заправка',
+              url: `${base}?action=fuel`,
+              icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            },
+            {
+              name: 'Пробег',
+              short_name: 'Пробег',
+              url: `${base}?action=mileage`,
+              icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            },
+          ],
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
