@@ -19,6 +19,9 @@ import {
   setShowYearEnabled,
 } from '../utils/dateFormat'
 import type { DateFormatId } from '../utils/dateFormat'
+import { checkForUpdate } from '../utils/appUpdate'
+import { useToast } from '../composables/useToast'
+import { haptic } from '../utils/haptics'
 
 const props = defineProps<{
   car: Car
@@ -115,6 +118,29 @@ function handleDelete() {
     return
   }
   emit('deleteCar')
+}
+
+const toast = useToast()
+const checkingUpdate = ref(false)
+
+async function handleCheckForUpdate() {
+  if (checkingUpdate.value) return
+  checkingUpdate.value = true
+  haptic('tap')
+  try {
+    const result = await checkForUpdate()
+    if (result === 'updated') {
+      toast.show('Найдено обновление — приложение сейчас перезапустится')
+    } else if (result === 'up-to-date') {
+      toast.show('У вас последняя версия')
+    } else if (result === 'offline') {
+      toast.show('Нет соединения — попробуйте позже')
+    } else {
+      toast.show('Не удалось проверить обновления')
+    }
+  } finally {
+    checkingUpdate.value = false
+  }
 }
 
 function triggerImport() {
@@ -222,6 +248,17 @@ function handleFileSelected(event: Event) {
         <p class="hint">
           «Авто» использует формат вашего региона. Пример: {{ datePreview }}. Применяется к датам
           заправок
+        </p>
+      </div>
+
+      <div class="update-zone">
+        <div class="section-title">Обновления</div>
+        <button class="backup-btn" :disabled="checkingUpdate" @click="handleCheckForUpdate">
+          {{ checkingUpdate ? 'Проверяем…' : 'Проверить обновления' }}
+        </button>
+        <p class="hint">
+          Приложение само проверяет обновления в фоне. Нажмите, чтобы проверить прямо сейчас — если
+          вышла новая версия, скрипты скачаются заново и приложение перезапустится
         </p>
       </div>
 
@@ -365,6 +402,7 @@ function handleFileSelected(event: Event) {
 .car-zone,
 .notifications-zone,
 .date-format-zone,
+.update-zone,
 .backup-zone,
 .danger-zone {
   display: flex;
@@ -476,6 +514,10 @@ function handleFileSelected(event: Event) {
 
 .backup-btn:active {
   opacity: 0.6;
+}
+
+.backup-btn:disabled {
+  opacity: 0.5;
 }
 
 .hint.error {
