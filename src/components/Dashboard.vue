@@ -471,6 +471,7 @@ function fmtDate(ts: number): string {
       :last-fuel-type="lastFuelType"
       :last-station="lastStation"
       :last-price="lastPrice"
+      :last-mileage="lastFuelEntry?.mileage"
       @close="showFuelSheet = false"
       @save="handleSaveFuel"
     />

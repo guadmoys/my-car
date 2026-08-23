@@ -10,6 +10,7 @@ const props = defineProps<{
   lastFuelType?: string
   lastStation?: string
   lastPrice: number | null
+  lastMileage?: number
 }>()
 
 const emit = defineEmits<{
@@ -160,6 +161,16 @@ const priceLooksOff = computed(() => {
   return Math.abs(effectivePrice.value - props.averagePrice) / props.averagePrice >= 0.4
 })
 
+// Odometer readings only ever go up, so an exact match with the previous
+// fill-up's mileage is a strong, low-noise signal of an accidental
+// double-submit or a stale mileage typo — not a coincidence.
+const looksLikeDuplicate = computed(() => {
+  if (props.lastMileage === undefined || mileage.value.trim() === '' || Number.isNaN(mileageNumber.value)) {
+    return false
+  }
+  return mileageNumber.value === props.lastMileage
+})
+
 function selectFuelType(value: string) {
   haptic('tap')
   fuelType.value = fuelType.value === value ? '' : value
@@ -270,6 +281,9 @@ function handleSave() {
         </div>
         <p v-if="mileage.trim() && mileageNumber < currentMileage" class="hint">
           Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
+        </p>
+        <p v-if="looksLikeDuplicate" class="hint warn">
+          ⚠ Такой же пробег, как в прошлой заправке — не дубль ли это?
         </p>
         <p v-if="litersExceedTank" class="hint warn">
           ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
