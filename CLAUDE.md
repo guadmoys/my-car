@@ -97,6 +97,23 @@ a component — reference the token.
   series colors), tap-to-reveal exact value below the chart instead of a hover tooltip
   (mobile-first, no hover). See `ConsumptionChart.vue` / `MonthlySpendChart.vue`.
 
+## Versioning
+
+- `package.json`'s `version` field is the single source of truth. It's injected at build
+  time as `__APP_VERSION__` (see `vite.config.ts` / `src/vite-env.d.ts`) and shown to the
+  user in Settings → «Обновления» (`SettingsTab.vue`), so a bump is the only way anyone can
+  tell a deployed build actually contains a given PR's changes.
+- **Every PR that changes app behavior must bump this version**, following semver by
+  complexity/impact:
+  - **patch** (`x.y.Z`) — small fixes, copy/style tweaks, refactors with no user-visible
+    change.
+  - **minor** (`x.Y.0`) — new features, new screens/components, non-breaking behavior
+    changes.
+  - **major** (`X.0.0`) — breaking changes (data format, IndexedDB schema, removed
+    features).
+- PRs that only touch docs, CI config, or tooling with zero effect on the shipped app may
+  skip the bump.
+
 ## Conventions
 
 - All UI copy is Russian; code, comments, identifiers stay English.

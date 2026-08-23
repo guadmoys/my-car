@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import pkg from './package.json'
 
 // Served from https://<owner>.github.io/my-car/ as a GitHub Pages project
 // site, so production assets need that subpath prefix; local dev stays at /.
@@ -9,6 +10,9 @@ export default defineConfig(({ command, isPreview }) => {
 
   return {
     base,
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+    },
     plugins: [
       vue(),
       VitePWA({
