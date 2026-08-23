@@ -616,6 +616,38 @@ const fuelInsights = computed<FuelInsight[]>(() => {
     }
   }
 
+  // Anomaly detector: flags one fill-up whose л/100км is a statistical
+  // outlier (z-score) against the rest, rather than a gradual drift like
+  // the trend insight above. A high positive z-score is usually a data
+  // entry slip (wrong mileage/liters) or a real mechanical issue; a sharply
+  // negative one is almost always a typo, since consumption can't improve
+  // that much between two fill-ups.
+  if (validSegments.length >= 5) {
+    const values = validSegments.map((r) => r.litersPer100km as number)
+    const mean = average(values)
+    const variance = average(values.map((v) => (v - mean) ** 2))
+    const stddev = Math.sqrt(variance)
+    if (stddev > 0) {
+      const latest = validSegments[0].litersPer100km as number
+      const z = (latest - mean) / stddev
+      if (z >= 2) {
+        insights.push({
+          id: 'anomaly',
+          icon: '🚨',
+          text: `Последняя заправка сильно выбивается из общей картины: ${latest.toFixed(1)} л/100км против обычных ~${mean.toFixed(1)} — проверьте введённые данные или состояние авто (давление в шинах, утечки, форсунки)`,
+          tone: 'bad',
+        })
+      } else if (z <= -2) {
+        insights.push({
+          id: 'anomaly',
+          icon: '🧐',
+          text: `Последняя заправка выглядит подозрительно экономичной: ${latest.toFixed(1)} л/100км против обычных ~${mean.toFixed(1)} — стоит перепроверить введённый пробег и литры`,
+          tone: 'bad',
+        })
+      }
+    }
+  }
+
   // Efficiency streak: consecutive recent fill-ups better than average.
   let streak = 0
   for (const row of validSegments) {
