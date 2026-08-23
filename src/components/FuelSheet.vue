@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { haptic } from '../utils/haptics'
 
 const props = defineProps<{
   currentMileage: number
@@ -7,35 +8,98 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { mileage: number; liters: number; cost?: number }]
+  save: [
+    payload: {
+      mileage: number
+      liters: number
+      cost?: number
+      fuelType?: string
+      isFullTank?: boolean
+      remainingLiters?: number
+      station?: string
+      comment?: string
+    },
+  ]
 }>()
+
+const FUEL_TYPES = ['АИ-92', 'АИ-95', 'АИ-98', 'Дизель', 'Газ']
 
 const mileage = ref(String(props.currentMileage))
 const liters = ref('')
 const cost = ref('')
+const pricePerLiter = ref('')
+const fuelType = ref('')
+const isFullTank = ref(true)
+const hasRemaining = ref(false)
+const remainingLiters = ref('')
+const station = ref('')
+const comment = ref('')
+const showMore = ref(false)
 
 const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '').replace(',', '.')))
 const litersNumber = computed(() => Number(liters.value.replace(/\s/g, '').replace(',', '.')))
 const costNumber = computed(() => Number(cost.value.replace(/\s/g, '').replace(',', '.')))
+const priceNumber = computed(() => Number(pricePerLiter.value.replace(/\s/g, '').replace(',', '.')))
+const remainingLitersNumber = computed(() => Number(remainingLiters.value.replace(/\s/g, '').replace(',', '.')))
 
 const isValid = computed(() => {
-  return (
-    mileage.value.trim().length > 0 &&
-    !Number.isNaN(mileageNumber.value) &&
-    mileageNumber.value >= props.currentMileage &&
-    liters.value.trim().length > 0 &&
-    !Number.isNaN(litersNumber.value) &&
-    litersNumber.value > 0 &&
-    (cost.value.trim() === '' || (!Number.isNaN(costNumber.value) && costNumber.value >= 0))
-  )
+  if (
+    mileage.value.trim().length === 0 ||
+    Number.isNaN(mileageNumber.value) ||
+    mileageNumber.value < props.currentMileage ||
+    liters.value.trim().length === 0 ||
+    Number.isNaN(litersNumber.value) ||
+    litersNumber.value <= 0
+  ) {
+    return false
+  }
+  if (cost.value.trim() !== '' && (Number.isNaN(costNumber.value) || costNumber.value < 0)) return false
+  if (pricePerLiter.value.trim() !== '' && (Number.isNaN(priceNumber.value) || priceNumber.value < 0)) return false
+  if (
+    hasRemaining.value &&
+    (remainingLiters.value.trim() === '' || Number.isNaN(remainingLitersNumber.value) || remainingLitersNumber.value < 0)
+  ) {
+    return false
+  }
+  return true
 })
+
+function selectFuelType(value: string) {
+  haptic('tap')
+  fuelType.value = fuelType.value === value ? '' : value
+}
+
+function toggleFullTank() {
+  haptic('tap')
+  isFullTank.value = !isFullTank.value
+  if (isFullTank.value) hasRemaining.value = false
+}
+
+function toggleHasRemaining() {
+  if (isFullTank.value) return
+  haptic('tap')
+  hasRemaining.value = !hasRemaining.value
+}
 
 function handleSave() {
   if (!isValid.value) return
+
+  let finalCost: number | undefined
+  if (cost.value.trim() !== '') {
+    finalCost = costNumber.value
+  } else if (pricePerLiter.value.trim() !== '') {
+    finalCost = Math.round(litersNumber.value * priceNumber.value * 100) / 100
+  }
+
   emit('save', {
     mileage: Math.round(mileageNumber.value),
     liters: litersNumber.value,
-    cost: cost.value.trim() === '' ? undefined : costNumber.value,
+    cost: finalCost,
+    fuelType: fuelType.value || undefined,
+    isFullTank: isFullTank.value,
+    remainingLiters: !isFullTank.value && hasRemaining.value ? remainingLitersNumber.value : undefined,
+    station: station.value.trim() || undefined,
+    comment: comment.value.trim() || undefined,
   })
 }
 </script>
@@ -72,6 +136,73 @@ function handleSave() {
         <p v-if="mileage.trim() && mileageNumber < currentMileage" class="hint">
           Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
         </p>
+
+        <div class="more-block">
+          <button class="section-title toggleable" @click="showMore = !showMore">
+            <span>Ещё</span>
+            <span class="caret" :class="{ open: showMore }">›</span>
+          </button>
+
+          <div v-if="showMore" class="group">
+            <div class="field">
+              <label>Вид топлива</label>
+              <div class="type-chips">
+                <button
+                  v-for="ft in FUEL_TYPES"
+                  :key="ft"
+                  type="button"
+                  class="type-chip"
+                  :class="{ active: fuelType === ft }"
+                  @click="selectFuelType(ft)"
+                >
+                  {{ ft }}
+                </button>
+              </div>
+            </div>
+            <div class="divider" />
+            <div class="field">
+              <label>Цена, ₽/л (необязательно)</label>
+              <input v-model="pricePerLiter" type="text" inputmode="decimal" placeholder="—" />
+            </div>
+            <div class="divider" />
+            <label class="field switch-row">
+              <span>Полный бак</span>
+              <span class="switch">
+                <input type="checkbox" :checked="isFullTank" @change="toggleFullTank" />
+                <span class="slider" />
+              </span>
+            </label>
+            <div class="divider" />
+            <label class="field switch-row" :class="{ disabled: isFullTank }">
+              <span>Остаток в баке</span>
+              <span class="switch">
+                <input type="checkbox" :checked="hasRemaining" :disabled="isFullTank" @change="toggleHasRemaining" />
+                <span class="slider" />
+              </span>
+            </label>
+            <template v-if="hasRemaining && !isFullTank">
+              <div class="divider" />
+              <div class="field">
+                <label>Сколько оставалось до заправки, л</label>
+                <input v-model="remainingLiters" type="text" inputmode="decimal" placeholder="5" />
+              </div>
+            </template>
+            <div class="divider" />
+            <div class="field">
+              <label>АЗС (необязательно)</label>
+              <input v-model="station" type="text" placeholder="Название или адрес" />
+            </div>
+            <div class="divider" />
+            <div class="field">
+              <label>Комментарий (необязательно)</label>
+              <input v-model="comment" type="text" placeholder="—" />
+            </div>
+          </div>
+          <p v-if="showMore && !isFullTank" class="hint advanced-hint">
+            Точный расход считается между заправками «под пробку». Если бак не полный, отметьте
+            «Остаток в баке», чтобы эта заправка тоже участвовала в расчёте
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -99,6 +230,8 @@ function handleSave() {
 
 .sheet {
   width: 100%;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
   background: var(--bg-grouped);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 8px 0 calc(24px + var(--safe-bottom));
@@ -182,6 +315,10 @@ function handleSave() {
   outline: none;
 }
 
+.field input::placeholder {
+  color: var(--text-tertiary);
+}
+
 .divider {
   height: 1px;
   background: var(--separator);
@@ -191,5 +328,132 @@ function handleSave() {
   font-size: 13px;
   color: var(--red);
   margin: 10px 4px 0;
+}
+
+.more-block {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0 4px;
+}
+
+.section-title.toggleable {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.caret {
+  display: inline-block;
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+}
+
+.caret.open {
+  transform: rotate(270deg);
+}
+
+.advanced-hint {
+  padding: 0 4px;
+  color: var(--text-tertiary);
+}
+
+.type-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 4px;
+}
+
+.type-chip {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--fill-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.type-chip.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+.type-chip:active {
+  opacity: 0.7;
+}
+
+.switch-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.switch-row span:first-child {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.switch-row.disabled span:first-child {
+  color: var(--text-tertiary);
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: var(--fill-secondary);
+  border-radius: 13px;
+  transition: background 0.2s;
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.switch input:checked + .slider {
+  background: var(--green);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(18px);
+}
+
+.switch input:disabled + .slider {
+  opacity: 0.4;
 }
 </style>

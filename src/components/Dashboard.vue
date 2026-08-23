@@ -168,7 +168,16 @@ async function handleSaveMileage(mileage: number) {
   showMileageSheet.value = false
 }
 
-async function handleSaveFuel(payload: { mileage: number; liters: number; cost?: number }) {
+async function handleSaveFuel(payload: {
+  mileage: number
+  liters: number
+  cost?: number
+  fuelType?: string
+  isFullTank?: boolean
+  remainingLiters?: number
+  station?: string
+  comment?: string
+}) {
   await store.addFuelEntry(payload)
   showFuelSheet.value = false
 }
@@ -192,7 +201,12 @@ async function handleUpdateHistoryCost(id: string, cost: number | null) {
   await store.updateHistoryCost(id, cost)
 }
 
-async function handleSaveCarInfo(payload: { make: string; model: string; year: number }) {
+async function handleSaveCarInfo(payload: {
+  make: string
+  model: string
+  year: number
+  tankCapacity?: number
+}) {
   await store.updateCarInfo(payload)
 }
 

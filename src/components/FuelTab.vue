@@ -109,16 +109,20 @@ function fmtCost(n: number): string {
               <div class="fuel-info">
                 <div class="fuel-main">
                   {{ fmt(row.entry.liters) }} л
+                  <span v-if="row.entry.fuelType" class="fuel-type">{{ row.entry.fuelType }}</span>
                   <span v-if="row.litersPer100km !== null" class="fuel-consumption">
                     · {{ row.litersPer100km.toFixed(1) }} л/100км
                   </span>
+                  <span v-else-if="row.entry.isFullTank === false" class="fuel-partial">· неполный бак</span>
                   <span v-if="row.entry.cost !== undefined" class="fuel-cost">
                     · {{ fmtCost(row.entry.cost) }}
                   </span>
                 </div>
                 <div class="fuel-meta">
                   {{ fmt(row.entry.mileage) }} км · {{ formatDate(row.entry.date) }}
+                  <template v-if="row.entry.station"> · {{ row.entry.station }}</template>
                 </div>
+                <div v-if="row.entry.comment" class="fuel-comment">{{ row.entry.comment }}</div>
               </div>
             </button>
             <button class="fuel-delete" aria-label="Удалить заправку" @click="emit('deleteFuel', row.entry.id)">
@@ -316,10 +320,33 @@ function fmtCost(n: number): string {
   font-weight: 400;
 }
 
+.fuel-partial {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.fuel-type {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--fill-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
 .fuel-meta {
   font-size: 13px;
   color: var(--text-secondary);
   margin-top: 1px;
+}
+
+.fuel-comment {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
 }
 
 .fuel-delete {

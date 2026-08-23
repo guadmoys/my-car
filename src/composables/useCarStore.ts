@@ -126,7 +126,7 @@ async function deleteCar(carId: string): Promise<void> {
 }
 
 async function updateCarInfo(
-  patch: Partial<Pick<Car, 'make' | 'model' | 'year'>>,
+  patch: Partial<Pick<Car, 'make' | 'model' | 'year' | 'tankCapacity'>>,
 ): Promise<void> {
   if (!activeCarId.value) return
   const updated = patchCar(activeCarId.value, patch)
@@ -247,7 +247,16 @@ async function deleteItem(id: string): Promise<void> {
   await db.deleteMaintenanceItem(id)
 }
 
-async function addFuelEntry(input: { mileage: number; liters: number; cost?: number }): Promise<void> {
+async function addFuelEntry(input: {
+  mileage: number
+  liters: number
+  cost?: number
+  fuelType?: string
+  isFullTank?: boolean
+  remainingLiters?: number
+  station?: string
+  comment?: string
+}): Promise<void> {
   if (!car.value) return
   const entry: FuelEntry = {
     id: makeId(),
@@ -256,6 +265,11 @@ async function addFuelEntry(input: { mileage: number; liters: number; cost?: num
     liters: input.liters,
     date: nowTs(),
     cost: input.cost,
+    fuelType: input.fuelType,
+    isFullTank: input.isFullTank,
+    remainingLiters: input.remainingLiters,
+    station: input.station,
+    comment: input.comment,
   }
   fuelEntries.push(entry)
   await db.putFuelEntry(entry)
@@ -365,44 +379,95 @@ const okCount = computed(
   () => enabledStatuses.value.filter((s) => s.state === 'ok').length,
 )
 
-const averageConsumption = computed<number | null>(() => {
-  if (!car.value) return null
-  const sorted = fuelEntries.slice().sort((a, b) => a.mileage - b.mileage)
-  let totalLiters = 0
-  let totalDistance = 0
-  let previousMileage = car.value.initialMileage
-  for (const entry of sorted) {
-    const distance = entry.mileage - previousMileage
-    if (distance > 0) {
-      totalLiters += entry.liters
-      totalDistance += distance
-    }
-    previousMileage = entry.mileage
+/**
+ * A tank level expressed as `c + k * tankCapacity` liters, so a full-tank
+ * reading stays exact even when the car's tank capacity isn't known: as
+ * long as a segment both starts and ends on a full tank, the `k` terms
+ * cancel out and the capacity is never actually needed.
+ */
+interface TankLevel {
+  c: number
+  k: number
+}
+
+function fuelLevels(entry: FuelEntry): { before: TankLevel; after: TankLevel } | null {
+  const isFull = entry.isFullTank ?? true
+  if (isFull) {
+    return { before: { c: -entry.liters, k: 1 }, after: { c: 0, k: 1 } }
   }
-  return totalDistance > 0 ? (totalLiters / totalDistance) * 100 : null
-})
+  if (entry.remainingLiters !== undefined) {
+    return {
+      before: { c: entry.remainingLiters, k: 0 },
+      after: { c: entry.remainingLiters + entry.liters, k: 0 },
+    }
+  }
+  return null
+}
 
-const fuelHistory = computed<FuelConsumption[]>(() => {
-  if (!car.value) return []
+function resolveLevel(level: TankLevel, tankCapacity: number | undefined): number | null {
+  if (level.k === 0) return level.c
+  return tankCapacity !== undefined ? level.c + level.k * tankCapacity : null
+}
+
+const consumptionAnalysis = computed<{ history: FuelConsumption[]; average: number | null }>(() => {
+  if (!car.value) return { history: [], average: null }
+  const capacity = car.value.tankCapacity
   const sorted = fuelEntries.slice().sort((a, b) => a.mileage - b.mileage)
-  const avg = averageConsumption.value
+
+  let anchorAfter: TankLevel = { c: 0, k: 1 }
+  let anchorMileage = car.value.initialMileage
+  let interimLiters = 0
   let previousMileage = car.value.initialMileage
 
-  const result: FuelConsumption[] = sorted.map((entry) => {
+  let totalBurned = 0
+  let totalDistance = 0
+
+  const rows = sorted.map((entry) => {
     const distanceKm = entry.mileage - previousMileage
     previousMileage = entry.mileage
-    const litersPer100km = distanceKm > 0 ? (entry.liters / distanceKm) * 100 : null
 
-    let quality: FuelConsumption['quality'] = 'neutral'
-    if (litersPer100km !== null && avg !== null) {
-      quality = litersPer100km <= avg * 1.03 ? 'good' : 'bad'
+    const levels = fuelLevels(entry)
+    let litersPer100km: number | null = null
+
+    if (levels) {
+      const combined: TankLevel = {
+        c: anchorAfter.c + interimLiters - levels.before.c,
+        k: anchorAfter.k - levels.before.k,
+      }
+      const burned = resolveLevel(combined, capacity)
+      const distance = entry.mileage - anchorMileage
+      if (burned !== null && burned >= 0 && distance > 0) {
+        litersPer100km = (burned / distance) * 100
+        totalBurned += burned
+        totalDistance += distance
+      }
+      anchorAfter = levels.after
+      anchorMileage = entry.mileage
+      interimLiters = 0
+    } else {
+      interimLiters += entry.liters
     }
 
-    return { entry, distanceKm, litersPer100km, quality }
+    return { entry, distanceKm, litersPer100km }
   })
 
-  return result.reverse()
+  const average = totalDistance > 0 ? (totalBurned / totalDistance) * 100 : null
+
+  const history: FuelConsumption[] = rows
+    .map(({ entry, distanceKm, litersPer100km }) => {
+      let quality: FuelConsumption['quality'] = 'neutral'
+      if (litersPer100km !== null && average !== null) {
+        quality = litersPer100km <= average * 1.03 ? 'good' : 'bad'
+      }
+      return { entry, distanceKm, litersPer100km, quality }
+    })
+    .reverse()
+
+  return { history, average }
 })
+
+const averageConsumption = computed<number | null>(() => consumptionAnalysis.value.average)
+const fuelHistory = computed<FuelConsumption[]>(() => consumptionAnalysis.value.history)
 
 const totalFuelCost = computed(() =>
   fuelEntries.reduce((sum, e) => sum + (e.cost ?? 0), 0),
