@@ -13,6 +13,7 @@ export default defineConfig(({ command, isPreview }) => {
       vue(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: false,
         includeAssets: [
           'icons/favicon-16.png',
           'icons/favicon-32.png',
