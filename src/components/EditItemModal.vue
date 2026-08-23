@@ -4,6 +4,7 @@ import type { HistoryEntry, MaintenanceItem, Part } from '../types'
 import CostEditSheet from './CostEditSheet.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
 import { downloadIcsReminder } from '../utils/ics'
+import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
 
 function addMonths(ts: number, months: number): number {
   const d = new Date(ts)
@@ -80,10 +81,15 @@ const notifyBeforeKm = ref('')
 const notifyBeforeDays = ref('')
 const showAdvanced = ref(false)
 
-const defaultDaysThreshold = computed(() => {
+const kmThresholdDefault = computed(() => {
+  const intervalKm = Number(interval.value) || 0
+  return adaptiveKmThreshold(intervalKm, undefined, props.history.map((h) => h.mileage))
+})
+
+const dayThresholdDefault = computed(() => {
   const months = Number(intervalMonths.value) || 0
-  const totalDays = addMonths(0, months) / (24 * 60 * 60 * 1000)
-  return Math.round(totalDays * 0.1)
+  const totalSpanMs = addMonths(0, months)
+  return adaptiveDayThreshold(totalSpanMs, undefined, props.history.map((h) => h.date))
 })
 
 function makePartId(): string {
@@ -270,7 +276,7 @@ function handleAddToCalendar() {
                 v-model="notifyBeforeKm"
                 type="text"
                 inputmode="numeric"
-                :placeholder="`по умолчанию ${Math.round((Number(interval) || 0) * 0.1)}`"
+                :placeholder="`по умолчанию ${Math.round(kmThresholdDefault.value)}`"
               />
             </div>
             <template v-if="intervalMonths.trim()">
@@ -281,13 +287,19 @@ function handleAddToCalendar() {
                   v-model="notifyBeforeDays"
                   type="text"
                   inputmode="numeric"
-                  :placeholder="`по умолчанию ${defaultDaysThreshold}`"
+                  :placeholder="`по умолчанию ${Math.round(dayThresholdDefault.value)}`"
                 />
               </div>
             </template>
           </div>
           <p v-if="showAdvanced" class="hint advanced-hint">
             Определяет, когда параметр станет «скоро» и придёт уведомление (если оно включено в настройках)
+          </p>
+          <p v-if="showAdvanced && !notifyBeforeKm.trim() && kmThresholdDefault.adaptive" class="hint advanced-hint adaptive-hint">
+            📈 Подстроено под вашу историю: обычно вы делаете это ТО раньше срока — порог сдвинут пораньше
+          </p>
+          <p v-if="showAdvanced && !notifyBeforeDays.trim() && dayThresholdDefault.adaptive" class="hint advanced-hint adaptive-hint">
+            📈 Подстроено под вашу историю: обычно вы делаете это ТО раньше срока — порог сдвинут пораньше
           </p>
         </div>
 
@@ -581,6 +593,10 @@ function handleAddToCalendar() {
 
 .advanced-hint {
   padding: 0 4px;
+}
+
+.adaptive-hint {
+  color: var(--blue);
 }
 
 .mileage-hint {

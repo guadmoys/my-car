@@ -12,6 +12,7 @@ import type {
   Part,
 } from '../types'
 import { buildDefaultItems } from '../data/defaultMaintenance'
+import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
 import * as db from '../db/database'
 
 const ACTIVE_CAR_KEY = 'my-car-active-car-id'
@@ -374,7 +375,12 @@ function statusFor(
   const remainingKm = dueAtMileage - currentMileage
   const traveled = currentMileage - item.lastServiceMileage
   const kmProgress = Math.min(1, Math.max(0, traveled / item.intervalKm))
-  const kmSoonThreshold = item.notifyBeforeKm ?? item.intervalKm * 0.1
+  const itemHistory = historyEntries.filter((h) => h.itemId === item.id)
+  const kmSoonThreshold = adaptiveKmThreshold(
+    item.intervalKm,
+    item.notifyBeforeKm,
+    itemHistory.map((h) => h.mileage),
+  ).value
   const kmState: MaintenanceStatus['state'] =
     remainingKm <= 0 ? 'due' : remainingKm <= kmSoonThreshold ? 'soon' : 'ok'
 
@@ -388,7 +394,11 @@ function statusFor(
     remainingDays = Math.ceil((dueAtDate - now) / DAY_MS)
     const totalSpan = dueAtDate - item.lastServiceDate
     dateProgress = totalSpan > 0 ? Math.min(1, Math.max(0, (now - item.lastServiceDate) / totalSpan)) : 1
-    const daySoonThreshold = item.notifyBeforeDays ?? (totalSpan / DAY_MS) * 0.1
+    const daySoonThreshold = adaptiveDayThreshold(
+      totalSpan,
+      item.notifyBeforeDays,
+      itemHistory.map((h) => h.date),
+    ).value
     dateState = remainingDays <= 0 ? 'due' : remainingDays <= daySoonThreshold ? 'soon' : 'ok'
   }
 
