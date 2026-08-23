@@ -41,6 +41,54 @@ const remainingLiters = ref('')
 const station = ref('')
 const comment = ref('')
 const showMore = ref(false)
+const quickEntry = ref('')
+
+// Parses a free-form line like "40л 3200р 80000км" into individual fields,
+// so a fill-up can be logged in one shot instead of tabbing through inputs.
+// Each unit is matched and stripped from a working copy in turn, so e.g.
+// "55р/л" (price per liter) can't also be picked up by the plain-cost match.
+function parseQuickEntry(raw: string): {
+  mileage?: number
+  liters?: number
+  cost?: number
+  pricePerLiter?: number
+} {
+  let text = raw.toLowerCase()
+  const take = (re: RegExp): number | undefined => {
+    const m = text.match(re)
+    if (!m) return undefined
+    text = text.slice(0, m.index) + text.slice(m.index! + m[0].length)
+    return Number(m[1].replace(',', '.'))
+  }
+  // No \b here: JS's \b is defined via \w, which is ASCII-only and never
+  // matches around Cyrillic letters — it would silently fail to anchor
+  // after "л"/"р". The digit-adjacency requirement already keeps these
+  // from matching inside unrelated words, so a boundary isn't needed.
+  return {
+    pricePerLiter: take(/(\d+(?:[.,]\d+)?)\s*(?:₽\s*\/\s*л|руб\s*\/\s*л|р\s*\/\s*л)/),
+    mileage: take(/(\d+(?:[.,]\d+)?)\s*км/),
+    liters: take(/(\d+(?:[.,]\d+)?)\s*л/),
+    cost: take(/(\d+(?:[.,]\d+)?)\s*(?:₽|руб|р)/),
+  }
+}
+
+function applyQuickEntry() {
+  if (!quickEntry.value.trim()) return
+  const parsed = parseQuickEntry(quickEntry.value)
+  if (parsed.mileage !== undefined) mileage.value = String(parsed.mileage)
+  if (parsed.liters !== undefined) liters.value = String(parsed.liters)
+  if (parsed.cost !== undefined) cost.value = String(parsed.cost)
+  if (parsed.pricePerLiter !== undefined) {
+    pricePerLiter.value = String(parsed.pricePerLiter)
+    showMore.value = true
+  }
+  if (Object.values(parsed).some((v) => v !== undefined)) {
+    haptic('success')
+    quickEntry.value = ''
+  } else {
+    haptic('warning')
+  }
+}
 
 const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '').replace(',', '.')))
 const litersNumber = computed(() => Number(liters.value.replace(/\s/g, '').replace(',', '.')))
@@ -182,6 +230,25 @@ function handleSave() {
       </div>
 
       <div class="form">
+        <div class="quick-entry-row">
+          <input
+            v-model="quickEntry"
+            type="text"
+            class="quick-entry-input"
+            placeholder="Быстрый ввод: 40л 3200р 80000км"
+            aria-label="Быстрый ввод заправки"
+            @keydown.enter="applyQuickEntry"
+          />
+          <button
+            v-if="quickEntry.trim()"
+            type="button"
+            class="quick-entry-apply"
+            aria-label="Применить"
+            @click="applyQuickEntry"
+          >
+            ✓
+          </button>
+        </div>
         <button v-if="suggestionLabel" type="button" class="suggestion-chip" @click="applySuggestion">
           Как в прошлый раз: {{ suggestionLabel }}
         </button>
@@ -369,6 +436,49 @@ function handleSave() {
   border-radius: var(--radius-md);
   padding: 0 14px;
   border: 1px solid var(--card-border);
+}
+
+.quick-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  margin-bottom: 12px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  background: var(--fill-secondary);
+}
+
+.quick-entry-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+}
+
+.quick-entry-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.quick-entry-apply {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quick-entry-apply:active {
+  opacity: 0.7;
 }
 
 .suggestion-chip {
