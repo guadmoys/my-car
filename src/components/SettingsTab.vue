@@ -39,6 +39,7 @@ const emit = defineEmits<{
   import: [file: File]
   openCarSwitcher: []
   sharePassport: []
+  notificationsEnabled: []
 }>()
 
 const make = ref(props.car.make)
@@ -76,6 +77,7 @@ async function handleToggleNotifications(checked: boolean) {
     setNotificationsEnabled(true)
     notificationsOn.value = true
     notificationsBlocked.value = false
+    emit('notificationsEnabled')
   } else {
     setNotificationsEnabled(false)
     notificationsOn.value = false

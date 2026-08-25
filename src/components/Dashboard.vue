@@ -144,6 +144,15 @@ watch(
   { immediate: true },
 )
 
+/** Re-runs the due/soon and low-fuel checks against the current state, since
+ * turning the toggle on doesn't itself change `car`/`enabledStatuses` and so
+ * wouldn't otherwise trigger the watchers below for items already due. */
+function handleNotificationsEnabled() {
+  if (!car.value) return
+  checkAndNotify(car.value.id, enabledStatuses.value)
+  checkAndNotifyLowFuel(car.value.id, estimatedRangeKm.value)
+}
+
 function openEdit(id: string) {
   const item = store.items.find((i) => i.id === id)
   if (item) editingItem.value = item
@@ -449,6 +458,7 @@ function fmtDate(ts: number): string {
         @import="handleImportFile"
         @open-car-switcher="showCarSwitcher = true"
         @share-passport="showPassportSheet = true"
+        @notifications-enabled="handleNotificationsEnabled"
       />
     </div>
     </Transition>
