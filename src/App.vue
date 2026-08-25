@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useCarStore } from './composables/useCarStore'
+import { useCloudSync } from './composables/useCloudSync'
 import OnboardingView from './components/OnboardingView.vue'
 import Dashboard from './components/Dashboard.vue'
 import ToastHost from './components/ToastHost.vue'
@@ -11,6 +12,7 @@ const { cars, isLoaded } = store
 
 onMounted(() => {
   store.load()
+  useCloudSync().initCloudSync()
 })
 
 async function handleOnboardingSubmit(payload: {
