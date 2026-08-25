@@ -116,6 +116,11 @@ export interface CostForecast {
   total: number
 }
 
+/** A fuel fill-up or a completed maintenance item, merged into one date-sorted feed for the home screen. */
+export type TimelineEvent =
+  | { kind: 'fuel'; id: string; date: number; mileage: number; entry: FuelEntry }
+  | { kind: 'service'; id: string; date: number; mileage: number; entry: HistoryEntry }
+
 export interface BackupData {
   version: 2
   exportedAt: number
