@@ -16,6 +16,7 @@ import CarSwitcherSheet from './CarSwitcherSheet.vue'
 import AddCarSheet from './AddCarSheet.vue'
 import CostEditSheet from './CostEditSheet.vue'
 import CarPassportSheet from './CarPassportSheet.vue'
+import EventsHistorySheet from './EventsHistorySheet.vue'
 import type { PassportData } from '../utils/carPassport'
 import type { FuelEntry, MaintenanceItem, MaintenanceStatus, Part } from '../types'
 
@@ -30,6 +31,8 @@ const {
   okCount,
   fuelHistory,
   averageConsumption,
+  monthDistanceKm,
+  timelineEvents,
   estimatedRangeKm,
   averageFuelPrice,
   totalCo2Kg,
@@ -50,6 +53,7 @@ const showFuelSheet = ref(false)
 const showCarSwitcher = ref(false)
 const showAddCar = ref(false)
 const showPassportSheet = ref(false)
+const showEventsSheet = ref(false)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
 const editingFuelCostId = ref<string | null>(null)
 const importError = ref<string | null>(null)
@@ -76,6 +80,10 @@ const lastFuelEntry = computed<FuelEntry | null>(() => {
   if (store.fuelEntries.length === 0) return null
   return store.fuelEntries.slice().sort((a, b) => b.date - a.date)[0]
 })
+const latestConsumption = computed<number | null>(
+  () => fuelHistory.value.find((row) => row.litersPer100km !== null)?.litersPer100km ?? null,
+)
+const recentEvents = computed(() => timelineEvents.value.slice(0, 4))
 const lastFuelType = computed(() => lastFuelEntry.value?.fuelType)
 const lastStation = computed(() => lastFuelEntry.value?.station)
 const lastPrice = computed<number | null>(() => {
@@ -379,6 +387,10 @@ function fmtDate(ts: number): string {
         :soon-count="soonCount"
         :due-count="dueCount"
         :average-consumption="averageConsumption"
+        :latest-consumption="latestConsumption"
+        :month-distance-km="monthDistanceKm"
+        :recent-events="recentEvents"
+        :events-total="timelineEvents.length"
         :total-fuel-cost="totalFuelCost"
         :total-service-cost="totalServiceCost"
         :total-cost="totalCost"
@@ -392,6 +404,7 @@ function fmtDate(ts: number): string {
         @open-item="openEditFromDashboard"
         @view-all-maintenance="activeTab = 'maintenance'"
         @view-all-fuel="activeTab = 'fuel'"
+        @view-all-events="showEventsSheet = true"
       />
 
       <MaintenanceTab
@@ -505,6 +518,12 @@ function fmtDate(ts: number): string {
     />
 
     <AddCarSheet v-if="showAddCar" @close="showAddCar = false" @create="handleCreateCar" />
+
+    <EventsHistorySheet
+      v-if="showEventsSheet"
+      :events="timelineEvents"
+      @close="showEventsSheet = false"
+    />
   </div>
 </template>
 

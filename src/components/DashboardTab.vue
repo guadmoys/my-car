@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Car, MaintenanceStatus } from '../types'
+import type { Car, MaintenanceStatus, TimelineEvent } from '../types'
 import SummaryCard from './SummaryCard.vue'
 
 const props = defineProps<{
@@ -9,6 +9,10 @@ const props = defineProps<{
   soonCount: number
   dueCount: number
   averageConsumption: number | null
+  latestConsumption: number | null
+  monthDistanceKm: number | null
+  recentEvents: TimelineEvent[]
+  eventsTotal: number
   totalFuelCost: number
   totalServiceCost: number
   totalCost: number
@@ -17,6 +21,29 @@ const props = defineProps<{
   urgentTotal: number
   estimatedRangeKm: number | null
 }>()
+
+const monthName = computed(() =>
+  new Date().toLocaleDateString('ru-RU', { month: 'long' }),
+)
+
+function eventIcon(event: TimelineEvent): string {
+  return event.kind === 'fuel' ? '⛽' : '🔧'
+}
+
+function eventTitle(event: TimelineEvent): string {
+  if (event.kind === 'fuel') return `Заправка · ${fmt(event.entry.liters)} л`
+  return event.entry.itemName
+}
+
+function eventMeta(event: TimelineEvent): string {
+  const parts = [fmt(event.mileage) + ' км', fmtDate(event.date)]
+  if (event.entry.cost !== undefined) parts.push(fmtCost(event.entry.cost))
+  return parts.join(' · ')
+}
+
+function fmtDate(ts: number): string {
+  return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+}
 
 // Low-fuel threshold matches the "скоро на заправку" cutoff already used
 // for the fuelInsights range warning, so this card and that insight agree.
@@ -50,6 +77,7 @@ const emit = defineEmits<{
   openItem: [id: string]
   viewAllMaintenance: []
   viewAllFuel: []
+  viewAllEvents: []
 }>()
 
 function stateColor(state: MaintenanceStatus['state']): string {
@@ -104,6 +132,25 @@ function fmtCost(n: number): string {
         <span class="quick-icon">⛽</span>
         Заправка
       </button>
+    </div>
+
+    <div v-if="averageConsumption !== null || monthDistanceKm !== null" class="stats-row">
+      <div v-if="averageConsumption !== null" class="stat-tile">
+        <div class="stat-headline">
+          <span class="stat-icon">⛽</span>
+          {{ (latestConsumption ?? averageConsumption).toFixed(1) }}
+          <span class="stat-unit">л/100км</span>
+        </div>
+        <div class="stat-sub">Сред.: {{ averageConsumption.toFixed(1) }} л/100км</div>
+      </div>
+      <div v-if="monthDistanceKm !== null" class="stat-tile">
+        <div class="stat-headline">
+          <span class="stat-icon">📍</span>
+          {{ fmt(monthDistanceKm) }}
+          <span class="stat-unit">км</span>
+        </div>
+        <div class="stat-sub">За {{ monthName }}</div>
+      </div>
     </div>
 
     <section v-if="priorityAction.kind !== 'ok'" class="section">
@@ -172,6 +219,22 @@ function fmtCost(n: number): string {
         Смотреть все ({{ urgentTotal }})
       </button>
     </section>
+
+    <section v-if="eventsTotal > 0" class="section">
+      <div class="section-header">
+        <div class="section-title no-pad">Последние события</div>
+        <button class="all-events-btn" @click="emit('viewAllEvents')">Все события</button>
+      </div>
+      <div class="card list">
+        <div v-for="event in recentEvents" :key="`${event.kind}-${event.id}`" class="event-row">
+          <span class="event-icon">{{ eventIcon(event) }}</span>
+          <span class="event-info">
+            <span class="event-title">{{ eventTitle(event) }}</span>
+            <span class="event-meta">{{ eventMeta(event) }}</span>
+          </span>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -223,6 +286,47 @@ function fmtCost(n: number): string {
   font-size: 26px;
 }
 
+.stats-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.stat-tile {
+  flex: 1;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow);
+}
+
+.stat-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.stat-icon {
+  font-size: 17px;
+  margin-right: 2px;
+}
+
+.stat-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.stat-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 .section {
   margin-bottom: 24px;
 }
@@ -234,6 +338,72 @@ function fmtCost(n: number): string {
   text-transform: uppercase;
   letter-spacing: 0.02em;
   padding: 0 4px 8px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.section-title.no-pad {
+  padding: 0;
+}
+
+.all-events-btn {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--card-border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.all-events-btn:active {
+  opacity: 0.6;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.event-row:last-child {
+  border-bottom: none;
+}
+
+.event-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.event-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.event-title {
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 1px;
 }
 
 .card {

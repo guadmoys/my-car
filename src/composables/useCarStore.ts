@@ -11,6 +11,7 @@ import type {
   MaintenanceItem,
   MaintenanceStatus,
   Part,
+  TimelineEvent,
 } from '../types'
 import { buildDefaultItems } from '../data/defaultMaintenance'
 import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
@@ -852,6 +853,46 @@ const fuelInsights = computed<FuelInsight[]>(() => {
   return insights.slice(0, 6)
 })
 
+/**
+ * Km driven since the start of the current calendar month, measured against
+ * the most recent known mileage reading dated before this month (a fuel
+ * entry, a completed service, or — failing either — the car's own creation
+ * point). That fallback means a car added this month reports its full
+ * mileage-to-date rather than an undefined gap.
+ */
+const monthDistanceKm = computed<number | null>(() => {
+  if (!car.value) return null
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime()
+  const points = [
+    { mileage: car.value.initialMileage, date: car.value.createdAt },
+    ...fuelEntries.map((e) => ({ mileage: e.mileage, date: e.date })),
+    ...historyEntries.map((h) => ({ mileage: h.mileage, date: h.date })),
+  ].sort((a, b) => a.date - b.date)
+
+  const before = points.filter((p) => p.date < monthStart)
+  const baseline = before.length > 0 ? before[before.length - 1] : points[0]
+  return Math.max(0, car.value.currentMileage - baseline.mileage)
+})
+
+/** Fuel fill-ups and completed maintenance, merged into one date-sorted feed. */
+const timelineEvents = computed<TimelineEvent[]>(() => {
+  const fuel: TimelineEvent[] = fuelEntries.map((e) => ({
+    kind: 'fuel',
+    id: e.id,
+    date: e.date,
+    mileage: e.mileage,
+    entry: e,
+  }))
+  const service: TimelineEvent[] = historyEntries.map((h) => ({
+    kind: 'service',
+    id: h.id,
+    date: h.date,
+    mileage: h.mileage,
+    entry: h,
+  }))
+  return [...fuel, ...service].sort((a, b) => b.date - a.date)
+})
+
 const totalFuelCost = computed(() =>
   fuelEntries.reduce((sum, e) => sum + (e.cost ?? 0), 0),
 )
@@ -1019,6 +1060,8 @@ export function useCarStore() {
     okCount,
     fuelHistory,
     averageConsumption,
+    monthDistanceKm,
+    timelineEvents,
     estimatedRangeKm,
     averageFuelPrice,
     totalCo2Kg,
