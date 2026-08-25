@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import type { MaintenanceItem, MaintenanceStatus } from '../types'
 import MaintenanceCard from './MaintenanceCard.vue'
+import ToggleSwitch from './ToggleSwitch.vue'
+import { haptic } from '../utils/haptics'
 
 const props = defineProps<{
   sortedStatuses: MaintenanceStatus[]
@@ -11,7 +13,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   markServiced: [id: string]
   toggle: [id: string, enabled: boolean]
+  bulkToggle: [ids: string[], enabled: boolean]
   edit: [id: string]
+  delete: [id: string]
+  reorderDisabled: [id: string, direction: 'up' | 'down']
   addItem: []
 }>()
 
@@ -27,20 +32,74 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'ok', label: 'В порядке' },
 ]
 
+function selectFilter(key: Filter) {
+  if (filter.value === key) return
+  haptic('tap')
+  filter.value = key
+}
+
+function matchesQuery(item: MaintenanceItem, query: string): boolean {
+  if (item.name.toLowerCase().includes(query)) return true
+  return item.parts.some(
+    (p) => p.name.toLowerCase().includes(query) || p.articleNumber.toLowerCase().includes(query),
+  )
+}
+
+const searchQuery = computed(() => search.value.trim().toLowerCase())
+
 const filteredStatuses = computed(() => {
-  const query = search.value.trim().toLowerCase()
+  const query = searchQuery.value
   return props.sortedStatuses.filter((s) => {
     if (filter.value !== 'all' && s.state !== filter.value) return false
-    if (query && !s.item.name.toLowerCase().includes(query)) return false
+    if (query && !matchesQuery(s.item, query)) return false
     return true
   })
 })
+
+const filteredDisabledItems = computed(() => {
+  const query = searchQuery.value
+  if (!query) return props.disabledItems
+  return props.disabledItems.filter((item) => matchesQuery(item, query))
+})
+
+const disabledSectionOpen = computed(
+  () => showDisabled.value || (searchQuery.value !== '' && filteredDisabledItems.value.length > 0),
+)
+
+// Reordering acts on the full disabled order, so it's hidden while a search
+// query narrows which neighbours are even visible.
+const canReorder = computed(() => searchQuery.value === '')
+
+const selectMode = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
+
+function toggleSelectMode() {
+  selectMode.value = !selectMode.value
+  selectedIds.value = new Set()
+}
+
+function toggleSelect(id: string) {
+  haptic('tap')
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+
+function bulkSetEnabled(enabled: boolean) {
+  emit('bulkToggle', Array.from(selectedIds.value), enabled)
+  selectMode.value = false
+  selectedIds.value = new Set()
+}
 </script>
 
 <template>
   <div class="tab-page">
     <header class="topbar">
       <h1>Замена</h1>
+      <button class="select-mode-btn" @click="toggleSelectMode">
+        {{ selectMode ? 'Отмена' : 'Выбрать' }}
+      </button>
     </header>
 
     <div class="search-row">
@@ -48,7 +107,7 @@ const filteredStatuses = computed(() => {
         <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8" />
         <path d="M20 20l-4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
       </svg>
-      <input v-model="search" type="text" placeholder="Поиск по параметрам" />
+      <input v-model="search" type="text" placeholder="Поиск по параметрам" aria-label="Поиск по параметрам" />
       <button v-if="search" class="search-clear" aria-label="Очистить" @click="search = ''">✕</button>
     </div>
 
@@ -58,7 +117,7 @@ const filteredStatuses = computed(() => {
         :key="f.key"
         class="filter-chip"
         :class="{ active: filter === f.key }"
-        @click="filter = f.key"
+        @click="selectFilter(f.key)"
       >
         {{ f.label }}
       </button>
@@ -70,9 +129,13 @@ const filteredStatuses = computed(() => {
           v-for="status in filteredStatuses"
           :key="status.item.id"
           :status="status"
+          :selectable="selectMode"
+          :selected="selectedIds.has(status.item.id)"
           @mark-serviced="emit('markServiced', $event)"
           @toggle="(id, enabled) => emit('toggle', id, enabled)"
           @edit="emit('edit', $event)"
+          @delete="emit('delete', $event)"
+          @select="toggleSelect"
         />
         <div v-if="filteredStatuses.length === 0" class="empty">
           {{ sortedStatuses.length === 0 ? 'Все параметры отключены' : 'Ничего не найдено' }}
@@ -83,24 +146,64 @@ const filteredStatuses = computed(() => {
     <section v-if="disabledItems.length > 0" class="section">
       <button class="section-title toggleable" @click="showDisabled = !showDisabled">
         <span>Отключено ({{ disabledItems.length }})</span>
-        <span class="caret" :class="{ open: showDisabled }">›</span>
+        <span class="caret" :class="{ open: disabledSectionOpen }">›</span>
       </button>
-      <div v-if="showDisabled" class="card list">
-        <div v-for="item in disabledItems" :key="item.id" class="disabled-row">
-          <button class="disabled-name" @click="emit('edit', item.id)">{{ item.name }}</button>
-          <label class="switch">
-            <input
-              type="checkbox"
-              :checked="item.enabled"
-              @change="emit('toggle', item.id, ($event.target as HTMLInputElement).checked)"
-            />
-            <span class="slider" />
-          </label>
+      <div v-if="disabledSectionOpen" class="card list">
+        <div v-for="(item, index) in filteredDisabledItems" :key="item.id" class="disabled-row">
+          <button
+            v-if="selectMode"
+            class="disabled-select-target"
+            @click="toggleSelect(item.id)"
+          >
+            <div class="checkbox" :class="{ checked: selectedIds.has(item.id) }">
+              <svg v-if="selectedIds.has(item.id)" viewBox="0 0 24 24" width="13" height="13" fill="none">
+                <path d="M5 13l4.5 4.5L19 8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <span class="disabled-name">{{ item.name }}</span>
+          </button>
+          <template v-else>
+            <button class="disabled-name" @click="emit('edit', item.id)">{{ item.name }}</button>
+            <div class="disabled-row-controls">
+              <div v-if="canReorder" class="reorder-buttons">
+                <button
+                  class="reorder-btn"
+                  aria-label="Переместить выше"
+                  :disabled="index === 0"
+                  @click="emit('reorderDisabled', item.id, 'up')"
+                >
+                  ▲
+                </button>
+                <button
+                  class="reorder-btn"
+                  aria-label="Переместить ниже"
+                  :disabled="index === filteredDisabledItems.length - 1"
+                  @click="emit('reorderDisabled', item.id, 'down')"
+                >
+                  ▼
+                </button>
+              </div>
+              <ToggleSwitch
+                :checked="item.enabled"
+                :aria-label="`Учитывать «${item.name}»`"
+                @update:checked="(v) => emit('toggle', item.id, v)"
+              />
+            </div>
+          </template>
         </div>
+        <div v-if="filteredDisabledItems.length === 0" class="empty">Ничего не найдено</div>
       </div>
     </section>
 
-    <button class="add-item" @click="emit('addItem')">+ Добавить параметр</button>
+    <div v-if="selectMode && selectedIds.size > 0" class="bulk-bar">
+      <span class="bulk-count">Выбрано: {{ selectedIds.size }}</span>
+      <div class="bulk-actions">
+        <button class="bulk-btn enable" @click="bulkSetEnabled(true)">Включить</button>
+        <button class="bulk-btn disable" @click="bulkSetEnabled(false)">Отключить</button>
+      </div>
+    </div>
+
+    <button v-if="!selectMode" class="add-item" @click="emit('addItem')">+ Добавить параметр</button>
   </div>
 </template>
 
@@ -112,6 +215,9 @@ const filteredStatuses = computed(() => {
 }
 
 .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 8px 4px 20px;
 }
 
@@ -120,6 +226,16 @@ const filteredStatuses = computed(() => {
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
+}
+
+.select-mode-btn {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--blue);
+}
+
+.select-mode-btn:active {
+  opacity: 0.6;
 }
 
 .search-row {
@@ -256,47 +372,111 @@ const filteredStatuses = computed(() => {
   text-align: left;
 }
 
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 26px;
+.disabled-select-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.disabled-select-target .disabled-name {
+  flex: 1;
+}
+
+.checkbox {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--separator);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--motion-fast), border-color var(--motion-fast);
+}
+
+.checkbox.checked {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+.disabled-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   flex-shrink: 0;
 }
 
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
+.reorder-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.slider {
-  position: absolute;
-  inset: 0;
-  background: var(--fill-secondary);
-  border-radius: 13px;
-  transition: background 0.2s;
-}
-
-.slider::before {
-  content: '';
-  position: absolute;
+.reorder-btn {
   width: 22px;
-  height: 22px;
-  left: 2px;
-  top: 2px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  line-height: 1;
 }
 
-.switch input:checked + .slider {
+.reorder-btn:active:not(:disabled) {
+  opacity: 0.5;
+}
+
+.reorder-btn:disabled {
+  opacity: 0.25;
+}
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow);
+}
+
+.bulk-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bulk-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bulk-btn.enable {
   background: var(--green);
+  color: #fff;
 }
 
-.switch input:checked + .slider::before {
-  transform: translateX(18px);
+.bulk-btn.disable {
+  background: var(--fill-secondary);
+  color: var(--text);
+}
+
+.bulk-btn:active {
+  opacity: 0.7;
 }
 
 .add-item {

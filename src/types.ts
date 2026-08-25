@@ -109,6 +109,13 @@ export interface FuelInsight {
   tone: 'good' | 'bad' | 'neutral'
 }
 
+/** Projected cost of ownership over a horizon, split by category. */
+export interface CostForecast {
+  fuel: number
+  maintenance: number
+  total: number
+}
+
 export interface BackupData {
   version: 2
   exportedAt: number

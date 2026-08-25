@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { haptic } from '../utils/haptics'
+import ToggleSwitch from './ToggleSwitch.vue'
 
 const props = defineProps<{
   currentMileage: number
@@ -9,6 +10,7 @@ const props = defineProps<{
   lastFuelType?: string
   lastStation?: string
   lastPrice: number | null
+  lastMileage?: number
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +42,54 @@ const remainingLiters = ref('')
 const station = ref('')
 const comment = ref('')
 const showMore = ref(false)
+const quickEntry = ref('')
+
+// Parses a free-form line like "40л 3200р 80000км" into individual fields,
+// so a fill-up can be logged in one shot instead of tabbing through inputs.
+// Each unit is matched and stripped from a working copy in turn, so e.g.
+// "55р/л" (price per liter) can't also be picked up by the plain-cost match.
+function parseQuickEntry(raw: string): {
+  mileage?: number
+  liters?: number
+  cost?: number
+  pricePerLiter?: number
+} {
+  let text = raw.toLowerCase()
+  const take = (re: RegExp): number | undefined => {
+    const m = text.match(re)
+    if (!m) return undefined
+    text = text.slice(0, m.index) + text.slice(m.index! + m[0].length)
+    return Number(m[1].replace(',', '.'))
+  }
+  // No \b here: JS's \b is defined via \w, which is ASCII-only and never
+  // matches around Cyrillic letters — it would silently fail to anchor
+  // after "л"/"р". The digit-adjacency requirement already keeps these
+  // from matching inside unrelated words, so a boundary isn't needed.
+  return {
+    pricePerLiter: take(/(\d+(?:[.,]\d+)?)\s*(?:₽\s*\/\s*л|руб\s*\/\s*л|р\s*\/\s*л)/),
+    mileage: take(/(\d+(?:[.,]\d+)?)\s*км/),
+    liters: take(/(\d+(?:[.,]\d+)?)\s*л/),
+    cost: take(/(\d+(?:[.,]\d+)?)\s*(?:₽|руб|р)/),
+  }
+}
+
+function applyQuickEntry() {
+  if (!quickEntry.value.trim()) return
+  const parsed = parseQuickEntry(quickEntry.value)
+  if (parsed.mileage !== undefined) mileage.value = String(parsed.mileage)
+  if (parsed.liters !== undefined) liters.value = String(parsed.liters)
+  if (parsed.cost !== undefined) cost.value = String(parsed.cost)
+  if (parsed.pricePerLiter !== undefined) {
+    pricePerLiter.value = String(parsed.pricePerLiter)
+    showMore.value = true
+  }
+  if (Object.values(parsed).some((v) => v !== undefined)) {
+    haptic('success')
+    quickEntry.value = ''
+  } else {
+    haptic('warning')
+  }
+}
 
 const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '').replace(',', '.')))
 const litersNumber = computed(() => Number(liters.value.replace(/\s/g, '').replace(',', '.')))
@@ -109,6 +159,16 @@ const effectivePrice = computed<number | null>(() => {
 const priceLooksOff = computed(() => {
   if (props.averagePrice === null || props.averagePrice <= 0 || effectivePrice.value === null) return false
   return Math.abs(effectivePrice.value - props.averagePrice) / props.averagePrice >= 0.4
+})
+
+// Odometer readings only ever go up, so an exact match with the previous
+// fill-up's mileage is a strong, low-noise signal of an accidental
+// double-submit or a stale mileage typo — not a coincidence.
+const looksLikeDuplicate = computed(() => {
+  if (props.lastMileage === undefined || mileage.value.trim() === '' || Number.isNaN(mileageNumber.value)) {
+    return false
+  }
+  return mileageNumber.value === props.lastMileage
 })
 
 function selectFuelType(value: string) {
@@ -181,6 +241,25 @@ function handleSave() {
       </div>
 
       <div class="form">
+        <div class="quick-entry-row">
+          <input
+            v-model="quickEntry"
+            type="text"
+            class="quick-entry-input"
+            placeholder="Быстрый ввод: 40л 3200р 80000км"
+            aria-label="Быстрый ввод заправки"
+            @keydown.enter="applyQuickEntry"
+          />
+          <button
+            v-if="quickEntry.trim()"
+            type="button"
+            class="quick-entry-apply"
+            aria-label="Применить"
+            @click="applyQuickEntry"
+          >
+            ✓
+          </button>
+        </div>
         <button v-if="suggestionLabel" type="button" class="suggestion-chip" @click="applySuggestion">
           Как в прошлый раз: {{ suggestionLabel }}
         </button>
@@ -202,6 +281,9 @@ function handleSave() {
         </div>
         <p v-if="mileage.trim() && mileageNumber < currentMileage" class="hint">
           Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
+        </p>
+        <p v-if="looksLikeDuplicate" class="hint warn">
+          ⚠ Такой же пробег, как в прошлой заправке — не дубль ли это?
         </p>
         <p v-if="litersExceedTank" class="hint warn">
           ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
@@ -238,21 +320,20 @@ function handleSave() {
               <input v-model="pricePerLiter" type="text" inputmode="decimal" placeholder="—" />
             </div>
             <div class="divider" />
-            <label class="field switch-row">
+            <div class="field switch-row">
               <span>Полный бак</span>
-              <span class="switch">
-                <input type="checkbox" :checked="isFullTank" @change="toggleFullTank" />
-                <span class="slider" />
-              </span>
-            </label>
+              <ToggleSwitch :checked="isFullTank" aria-label="Полный бак" @update:checked="toggleFullTank" />
+            </div>
             <div class="divider" />
-            <label class="field switch-row" :class="{ disabled: isFullTank }">
+            <div class="field switch-row" :class="{ disabled: isFullTank }">
               <span>Остаток в баке</span>
-              <span class="switch">
-                <input type="checkbox" :checked="hasRemaining" :disabled="isFullTank" @change="toggleHasRemaining" />
-                <span class="slider" />
-              </span>
-            </label>
+              <ToggleSwitch
+                :checked="hasRemaining"
+                :disabled="isFullTank"
+                aria-label="Остаток в баке"
+                @update:checked="toggleHasRemaining"
+              />
+            </div>
             <template v-if="hasRemaining && !isFullTank">
               <div class="divider" />
               <div class="field">
@@ -311,7 +392,7 @@ function handleSave() {
   background: var(--bg-grouped);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 8px 0 calc(24px + var(--safe-bottom));
-  animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: slide-up 0.25s var(--motion-spring);
 }
 
 @keyframes slide-up {
@@ -369,6 +450,49 @@ function handleSave() {
   border-radius: var(--radius-md);
   padding: 0 14px;
   border: 1px solid var(--card-border);
+}
+
+.quick-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  margin-bottom: 12px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  background: var(--fill-secondary);
+}
+
+.quick-entry-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+}
+
+.quick-entry-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.quick-entry-apply {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quick-entry-apply:active {
+  opacity: 0.7;
 }
 
 .suggestion-chip {
@@ -507,50 +631,4 @@ function handleSave() {
   color: var(--text-tertiary);
 }
 
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 26px;
-  flex-shrink: 0;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  inset: 0;
-  background: var(--fill-secondary);
-  border-radius: 13px;
-  transition: background 0.2s;
-}
-
-.slider::before {
-  content: '';
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  left: 2px;
-  top: 2px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
-.switch input:checked + .slider {
-  background: var(--green);
-}
-
-.switch input:checked + .slider::before {
-  transform: translateX(18px);
-}
-
-.switch input:disabled + .slider {
-  opacity: 0.4;
-}
 </style>

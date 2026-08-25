@@ -132,7 +132,7 @@ function onClickCapture(e: MouseEvent) {
 }
 
 .content:not(.dragging) {
-  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.25s var(--motion-spring);
 }
 
 .reveal {

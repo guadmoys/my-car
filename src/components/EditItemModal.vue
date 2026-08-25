@@ -4,6 +4,7 @@ import type { HistoryEntry, MaintenanceItem, Part } from '../types'
 import CostEditSheet from './CostEditSheet.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
 import { downloadIcsReminder } from '../utils/ics'
+import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
 
 function addMonths(ts: number, months: number): number {
   const d = new Date(ts)
@@ -80,6 +81,17 @@ const notifyBeforeKm = ref('')
 const notifyBeforeDays = ref('')
 const showAdvanced = ref(false)
 
+const kmThresholdDefault = computed(() => {
+  const intervalKm = Number(interval.value) || 0
+  return adaptiveKmThreshold(intervalKm, undefined, props.history.map((h) => h.mileage))
+})
+
+const dayThresholdDefault = computed(() => {
+  const months = Number(intervalMonths.value) || 0
+  const totalSpanMs = addMonths(0, months)
+  return adaptiveDayThreshold(totalSpanMs, undefined, props.history.map((h) => h.date))
+})
+
 function makePartId(): string {
   return `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -133,7 +145,7 @@ const isValid = computed(() => {
   }
   if (!isCreate.value) {
     const l = Number(lastServiceMileage.value)
-    if (Number.isNaN(l) || l < 0) return false
+    if (Number.isNaN(l) || l < 0 || l > props.currentMileage) return false
   }
   if (notifyBeforeKm.value.trim()) {
     const n = Number(notifyBeforeKm.value)
@@ -264,19 +276,30 @@ function handleAddToCalendar() {
                 v-model="notifyBeforeKm"
                 type="text"
                 inputmode="numeric"
-                :placeholder="`по умолчанию ${Math.round((Number(interval) || 0) * 0.1)}`"
+                :placeholder="`по умолчанию ${Math.round(kmThresholdDefault.value)}`"
               />
             </div>
             <template v-if="intervalMonths.trim()">
               <div class="divider" />
               <div class="field">
                 <label>Уведомлять за, дней до ТО</label>
-                <input v-model="notifyBeforeDays" type="text" inputmode="numeric" placeholder="—" />
+                <input
+                  v-model="notifyBeforeDays"
+                  type="text"
+                  inputmode="numeric"
+                  :placeholder="`по умолчанию ${Math.round(dayThresholdDefault.value)}`"
+                />
               </div>
             </template>
           </div>
           <p v-if="showAdvanced" class="hint advanced-hint">
             Определяет, когда параметр станет «скоро» и придёт уведомление (если оно включено в настройках)
+          </p>
+          <p v-if="showAdvanced && !notifyBeforeKm.trim() && kmThresholdDefault.adaptive" class="hint advanced-hint adaptive-hint">
+            📈 Подстроено под вашу историю: обычно вы делаете это ТО раньше срока — порог сдвинут пораньше
+          </p>
+          <p v-if="showAdvanced && !notifyBeforeDays.trim() && dayThresholdDefault.adaptive" class="hint advanced-hint adaptive-hint">
+            📈 Подстроено под вашу историю: обычно вы делаете это ТО раньше срока — порог сдвинут пораньше
           </p>
         </div>
 
@@ -286,6 +309,9 @@ function handleAddToCalendar() {
             <input v-model="lastServiceMileage" type="text" inputmode="numeric" />
           </div>
         </div>
+        <p v-if="!isCreate && Number(lastServiceMileage) > currentMileage" class="hint mileage-hint">
+          Не может быть больше текущего пробега машины ({{ fmtMileage(currentMileage) }} км)
+        </p>
 
         <button v-if="nextDueAt !== null" class="calendar-btn" @click="handleAddToCalendar">
           🗓 Добавить напоминание в календарь
@@ -397,7 +423,7 @@ function handleAddToCalendar() {
   background: var(--bg-grouped);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 8px 0 calc(24px + var(--safe-bottom));
-  animation: slide-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  animation: slide-up 0.25s var(--motion-spring);
 }
 
 @keyframes slide-up {
@@ -567,6 +593,16 @@ function handleAddToCalendar() {
 
 .advanced-hint {
   padding: 0 4px;
+}
+
+.adaptive-hint {
+  color: var(--blue);
+}
+
+.mileage-hint {
+  margin-top: -12px;
+  padding: 0 4px;
+  color: var(--red);
 }
 
 .hint {

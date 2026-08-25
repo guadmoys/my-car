@@ -2,6 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import type {
   BackupData,
   Car,
+  CostForecast,
   FuelConsumption,
   FuelEntry,
   FuelInsight,
@@ -12,6 +13,7 @@ import type {
   Part,
 } from '../types'
 import { buildDefaultItems } from '../data/defaultMaintenance'
+import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
 import * as db from '../db/database'
 
 const ACTIVE_CAR_KEY = 'my-car-active-car-id'
@@ -241,11 +243,32 @@ async function addCustomItem(input: {
   await db.putMaintenanceItem(item)
 }
 
-async function deleteItem(id: string): Promise<void> {
+async function deleteItem(id: string): Promise<MaintenanceItem | null> {
   const index = items.findIndex((i) => i.id === id)
-  if (index === -1) return
-  items.splice(index, 1)
+  if (index === -1) return null
+  const [removed] = items.splice(index, 1)
   await db.deleteMaintenanceItem(id)
+  return removed
+}
+
+async function restoreItem(item: MaintenanceItem): Promise<void> {
+  if (items.some((i) => i.id === item.id)) return
+  items.push(item)
+  await db.putMaintenanceItem(item)
+}
+
+async function reorderDisabledItem(id: string, direction: 'up' | 'down'): Promise<void> {
+  const disabled = items.filter((i) => !i.enabled).sort((a, b) => a.order - b.order)
+  const idx = disabled.findIndex((i) => i.id === id)
+  if (idx === -1) return
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+  if (swapIdx < 0 || swapIdx >= disabled.length) return
+  const a = disabled[idx]
+  const b = disabled[swapIdx]
+  const aOrder = a.order
+  a.order = b.order
+  b.order = aOrder
+  await Promise.all([db.putMaintenanceItem({ ...a }), db.putMaintenanceItem({ ...b })])
 }
 
 async function addFuelEntry(input: {
@@ -353,7 +376,12 @@ function statusFor(
   const remainingKm = dueAtMileage - currentMileage
   const traveled = currentMileage - item.lastServiceMileage
   const kmProgress = Math.min(1, Math.max(0, traveled / item.intervalKm))
-  const kmSoonThreshold = item.notifyBeforeKm ?? item.intervalKm * 0.1
+  const itemHistory = historyEntries.filter((h) => h.itemId === item.id)
+  const kmSoonThreshold = adaptiveKmThreshold(
+    item.intervalKm,
+    item.notifyBeforeKm,
+    itemHistory.map((h) => h.mileage),
+  ).value
   const kmState: MaintenanceStatus['state'] =
     remainingKm <= 0 ? 'due' : remainingKm <= kmSoonThreshold ? 'soon' : 'ok'
 
@@ -367,7 +395,11 @@ function statusFor(
     remainingDays = Math.ceil((dueAtDate - now) / DAY_MS)
     const totalSpan = dueAtDate - item.lastServiceDate
     dateProgress = totalSpan > 0 ? Math.min(1, Math.max(0, (now - item.lastServiceDate) / totalSpan)) : 1
-    const daySoonThreshold = item.notifyBeforeDays ?? (totalSpan / DAY_MS) * 0.1
+    const daySoonThreshold = adaptiveDayThreshold(
+      totalSpan,
+      item.notifyBeforeDays,
+      itemHistory.map((h) => h.date),
+    ).value
     dateState = remainingDays <= 0 ? 'due' : remainingDays <= daySoonThreshold ? 'soon' : 'ok'
   }
 
@@ -595,6 +627,38 @@ const fuelInsights = computed<FuelInsight[]>(() => {
     }
   }
 
+  // Anomaly detector: flags one fill-up whose л/100км is a statistical
+  // outlier (z-score) against the rest, rather than a gradual drift like
+  // the trend insight above. A high positive z-score is usually a data
+  // entry slip (wrong mileage/liters) or a real mechanical issue; a sharply
+  // negative one is almost always a typo, since consumption can't improve
+  // that much between two fill-ups.
+  if (validSegments.length >= 5) {
+    const values = validSegments.map((r) => r.litersPer100km as number)
+    const mean = average(values)
+    const variance = average(values.map((v) => (v - mean) ** 2))
+    const stddev = Math.sqrt(variance)
+    if (stddev > 0) {
+      const latest = validSegments[0].litersPer100km as number
+      const z = (latest - mean) / stddev
+      if (z >= 2) {
+        insights.push({
+          id: 'anomaly',
+          icon: '🚨',
+          text: `Последняя заправка сильно выбивается из общей картины: ${latest.toFixed(1)} л/100км против обычных ~${mean.toFixed(1)} — проверьте введённые данные или состояние авто (давление в шинах, утечки, форсунки)`,
+          tone: 'bad',
+        })
+      } else if (z <= -2) {
+        insights.push({
+          id: 'anomaly',
+          icon: '🧐',
+          text: `Последняя заправка выглядит подозрительно экономичной: ${latest.toFixed(1)} л/100км против обычных ~${mean.toFixed(1)} — стоит перепроверить введённый пробег и литры`,
+          tone: 'bad',
+        })
+      }
+    }
+  }
+
   // Efficiency streak: consecutive recent fill-ups better than average.
   let streak = 0
   for (const row of validSegments) {
@@ -799,6 +863,64 @@ const hasAnyCost = computed(
   () => fuelEntries.some((e) => e.cost !== undefined) || historyEntries.some((h) => h.cost !== undefined),
 )
 
+const MONTH_DAYS = 30.44
+
+/**
+ * Expected number of times an enabled item will trigger within `days`.
+ * Items with a month-based interval use that cadence directly; purely
+ * km-based items need a driving-pace estimate (avgDailyKm) — without one,
+ * they're left out rather than guessed at.
+ */
+function expectedServicesIn(days: number, dailyKm: number | null): number {
+  let count = 0
+  for (const item of items) {
+    if (!item.enabled) continue
+    if (item.intervalMonths) {
+      count += days / (item.intervalMonths * MONTH_DAYS)
+    } else if (dailyKm !== null && dailyKm > 0) {
+      count += (dailyKm * days) / item.intervalKm
+    }
+  }
+  return count
+}
+
+/**
+ * Cost-of-ownership projection for 6 and 12 months out: a fuel-spend rate
+ * (recent 90-day window, falling back to the full tracked history) times
+ * the horizon, plus an expected maintenance cost — the average priced
+ * service times how many services the enabled items are expected to
+ * trigger in that horizon. A rough estimate by design (one flat average
+ * service cost, not a per-item one), not a budgeting tool.
+ */
+const costForecast = computed<{ sixMonths: CostForecast | null; twelveMonths: CostForecast | null }>(() => {
+  if (!car.value) return { sixMonths: null, twelveMonths: null }
+
+  const priced = fuelEntries.filter((e) => e.cost !== undefined).sort((a, b) => a.date - b.date)
+  if (priced.length < 2) return { sixMonths: null, twelveMonths: null }
+
+  const now = Date.now()
+  const recentWindow = priced.filter((e) => e.date >= now - 90 * DAY_MS)
+  const windowEntries = recentWindow.length >= 2 ? recentWindow : priced
+  const daysSpan = (now - windowEntries[0].date) / DAY_MS
+  if (daysSpan < 3) return { sixMonths: null, twelveMonths: null }
+  const dailyFuelRate =
+    windowEntries.reduce((sum, e) => sum + (e.cost as number), 0) / daysSpan
+
+  const pricedHistory = historyEntries.filter((h) => h.cost !== undefined)
+  const avgServiceCost =
+    pricedHistory.length > 0
+      ? pricedHistory.reduce((sum, h) => sum + (h.cost as number), 0) / pricedHistory.length
+      : 0
+
+  function forecastFor(days: number): CostForecast {
+    const fuel = dailyFuelRate * days
+    const maintenance = expectedServicesIn(days, avgDailyKm.value) * avgServiceCost
+    return { fuel, maintenance, total: fuel + maintenance }
+  }
+
+  return { sixMonths: forecastFor(6 * MONTH_DAYS), twelveMonths: forecastFor(12 * MONTH_DAYS) }
+})
+
 function isMultiCarBackup(data: unknown): data is BackupData {
   if (!data || typeof data !== 'object') return false
   const d = data as Record<string, unknown>
@@ -905,6 +1027,7 @@ export function useCarStore() {
     totalServiceCost,
     totalCost,
     hasAnyCost,
+    costForecast,
     load,
     switchCar,
     createCar,
@@ -917,6 +1040,8 @@ export function useCarStore() {
     undoMarkServiced,
     addCustomItem,
     deleteItem,
+    restoreItem,
+    reorderDisabledItem,
     addFuelEntry,
     deleteFuelEntry,
     restoreFuelEntry,

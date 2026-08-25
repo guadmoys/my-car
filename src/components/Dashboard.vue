@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useCarStore } from '../composables/useCarStore'
 import { checkAndNotify, checkAndNotifyLowFuel, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
 import { haptic } from '../utils/haptics'
@@ -38,6 +38,7 @@ const {
   totalServiceCost,
   totalCost,
   hasAnyCost,
+  costForecast,
 } = store
 
 const toast = useToast()
@@ -56,6 +57,20 @@ const importError = ref<string | null>(null)
 const editingFuelEntry = computed<FuelEntry | null>(
   () => store.fuelEntries.find((e) => e.id === editingFuelCostId.value) ?? null,
 )
+
+// Opens the matching sheet when launched from a PWA shortcut (manifest.shortcuts
+// links to "?action=fuel"/"?action=mileage"), then strips the param so a
+// later reload of the same tab doesn't reopen it.
+onMounted(() => {
+  const url = new URL(window.location.href)
+  const action = url.searchParams.get('action')
+  if (action === 'fuel') showFuelSheet.value = true
+  else if (action === 'mileage') showMileageSheet.value = true
+  if (action) {
+    url.searchParams.delete('action')
+    window.history.replaceState({}, '', url)
+  }
+})
 
 const lastFuelEntry = computed<FuelEntry | null>(() => {
   if (store.fuelEntries.length === 0) return null
@@ -152,6 +167,16 @@ async function handleToggle(id: string, enabled: boolean) {
   await store.toggleItem(id, enabled)
 }
 
+async function handleBulkToggle(ids: string[], enabled: boolean) {
+  if (ids.length === 0) return
+  haptic('tap')
+  await Promise.all(ids.map((id) => store.toggleItem(id, enabled)))
+}
+
+async function handleReorderDisabled(id: string, direction: 'up' | 'down') {
+  await store.reorderDisabledItem(id, direction)
+}
+
 async function handleSaveItem(payload: {
   name: string
   intervalKm: number
@@ -182,9 +207,15 @@ async function handleCreateItem(payload: {
 }
 
 async function handleDeleteItem(id: string) {
-  haptic('delete')
-  await store.deleteItem(id)
+  const item = store.items.find((i) => i.id === id)
+  const removed = await store.deleteItem(id)
   closeEdit()
+  if (!removed) return
+  haptic('delete')
+  toast.show(item ? `«${item.name}» удалён` : 'Параметр удалён', {
+    label: 'Отменить',
+    onAction: () => store.restoreItem(removed),
+  })
 }
 
 async function handleSaveMileage(mileage: number) {
@@ -354,6 +385,7 @@ function fmtDate(ts: number): string {
         :has-any-cost="hasAnyCost"
         :urgent-statuses="urgentPreview"
         :urgent-total="urgentStatuses.length"
+        :estimated-range-km="estimatedRangeKm"
         @edit-mileage="showMileageSheet = true"
         @switch-car="showCarSwitcher = true"
         @quick-fuel="showFuelSheet = true"
@@ -368,7 +400,10 @@ function fmtDate(ts: number): string {
         :disabled-items="disabledItems"
         @mark-serviced="handleMarkServiced"
         @toggle="handleToggle"
+        @bulk-toggle="handleBulkToggle"
         @edit="openEdit"
+        @delete="handleDeleteItem"
+        @reorder-disabled="handleReorderDisabled"
         @add-item="editingItem = 'new'"
       />
 
@@ -383,6 +418,7 @@ function fmtDate(ts: number): string {
         :total-service-cost="totalServiceCost"
         :total-cost="totalCost"
         :has-any-cost="hasAnyCost"
+        :cost-forecast="costForecast"
         @add-fuel="showFuelSheet = true"
         @delete-fuel="handleDeleteFuel"
         @edit-cost="editingFuelCostId = $event"
@@ -438,6 +474,7 @@ function fmtDate(ts: number): string {
       :last-fuel-type="lastFuelType"
       :last-station="lastStation"
       :last-price="lastPrice"
+      :last-mileage="lastFuelEntry?.mileage"
       @close="showFuelSheet = false"
       @save="handleSaveFuel"
     />
