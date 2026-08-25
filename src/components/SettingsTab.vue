@@ -23,6 +23,8 @@ import type { DateFormatId } from '../utils/dateFormat'
 import { checkForUpdate } from '../utils/appUpdate'
 import { useToast } from '../composables/useToast'
 import { haptic } from '../utils/haptics'
+import { useCloudSync } from '../composables/useCloudSync'
+import type { CloudProvider } from '../utils/cloudSync'
 
 const props = defineProps<{
   car: Car
@@ -155,6 +157,59 @@ async function handleCheckForUpdate() {
   } finally {
     checkingUpdate.value = false
   }
+}
+
+const cloudSync = useCloudSync()
+
+const cloudProviders: { id: CloudProvider; label: string }[] = [
+  { id: 'google', label: 'Google Диск' },
+  { id: 'yandex', label: 'Яндекс.Диск' },
+]
+
+const activeAccount = computed(() => {
+  const provider = cloudSync.state.activeProvider
+  return provider ? cloudSync.state.accounts[provider] : null
+})
+
+const accountInitial = computed(() => {
+  const name = activeAccount.value?.name || activeAccount.value?.email || '?'
+  return name.charAt(0).toUpperCase()
+})
+
+const activeLastSync = computed(() => {
+  const provider = cloudSync.state.activeProvider
+  return provider ? cloudSync.state.lastSync[provider] : null
+})
+
+function formatSyncDate(ts: number): string {
+  return new Date(ts).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+function handleSelectProvider(provider: CloudProvider) {
+  if (!cloudSync.isProviderConfigured(provider) || cloudSync.state.activeProvider === provider) return
+  void cloudSync.connect(provider)
+}
+
+function handleSyncNow() {
+  haptic('tap')
+  void cloudSync.syncNow()
+}
+
+async function handleRestoreFromCloud() {
+  const provider = cloudSync.state.activeProvider
+  if (!provider) return
+  const confirmed = window.confirm(
+    'Восстановление заменит текущие данные на устройстве резервной копией из облака. Продолжить?',
+  )
+  if (!confirmed) return
+  haptic('tap')
+  const result = await cloudSync.restoreFromCloud(provider)
+  toast.show(result.ok ? 'Данные восстановлены из облака' : result.error)
+}
+
+function handleDisconnectCloud() {
+  const provider = cloudSync.state.activeProvider
+  if (provider) cloudSync.disconnect(provider)
 }
 
 function triggerImport() {
@@ -302,6 +357,58 @@ function handleFileSelected(event: Event) {
         </p>
       </div>
 
+      <div class="cloud-zone">
+        <div class="section-title">Облако</div>
+        <div class="format-chips">
+          <button
+            v-for="p in cloudProviders"
+            :key="p.id"
+            class="format-chip"
+            :class="{ active: cloudSync.state.activeProvider === p.id }"
+            :disabled="!cloudSync.isProviderConfigured(p.id)"
+            @click="handleSelectProvider(p.id)"
+          >
+            {{ p.label }}
+          </button>
+        </div>
+
+        <template v-if="activeAccount">
+          <div class="group cloud-account-row">
+            <span class="cloud-avatar">{{ accountInitial }}</span>
+            <span class="cloud-account-info">
+              <span class="cloud-account-name">{{ activeAccount.name }}</span>
+              <span v-if="activeAccount.email" class="cloud-account-email">{{ activeAccount.email }}</span>
+            </span>
+          </div>
+          <div class="group">
+            <div class="field notif-row">
+              <span class="notif-label">Автосинхронизация</span>
+              <ToggleSwitch
+                :checked="cloudSync.state.autoSync"
+                aria-label="Автосинхронизация"
+                @update:checked="cloudSync.setAutoSync"
+              />
+            </div>
+          </div>
+          <button class="backup-btn" :disabled="cloudSync.state.syncing" @click="handleSyncNow">
+            {{ cloudSync.state.syncing ? 'Синхронизация…' : 'Синхронизировать сейчас' }}
+          </button>
+          <button class="backup-btn" :disabled="cloudSync.state.syncing" @click="handleRestoreFromCloud">
+            Восстановить из облака
+          </button>
+          <button class="reset" @click="handleDisconnectCloud">Отключить облако</button>
+          <p v-if="cloudSync.state.error" class="hint error">{{ cloudSync.state.error }}</p>
+          <p v-else-if="activeLastSync" class="hint">
+            Последняя синхронизация: {{ formatSyncDate(activeLastSync.savedAt) }} · версия {{ activeLastSync.appVersion }}
+          </p>
+          <p v-else class="hint">Ещё не синхронизировалось</p>
+        </template>
+        <p v-else class="hint">
+          Выберите облако и войдите в свой аккаунт, чтобы хранить резервную копию онлайн и синхронизировать её
+          между устройствами
+        </p>
+      </div>
+
       <div class="danger-zone">
         <div class="section-title">Опасная зона</div>
         <button class="reset" @click="handleDelete">
@@ -426,10 +533,56 @@ function handleFileSelected(event: Event) {
 .date-format-zone,
 .update-zone,
 .backup-zone,
+.cloud-zone,
 .danger-zone {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.format-chip:disabled {
+  opacity: 0.4;
+}
+
+.cloud-account-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.cloud-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--blue), #0040dd);
+}
+
+.cloud-account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cloud-account-name {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.cloud-account-email {
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .format-chips {
