@@ -460,7 +460,13 @@ function fmtDate(ts: number): string {
         @notifications-enabled="handleNotificationsEnabled"
       />
 
-    <TabBar :active-tab="activeTab" :due-badge="dueCount" @change="activeTab = $event" />
+    <TabBar
+      :active-tab="activeTab"
+      :due-badge="dueCount"
+      @change="activeTab = $event"
+      @quick-mileage="showMileageSheet = true"
+      @quick-fuel="showFuelSheet = true"
+    />
 
     <EditItemModal
       v-if="editingItem !== null"
