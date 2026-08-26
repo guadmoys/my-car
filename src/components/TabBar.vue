@@ -101,8 +101,6 @@ const quickActionButtons = [
 .floating-tab-bar ion-tab-button.tab-selected::part(native) {
   background: rgba(var(--ion-color-primary-rgb), 0.12);
   border-radius: 20px;
-  margin: 6px;
-  width: auto;
 }
 
 .quick-action-button {
