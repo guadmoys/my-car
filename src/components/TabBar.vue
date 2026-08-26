@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { IonActionSheet, IonIcon } from '@ionic/vue'
 import {
   add,
+  alarmOutline,
   construct,
   constructOutline,
   home,
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   change: [tab: TabKey]
   quickMileage: []
   quickFuel: []
+  quickReminder: []
 }>()
 
 const tabs: { key: TabKey; label: string; icon: string; iconActive: string }[] = [
@@ -50,6 +52,7 @@ function openQuickActions() {
 const quickActionButtons = [
   { text: 'Пробег', icon: speedometerOutline, handler: () => emit('quickMileage') },
   { text: 'Заправка', icon: water, handler: () => emit('quickFuel') },
+  { text: 'Напоминание', icon: alarmOutline, handler: () => emit('quickReminder') },
   { text: 'Отмена', role: 'cancel' },
 ]
 </script>

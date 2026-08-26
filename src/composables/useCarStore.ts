@@ -11,6 +11,8 @@ import type {
   MaintenanceItem,
   MaintenanceStatus,
   Part,
+  Reminder,
+  ReminderStatus,
   TimelineEvent,
 } from '../types'
 import { buildDefaultItems } from '../data/defaultMaintenance'
@@ -24,6 +26,7 @@ const activeCarId = ref<string | null>(null)
 const items = reactive<MaintenanceItem[]>([])
 const fuelEntries = reactive<FuelEntry[]>([])
 const historyEntries = reactive<HistoryEntry[]>([])
+const reminders = reactive<Reminder[]>([])
 const isLoaded = ref(false)
 
 const car = computed(() => cars.find((c) => c.id === activeCarId.value) ?? null)
@@ -45,14 +48,16 @@ function patchCar(carId: string, patch: Partial<Car>): Car | null {
 }
 
 async function loadCarData(carId: string): Promise<void> {
-  const [loadedItems, loadedFuel, loadedHistory] = await Promise.all([
+  const [loadedItems, loadedFuel, loadedHistory, loadedReminders] = await Promise.all([
     db.getMaintenanceItemsForCar(carId),
     db.getFuelEntriesForCar(carId),
     db.getHistoryForCar(carId),
+    db.getRemindersForCar(carId),
   ])
   items.splice(0, items.length, ...loadedItems.map((item) => ({ ...item, parts: item.parts ?? [] })))
   fuelEntries.splice(0, fuelEntries.length, ...loadedFuel)
   historyEntries.splice(0, historyEntries.length, ...loadedHistory)
+  reminders.splice(0, reminders.length, ...loadedReminders)
 }
 
 async function load(): Promise<void> {
@@ -106,6 +111,7 @@ async function createCar(input: {
   items.splice(0, items.length, ...defaults)
   fuelEntries.splice(0, fuelEntries.length)
   historyEntries.splice(0, historyEntries.length)
+  reminders.splice(0, reminders.length)
 }
 
 async function deleteCar(carId: string): Promise<void> {
@@ -126,6 +132,7 @@ async function deleteCar(carId: string): Promise<void> {
     items.splice(0, items.length)
     fuelEntries.splice(0, fuelEntries.length)
     historyEntries.splice(0, historyEntries.length)
+    reminders.splice(0, reminders.length)
   }
 }
 
@@ -317,6 +324,35 @@ function getItemHistory(itemId: string): HistoryEntry[] {
     .sort((a, b) => b.date - a.date)
 }
 
+async function addReminder(input: { text: string; dueMileage?: number; dueDate?: number; hasTime?: boolean }): Promise<void> {
+  if (!car.value) return
+  const reminder: Reminder = {
+    id: makeId(),
+    carId: car.value.id,
+    text: input.text.trim(),
+    createdAt: nowTs(),
+    dueMileage: input.dueMileage,
+    dueDate: input.dueDate,
+    hasTime: input.hasTime,
+  }
+  reminders.push(reminder)
+  await db.putReminder(reminder)
+}
+
+async function deleteReminder(id: string): Promise<Reminder | null> {
+  const index = reminders.findIndex((r) => r.id === id)
+  if (index === -1) return null
+  const [removed] = reminders.splice(index, 1)
+  await db.deleteReminder(id)
+  return removed
+}
+
+async function restoreReminder(reminder: Reminder): Promise<void> {
+  if (reminders.some((r) => r.id === reminder.id)) return
+  reminders.push(reminder)
+  await db.putReminder(reminder)
+}
+
 function addMonths(ts: number, months: number): number {
   const d = new Date(ts)
   d.setMonth(d.getMonth() + months)
@@ -415,6 +451,25 @@ const soonCount = computed(
 const okCount = computed(
   () => statuses.value.filter((s) => s.state === 'ok').length,
 )
+
+/** Due-first, then oldest-added-first (km-based and date-based reminders aren't directly comparable, so no finer sort). */
+const reminderStatuses = computed<ReminderStatus[]>(() => {
+  if (!car.value) return []
+  const now = Date.now()
+  const mileage = car.value.currentMileage
+  return reminders
+    .map((reminder) => {
+      const remainingKm = reminder.dueMileage !== undefined ? reminder.dueMileage - mileage : undefined
+      const remainingDays =
+        reminder.dueDate !== undefined ? Math.ceil((reminder.dueDate - now) / DAY_MS) : undefined
+      const isDue = (remainingKm !== undefined && remainingKm <= 0) || (remainingDays !== undefined && remainingDays <= 0)
+      return { reminder, isDue, remainingKm, remainingDays }
+    })
+    .sort((a, b) => {
+      if (a.isDue !== b.isDue) return a.isDue ? -1 : 1
+      return a.reminder.createdAt - b.reminder.createdAt
+    })
+})
 
 /**
  * A tank level expressed as `c + k * tankCapacity` liters, so a full-tank
@@ -947,11 +1002,12 @@ function isLegacyBackup(data: unknown): data is LegacyBackupData {
 }
 
 async function exportData(): Promise<BackupData> {
-  const [allCars, allItems, allFuel, allHistory] = await Promise.all([
+  const [allCars, allItems, allFuel, allHistory, allReminders] = await Promise.all([
     db.getAllCars(),
     db.getAllMaintenanceItemsRaw(),
     db.getAllFuelEntriesRaw(),
     db.getAllHistoryRaw(),
+    db.getAllRemindersRaw(),
   ])
   return {
     version: 2,
@@ -961,6 +1017,7 @@ async function exportData(): Promise<BackupData> {
     items: allItems,
     fuelEntries: allFuel,
     historyEntries: allHistory,
+    reminders: allReminders,
   }
 }
 
@@ -969,6 +1026,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   let importedItems: MaintenanceItem[]
   let importedFuel: FuelEntry[]
   let importedHistory: HistoryEntry[]
+  let importedReminders: Reminder[]
   let newActiveCarId: string | undefined
 
   if (isMultiCarBackup(data)) {
@@ -976,6 +1034,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     importedItems = data.items.map((i) => ({ ...i, parts: i.parts ?? [] }))
     importedFuel = Array.isArray(data.fuelEntries) ? data.fuelEntries : []
     importedHistory = Array.isArray(data.historyEntries) ? data.historyEntries : []
+    importedReminders = Array.isArray(data.reminders) ? data.reminders : []
     newActiveCarId =
       data.activeCarId && importedCars.some((c) => c.id === data.activeCarId)
         ? data.activeCarId
@@ -986,6 +1045,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     importedItems = data.items.map((i) => ({ ...i, carId, parts: i.parts ?? [] }))
     importedFuel = (data.fuelEntries ?? []).map((f) => ({ ...f, carId }))
     importedHistory = (data.historyEntries ?? []).map((h) => ({ ...h, carId }))
+    importedReminders = []
     newActiveCarId = carId
   } else {
     return { ok: false, error: 'Файл повреждён или это не резервная копия «Моей машины»' }
@@ -1000,6 +1060,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   await db.putMaintenanceItems(importedItems)
   if (importedFuel.length) await db.putFuelEntries(importedFuel)
   if (importedHistory.length) await db.putHistoryEntries(importedHistory)
+  if (importedReminders.length) await db.putReminders(importedReminders)
 
   cars.splice(0, cars.length, ...importedCars)
   activeCarId.value = newActiveCarId
@@ -1012,6 +1073,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     historyEntries.length,
     ...importedHistory.filter((h) => h.carId === newActiveCarId),
   )
+  reminders.splice(0, reminders.length, ...importedReminders.filter((r) => r.carId === newActiveCarId))
 
   return { ok: true }
 }
@@ -1023,11 +1085,13 @@ export function useCarStore() {
     items,
     fuelEntries,
     historyEntries,
+    reminders,
     isLoaded,
     statuses,
     dueCount,
     soonCount,
     okCount,
+    reminderStatuses,
     fuelHistory,
     averageConsumption,
     monthDistanceKm,
@@ -1053,6 +1117,9 @@ export function useCarStore() {
     addCustomItem,
     deleteItem,
     restoreItem,
+    addReminder,
+    deleteReminder,
+    restoreReminder,
     addFuelEntry,
     deleteFuelEntry,
     restoreFuelEntry,

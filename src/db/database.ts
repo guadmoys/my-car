@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Car, FuelEntry, HistoryEntry, MaintenanceItem } from '../types'
+import type { Car, FuelEntry, HistoryEntry, MaintenanceItem, Reminder } from '../types'
 
 interface MyCarDB extends DBSchema {
   cars: {
@@ -21,10 +21,15 @@ interface MyCarDB extends DBSchema {
     value: HistoryEntry
     indexes: { 'by-date': number; 'by-car': string }
   }
+  reminders: {
+    key: string
+    value: Reminder
+    indexes: { 'by-car': string }
+  }
 }
 
 const DB_NAME = 'my-car-db'
-const DB_VERSION = 4
+const DB_VERSION = 5
 
 /**
  * IndexedDB's structured clone can choke on Vue reactive proxies (nested
@@ -51,6 +56,10 @@ function getDB(): Promise<IDBPDatabase<MyCarDB>> {
         if (!db.objectStoreNames.contains('history')) {
           const store = db.createObjectStore('history', { keyPath: 'id' })
           store.createIndex('by-date', 'date')
+        }
+        if (!db.objectStoreNames.contains('reminders')) {
+          const store = db.createObjectStore('reminders', { keyPath: 'id' })
+          store.createIndex('by-car', 'carId')
         }
 
         if (oldVersion < 4) {
@@ -122,10 +131,10 @@ export async function putCars(carsList: Car[]): Promise<void> {
 
 export async function deleteCarCascade(carId: string): Promise<void> {
   const db = await getDB()
-  const tx = db.transaction(['cars', 'maintenanceItems', 'fuelEntries', 'history'], 'readwrite')
+  const tx = db.transaction(['cars', 'maintenanceItems', 'fuelEntries', 'history', 'reminders'], 'readwrite')
   await tx.objectStore('cars').delete(carId)
 
-  for (const storeName of ['maintenanceItems', 'fuelEntries', 'history'] as const) {
+  for (const storeName of ['maintenanceItems', 'fuelEntries', 'history', 'reminders'] as const) {
     const store = tx.objectStore(storeName)
     const index = store.index('by-car')
     let cursor = await index.openCursor(IDBKeyRange.only(carId))
@@ -223,12 +232,41 @@ export async function deleteHistoryEntry(id: string): Promise<void> {
 
 export async function clearAll(): Promise<void> {
   const db = await getDB()
-  const tx = db.transaction(['cars', 'maintenanceItems', 'fuelEntries', 'history'], 'readwrite')
+  const tx = db.transaction(['cars', 'maintenanceItems', 'fuelEntries', 'history', 'reminders'], 'readwrite')
   await Promise.all([
     tx.objectStore('cars').clear(),
     tx.objectStore('maintenanceItems').clear(),
     tx.objectStore('fuelEntries').clear(),
     tx.objectStore('history').clear(),
+    tx.objectStore('reminders').clear(),
   ])
   await tx.done
+}
+
+export async function getRemindersForCar(carId: string): Promise<Reminder[]> {
+  const db = await getDB()
+  const reminders = await db.getAllFromIndex('reminders', 'by-car', carId)
+  return reminders.sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export async function getAllRemindersRaw(): Promise<Reminder[]> {
+  const db = await getDB()
+  return db.getAll('reminders')
+}
+
+export async function putReminder(reminder: Reminder): Promise<void> {
+  const db = await getDB()
+  await db.put('reminders', toPlain(reminder))
+}
+
+export async function putReminders(reminders: Reminder[]): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction('reminders', 'readwrite')
+  await Promise.all(reminders.map((reminder) => tx.store.put(toPlain(reminder))))
+  await tx.done
+}
+
+export async function deleteReminder(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('reminders', id)
 }

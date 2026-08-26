@@ -19,9 +19,10 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { checkmarkCircleOutline, construct, ellipse, speedometerOutline, water } from 'ionicons/icons'
-import type { Car, MaintenanceStatus, TimelineEvent } from '../types'
+import { add, alarmOutline, checkmarkCircleOutline, construct, ellipse, speedometerOutline, water } from 'ionicons/icons'
+import type { Car, MaintenanceStatus, ReminderStatus, TimelineEvent } from '../types'
 import SummaryCard from './SummaryCard.vue'
+import ReminderCard from './ReminderCard.vue'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
 
 const props = defineProps<{
@@ -41,6 +42,7 @@ const props = defineProps<{
   urgentStatuses: MaintenanceStatus[]
   urgentTotal: number
   estimatedRangeKm: number | null
+  reminderStatuses: ReminderStatus[]
 }>()
 
 const monthName = computed(() =>
@@ -99,6 +101,8 @@ const emit = defineEmits<{
   viewAllMaintenance: []
   viewAllFuel: []
   viewAllEvents: []
+  addReminder: []
+  deleteReminder: [id: string]
 }>()
 
 function stateColor(state: MaintenanceStatus['state']): string {
@@ -217,6 +221,25 @@ function fmtCost(n: number): string {
             }}
           </p>
         </ion-label>
+      </ion-item>
+    </ion-list>
+
+    <ion-list inset>
+      <ion-list-header>
+        <ion-label>Напоминания</ion-label>
+        <ion-button fill="clear" size="small" @click="emit('addReminder')">
+          <ion-icon slot="icon-only" :icon="add" />
+        </ion-button>
+      </ion-list-header>
+      <ReminderCard
+        v-for="status in reminderStatuses"
+        :key="status.reminder.id"
+        :status="status"
+        @delete="emit('deleteReminder', $event)"
+      />
+      <ion-item v-if="reminderStatuses.length === 0" button :detail="false" lines="none" @click="emit('addReminder')">
+        <ion-icon slot="start" :icon="alarmOutline" color="medium" />
+        <ion-label color="medium">Например: «через 300км проверить масло»</ion-label>
       </ion-item>
     </ion-list>
 
