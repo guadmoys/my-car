@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   IonAvatar,
   IonContent,
@@ -20,9 +20,30 @@ import {
   type SegmentCustomEvent,
   type ToggleCustomEvent,
 } from '@ionic/vue'
+import {
+  calendarOutline,
+  carOutline,
+  carSportOutline,
+  cloudDownloadOutline,
+  cloudUploadOutline,
+  closeCircleOutline,
+  documentTextOutline,
+  downloadOutline,
+  eyeOutline,
+  fingerPrintOutline,
+  keyOutline,
+  lockClosedOutline,
+  notificationsOutline,
+  refreshOutline,
+  syncOutline,
+  trashOutline,
+  waterOutline,
+} from 'ionicons/icons'
 import type { Car } from '../types'
 import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
 import PickerSheet from './PickerSheet.vue'
+import SettingsIconBadge from './SettingsIconBadge.vue'
+import AppLockSheet from './AppLockSheet.vue'
 import {
   getNotificationPermission,
   isNotificationApiSupported,
@@ -30,6 +51,14 @@ import {
   requestNotificationPermission,
   setNotificationsEnabled,
 } from '../utils/notifications'
+import {
+  disableBiometric,
+  disableLock,
+  isBiometricEnabled,
+  isLockEnabled,
+  isPlatformAuthenticatorAvailable,
+  registerBiometric,
+} from '../utils/appLock'
 import {
   DATE_FORMAT_OPTIONS,
   formatDate,
@@ -103,6 +132,40 @@ async function handleToggleNotifications(checked: boolean) {
     notificationsOn.value = false
     notificationsBlocked.value = permission === 'denied'
   }
+}
+
+const lockOn = ref(isLockEnabled())
+const biometricOn = ref(isBiometricEnabled())
+const biometricSupported = ref(false)
+const showAppLockSheet = ref(false)
+
+onMounted(async () => {
+  biometricSupported.value = await isPlatformAuthenticatorAvailable()
+})
+
+function handleTogglePasscode(checked: boolean) {
+  if (checked) {
+    showAppLockSheet.value = true
+    return
+  }
+  disableLock()
+  lockOn.value = false
+  biometricOn.value = false
+}
+
+function handleAppLockSaved() {
+  showAppLockSheet.value = false
+  lockOn.value = true
+}
+
+async function handleToggleBiometric(checked: boolean) {
+  if (!checked) {
+    disableBiometric()
+    biometricOn.value = false
+    return
+  }
+  const ok = await registerBiometric()
+  biometricOn.value = ok
 }
 
 const dateFormat = ref<DateFormatId>(getDateFormat())
@@ -269,14 +332,17 @@ function handleFileSelected(event: Event) {
     <ion-list inset>
       <ion-list-header>Автомобиль</ion-list-header>
       <ion-item button detail @click="activePicker = 'make'">
+        <SettingsIconBadge slot="start" :icon="carSportOutline" color="primary" />
         <ion-label>Марка</ion-label>
         <ion-note slot="end">{{ make || 'Выбрать' }}</ion-note>
       </ion-item>
       <ion-item button detail :disabled="!make" @click="activePicker = 'model'">
+        <SettingsIconBadge slot="start" :icon="carSportOutline" color="primary" />
         <ion-label>Модель</ion-label>
         <ion-note slot="end">{{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}</ion-note>
       </ion-item>
       <ion-item>
+        <SettingsIconBadge slot="start" :icon="calendarOutline" color="tertiary" />
         <ion-input
           v-model="year"
           label="Год выпуска"
@@ -286,6 +352,7 @@ function handleFileSelected(event: Event) {
         />
       </ion-item>
       <ion-item lines="none">
+        <SettingsIconBadge slot="start" :icon="waterOutline" color="secondary" />
         <ion-input
           v-model="tankCapacity"
           label="Объём бака, л (необязательно)"
@@ -305,9 +372,11 @@ function handleFileSelected(event: Event) {
 
     <ion-list inset>
       <ion-item button detail @click="emit('openCarSwitcher')">
+        <SettingsIconBadge slot="start" :icon="carOutline" color="success" />
         <ion-label>Мои машины ({{ carCount }})</ion-label>
       </ion-item>
       <ion-item button detail lines="none" @click="emit('sharePassport')">
+        <SettingsIconBadge slot="start" :icon="documentTextOutline" color="primary" />
         <ion-label>Поделиться паспортом машины</ion-label>
       </ion-item>
     </ion-list>
@@ -315,6 +384,7 @@ function handleFileSelected(event: Event) {
     <ion-list v-if="notificationsSupported" inset>
       <ion-list-header>Уведомления</ion-list-header>
       <ion-item lines="none">
+        <SettingsIconBadge slot="start" :icon="notificationsOutline" color="danger" />
         <ion-toggle
           justify="space-between"
           :checked="notificationsOn"
@@ -333,6 +403,38 @@ function handleFileSelected(event: Event) {
     </p>
 
     <ion-list inset>
+      <ion-list-header>Конфиденциальность</ion-list-header>
+      <ion-item :lines="lockOn && biometricSupported ? 'full' : 'none'">
+        <SettingsIconBadge slot="start" :icon="lockClosedOutline" color="medium" />
+        <ion-toggle
+          justify="space-between"
+          :checked="lockOn"
+          @ion-change="(e: ToggleCustomEvent) => handleTogglePasscode(e.detail.checked)"
+        >
+          Код-пароль
+        </ion-toggle>
+      </ion-item>
+      <ion-item v-if="lockOn && biometricSupported" lines="none">
+        <SettingsIconBadge slot="start" :icon="fingerPrintOutline" color="dark" />
+        <ion-toggle
+          justify="space-between"
+          :checked="biometricOn"
+          @ion-change="(e: ToggleCustomEvent) => handleToggleBiometric(e.detail.checked)"
+        >
+          Face ID / отпечаток
+        </ion-toggle>
+      </ion-item>
+      <ion-item v-if="lockOn" button :detail="false" lines="none" @click="showAppLockSheet = true">
+        <SettingsIconBadge slot="start" :icon="keyOutline" color="medium" />
+        <ion-label color="primary">Изменить код-пароль</ion-label>
+      </ion-item>
+    </ion-list>
+    <p class="hint">
+      Код-пароль запрашивается при каждом открытии приложения. Это блокирует экран, а не
+      шифрует данные — они по-прежнему хранятся на устройстве в открытом виде
+    </p>
+
+    <ion-list inset>
       <ion-list-header>Формат даты</ion-list-header>
       <ion-item>
         <ion-segment :value="dateFormat" @ionChange="selectDateFormat">
@@ -342,6 +444,7 @@ function handleFileSelected(event: Event) {
         </ion-segment>
       </ion-item>
       <ion-item lines="none">
+        <SettingsIconBadge slot="start" :icon="eyeOutline" color="secondary" />
         <ion-toggle justify="space-between" :checked="showYear" @ion-change="(e: ToggleCustomEvent) => handleToggleShowYear(e.detail.checked)">
           Показывать год
         </ion-toggle>
@@ -352,6 +455,7 @@ function handleFileSelected(event: Event) {
     <ion-list inset>
       <ion-list-header>Обновления</ion-list-header>
       <ion-item button :detail="false" lines="none" :disabled="checkingUpdate" @click="handleCheckForUpdate">
+        <SettingsIconBadge slot="start" :icon="refreshOutline" color="primary" />
         <ion-label color="primary">{{ checkingUpdate ? 'Проверяем…' : 'Проверить обновления' }}</ion-label>
       </ion-item>
     </ion-list>
@@ -364,9 +468,11 @@ function handleFileSelected(event: Event) {
     <ion-list inset>
       <ion-list-header>Резервная копия</ion-list-header>
       <ion-item button :detail="false" @click="emit('export')">
+        <SettingsIconBadge slot="start" :icon="downloadOutline" color="success" />
         <ion-label color="primary">Экспортировать данные</ion-label>
       </ion-item>
       <ion-item button :detail="false" lines="none" @click="triggerImport">
+        <SettingsIconBadge slot="start" :icon="cloudUploadOutline" color="tertiary" />
         <ion-label color="primary">Импортировать резервную копию</ion-label>
       </ion-item>
       <input
@@ -409,6 +515,7 @@ function handleFileSelected(event: Event) {
           </ion-label>
         </ion-item>
         <ion-item lines="none">
+          <SettingsIconBadge slot="start" :icon="syncOutline" color="success" />
           <ion-toggle justify="space-between" :checked="cloudSync.state.autoSync" @ion-change="(e: ToggleCustomEvent) => cloudSync.setAutoSync(e.detail.checked)">
             Автосинхронизация
           </ion-toggle>
@@ -416,12 +523,15 @@ function handleFileSelected(event: Event) {
       </ion-list>
       <ion-list inset>
         <ion-item button :detail="false" :disabled="cloudSync.state.syncing" @click="handleSyncNow">
+          <SettingsIconBadge slot="start" :icon="refreshOutline" color="primary" />
           <ion-label color="primary">{{ cloudSync.state.syncing ? 'Синхронизация…' : 'Синхронизировать сейчас' }}</ion-label>
         </ion-item>
         <ion-item button :detail="false" :disabled="cloudSync.state.syncing" @click="handleRestoreFromCloud">
+          <SettingsIconBadge slot="start" :icon="cloudDownloadOutline" color="tertiary" />
           <ion-label color="primary">Восстановить из облака</ion-label>
         </ion-item>
         <ion-item button :detail="false" lines="none" @click="handleDisconnectCloud">
+          <SettingsIconBadge slot="start" :icon="closeCircleOutline" color="danger" />
           <ion-label color="danger">Отключить облако</ion-label>
         </ion-item>
       </ion-list>
@@ -439,9 +549,16 @@ function handleFileSelected(event: Event) {
     <ion-list inset>
       <ion-list-header>Опасная зона</ion-list-header>
       <ion-item button :detail="false" lines="none" @click="handleDelete">
+        <SettingsIconBadge slot="start" :icon="trashOutline" color="danger" />
         <ion-label color="danger">{{ confirmingDelete ? 'Точно удалить эту машину?' : 'Удалить эту машину' }}</ion-label>
       </ion-item>
     </ion-list>
+
+    <AppLockSheet
+      v-if="showAppLockSheet"
+      @close="showAppLockSheet = false"
+      @saved="handleAppLockSaved"
+    />
     <p class="hint">
       Удалит эту машину, её параметры ТО, заправки и историю без возможности восстановления.
       Другие ваши машины не затронет
