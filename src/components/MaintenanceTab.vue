@@ -229,7 +229,7 @@ function bulkSetEnabled(enabled: boolean) {
       </ion-buttons>
     </ion-toolbar>
 
-    <ion-fab v-if="!selectMode" vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab v-if="!selectMode" vertical="bottom" horizontal="start" slot="fixed">
       <ion-fab-button @click="emit('addItem')">
         <ion-icon :icon="add" />
       </ion-fab-button>

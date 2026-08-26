@@ -228,7 +228,7 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
       Экспорт в CSV
     </ion-button>
 
-    <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab vertical="bottom" horizontal="start" slot="fixed">
       <ion-fab-button @click="emit('addFuel')">
         <ion-icon :icon="add" />
       </ion-fab-button>
