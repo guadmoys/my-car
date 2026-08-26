@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { IonActionSheet, IonIcon } from '@ionic/vue'
+import { IonActionSheet, IonFabButton, IonIcon } from '@ionic/vue'
 import {
   add,
   construct,
@@ -75,9 +75,15 @@ const quickActionButtons = [
       </button>
     </nav>
 
-    <button type="button" class="quick-action-button" aria-label="Быстрые действия" @click="openQuickActions">
+    <ion-fab-button
+      class="quick-action-button"
+      size="small"
+      color="primary"
+      aria-label="Быстрые действия"
+      @click="openQuickActions"
+    >
       <ion-icon :icon="add" />
-    </button>
+    </ion-fab-button>
   </div>
 
   <ion-action-sheet
@@ -89,10 +95,15 @@ const quickActionButtons = [
 </template>
 
 <style scoped>
-/* Plain HTML/CSS tab bar (no ion-tab-bar/ion-tab-button) — those require an
-   ancestor IonTabs to register properly, which this app's manual-tabs
-   navigation doesn't have. Colors/spacing still come from the app's Ionic
-   CSS-variable theme, so it stays visually part of the same design system. */
+/* The tab row itself is plain HTML/CSS (no ion-tab-bar/ion-tab-button) —
+   those require an ancestor IonTabs to register properly, which this app's
+   manual-tabs navigation doesn't have. Colors/spacing still come from the
+   app's Ionic CSS-variable theme, so it stays visually part of the same
+   design system. The "+" stays a real IonFabButton (no such IonTabs
+   dependency): a plain <button> in this exact spot reliably failed to
+   paint its own background in testing (DOM/computed styles were all
+   correct — it just never composited a fill, even forced via
+   `!important`) while IonFabButton painted fine every time. */
 .tab-bar-row {
   display: flex;
   align-items: center;
@@ -168,22 +179,7 @@ const quickActionButtons = [
 
 .quick-action-button {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
   margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--ion-color-primary);
-  color: var(--ion-color-primary-contrast);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.quick-action-button ion-icon {
-  font-size: 20px;
+  --box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 </style>
