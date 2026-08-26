@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { IonActionSheet, IonBadge, IonFabButton, IonIcon, IonLabel } from '@ionic/vue'
+import { IonActionSheet, IonBadge, IonFabButton, IonIcon } from '@ionic/vue'
 import {
   add,
   construct,
@@ -62,10 +62,10 @@ const quickActionButtons = [
         :key="tab.key"
         :tab="tab.key"
         :selected="activeTab === tab.key"
+        :aria-label="tab.label"
         @click="select(tab.key)"
       >
         <ion-icon :icon="activeTab === tab.key ? tab.iconActive : tab.icon" />
-        <ion-label>{{ tab.label }}</ion-label>
         <ion-badge v-if="tab.key === 'maintenance' && dueBadge > 0" color="danger">{{ dueBadge }}</ion-badge>
       </ion-tab-button>
     </ion-tab-bar>
