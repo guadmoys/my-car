@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import {
   IonButton,
-  IonButtons,
   IonCheckbox,
   IonChip,
   IonIcon,
@@ -106,18 +105,17 @@ function fmt(n: number): string {
           </p>
           <ion-progress-bar :value="status.progress" :color="stateColor" />
         </ion-label>
-        <ion-buttons slot="end">
-          <ion-button size="small" fill="clear" @click.stop="emit('markServiced', status.item.id)">
+        <div slot="end" class="end-controls">
+          <ion-button size="small" fill="outline" @click.stop="emit('markServiced', status.item.id)">
             Готово
           </ion-button>
-        </ion-buttons>
-        <ion-toggle
-          slot="end"
-          :checked="status.item.enabled"
-          :aria-label="`Учитывать «${status.item.name}»`"
-          @click.stop
-          @ion-change="(e) => emit('toggle', status.item.id, e.detail.checked)"
-        />
+          <ion-toggle
+            :checked="status.item.enabled"
+            :aria-label="`Учитывать «${status.item.name}»`"
+            @click.stop
+            @ion-change="(e) => emit('toggle', status.item.id, e.detail.checked)"
+          />
+        </div>
       </ion-item>
 
       <ion-item-options side="end">
@@ -164,6 +162,17 @@ function fmt(n: number): string {
 <style scoped>
 .dimmed {
   opacity: 0.5;
+}
+
+.end-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.end-controls ion-button {
+  margin: 0;
 }
 
 ion-progress-bar {

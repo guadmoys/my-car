@@ -52,9 +52,9 @@ type Filter = 'all' | 'due' | 'soon' | 'ok'
 const filter = ref<Filter>('all')
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'Все' },
-  { key: 'due', label: 'Просрочено' },
+  { key: 'due', label: 'Просроч.' },
   { key: 'soon', label: 'Скоро' },
-  { key: 'ok', label: 'В порядке' },
+  { key: 'ok', label: 'Ок' },
 ]
 
 function selectFilter(event: SegmentCustomEvent) {
@@ -242,5 +242,19 @@ function bulkSetEnabled(enabled: boolean) {
   position: sticky;
   bottom: 0;
   --background: var(--ion-color-light);
+}
+
+/* "Просроч." is the tightest fit of the four segment labels at phone
+   widths — trim the button's own padding so it stays on one line instead
+   of ellipsis-truncating into an unreadable "ПРОС…". white-space: normal
+   is a safety net for even narrower screens. */
+ion-segment-button {
+  --padding-start: 2px;
+  --padding-end: 2px;
+}
+
+ion-segment-button ion-label {
+  white-space: normal;
+  font-size: 12px;
 }
 </style>

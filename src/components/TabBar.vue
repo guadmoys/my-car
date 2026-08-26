@@ -55,8 +55,17 @@ const quickActionButtons = [
 </script>
 
 <template>
-  <div class="tab-bar-row">
-    <ion-tab-bar :selected-tab="activeTab" translucent class="floating-tab-bar">
+  <div class="tab-bar-wrapper">
+    <ion-fab-button
+      class="quick-action-button"
+      size="small"
+      aria-label="Быстрые действия"
+      @click="openQuickActions"
+    >
+      <ion-icon :icon="add" />
+    </ion-fab-button>
+
+    <ion-tab-bar :selected-tab="activeTab" translucent>
       <ion-tab-button
         v-for="tab in tabs"
         :key="tab.key"
@@ -69,10 +78,6 @@ const quickActionButtons = [
         <ion-badge v-if="tab.key === 'maintenance' && dueBadge > 0" color="danger">{{ dueBadge }}</ion-badge>
       </ion-tab-button>
     </ion-tab-bar>
-
-    <ion-fab-button class="quick-action-button" size="small" @click="openQuickActions">
-      <ion-icon :icon="add" />
-    </ion-fab-button>
   </div>
 
   <ion-action-sheet
@@ -84,29 +89,22 @@ const quickActionButtons = [
 </template>
 
 <style scoped>
-.tab-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 16px calc(env(safe-area-inset-bottom, 0) + 8px);
+.tab-bar-wrapper {
+  position: relative;
 }
 
-.floating-tab-bar {
-  flex: 1;
-  border-radius: 28px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-}
-
-.floating-tab-bar ion-tab-button.tab-selected::part(native) {
+ion-tab-button.tab-selected::part(native) {
   background: rgba(var(--ion-color-primary-rgb), 0.12);
-  border-radius: 20px;
-  margin: 6px;
+  border-radius: 14px;
+  margin: 6px 10px;
   width: auto;
 }
 
 .quick-action-button {
-  flex-shrink: 0;
-  --box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  position: absolute;
+  right: 16px;
+  bottom: 100%;
+  margin-bottom: 12px;
+  --box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
 }
 </style>
