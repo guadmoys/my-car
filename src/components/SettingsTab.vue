@@ -43,6 +43,7 @@ import type { Car } from '../types'
 import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
 import PickerSheet from './PickerSheet.vue'
 import SettingsIconBadge from './SettingsIconBadge.vue'
+import HintButton from './HintButton.vue'
 import AppLockSheet from './AppLockSheet.vue'
 import {
   getNotificationPermission,
@@ -171,6 +172,9 @@ async function handleToggleBiometric(checked: boolean) {
 const dateFormat = ref<DateFormatId>(getDateFormat())
 const showYear = ref(isShowYearEnabled())
 const datePreview = computed(() => formatDate(Date.now()))
+const dateFormatHint = computed(
+  () => `«Авто» использует формат вашего региона. Пример: ${datePreview.value}. Применяется к датам заправок`,
+)
 
 function selectDateFormat(event: SegmentCustomEvent) {
   const value = event.detail.value as DateFormatId
@@ -330,7 +334,12 @@ function handleFileSelected(event: Event) {
     </ion-header>
 
     <ion-list inset>
-      <ion-list-header>Автомобиль</ion-list-header>
+      <ion-list-header>
+        <ion-label>Автомобиль</ion-label>
+        <HintButton
+          text="Зная объём бака, можно точно считать расход и по неполным заправкам — если отмечать остаток в баке. Не знаете точное значение — посмотрите в ПТС, руководстве по эксплуатации или на крышке бензобака. Ориентировочно: седаны и хэтчбеки — 40–55 л, кроссоверы — 55–65 л, крупные внедорожники — 70–95 л."
+        />
+      </ion-list-header>
       <ion-item button detail @click="activePicker = 'make'">
         <SettingsIconBadge slot="start" :icon="carSportOutline" color="primary" />
         <ion-label>Марка</ion-label>
@@ -363,12 +372,6 @@ function handleFileSelected(event: Event) {
         />
       </ion-item>
     </ion-list>
-    <p class="hint">
-      Зная объём бака, можно точно считать расход и по неполным заправкам — если отмечать
-      остаток в баке. Не знаете точное значение — посмотрите в ПТС, руководстве по
-      эксплуатации или на крышке бензобака. Ориентировочно: седаны и хэтчбеки — 40–55 л,
-      кроссоверы — 55–65 л, крупные внедорожники — 70–95 л.
-    </p>
 
     <ion-list inset>
       <ion-item button detail @click="emit('openCarSwitcher')">
@@ -382,7 +385,10 @@ function handleFileSelected(event: Event) {
     </ion-list>
 
     <ion-list v-if="notificationsSupported" inset>
-      <ion-list-header>Уведомления</ion-list-header>
+      <ion-list-header>
+        <ion-label>Уведомления</ion-label>
+        <HintButton text="Когда параметр становится «скоро» или «просрочено»" />
+      </ion-list-header>
       <ion-item lines="none">
         <SettingsIconBadge slot="start" :icon="notificationsOutline" color="danger" />
         <ion-toggle
@@ -394,16 +400,18 @@ function handleFileSelected(event: Event) {
         </ion-toggle>
       </ion-item>
     </ion-list>
-    <p v-if="notificationsSupported" class="hint">
-      Когда параметр становится «скоро» или «просрочено»
-    </p>
     <p v-if="notificationsBlocked" class="hint error">
       Уведомления заблокированы в браузере — включите их в настройках сайта, чтобы приложение
       могло их показывать
     </p>
 
     <ion-list inset>
-      <ion-list-header>Конфиденциальность</ion-list-header>
+      <ion-list-header>
+        <ion-label>Конфиденциальность</ion-label>
+        <HintButton
+          text="Код-пароль запрашивается при каждом открытии приложения. Это блокирует экран, а не шифрует данные — они по-прежнему хранятся на устройстве в открытом виде"
+        />
+      </ion-list-header>
       <ion-item :lines="lockOn && biometricSupported ? 'full' : 'none'">
         <SettingsIconBadge slot="start" :icon="lockClosedOutline" color="medium" />
         <ion-toggle
@@ -429,13 +437,12 @@ function handleFileSelected(event: Event) {
         <ion-label color="primary">Изменить код-пароль</ion-label>
       </ion-item>
     </ion-list>
-    <p class="hint">
-      Код-пароль запрашивается при каждом открытии приложения. Это блокирует экран, а не
-      шифрует данные — они по-прежнему хранятся на устройстве в открытом виде
-    </p>
 
     <ion-list inset>
-      <ion-list-header>Формат даты</ion-list-header>
+      <ion-list-header>
+        <ion-label>Формат даты</ion-label>
+        <HintButton :text="dateFormatHint" />
+      </ion-list-header>
       <ion-item>
         <ion-segment :value="dateFormat" @ionChange="selectDateFormat">
           <ion-segment-button v-for="opt in DATE_FORMAT_OPTIONS" :key="opt.value" :value="opt.value">
@@ -450,23 +457,28 @@ function handleFileSelected(event: Event) {
         </ion-toggle>
       </ion-item>
     </ion-list>
-    <p class="hint">«Авто» использует формат вашего региона. Пример: {{ datePreview }}. Применяется к датам заправок</p>
 
     <ion-list inset>
-      <ion-list-header>Обновления</ion-list-header>
+      <ion-list-header>
+        <ion-label>Обновления</ion-label>
+        <HintButton
+          text="Приложение само проверяет обновления в фоне. Нажмите, чтобы проверить прямо сейчас — если вышла новая версия, скрипты скачаются заново и приложение перезапустится"
+        />
+      </ion-list-header>
       <ion-item button :detail="false" lines="none" :disabled="checkingUpdate" @click="handleCheckForUpdate">
         <SettingsIconBadge slot="start" :icon="refreshOutline" color="primary" />
         <ion-label color="primary">{{ checkingUpdate ? 'Проверяем…' : 'Проверить обновления' }}</ion-label>
       </ion-item>
     </ion-list>
-    <p class="hint">
-      Приложение само проверяет обновления в фоне. Нажмите, чтобы проверить прямо сейчас — если
-      вышла новая версия, скрипты скачаются заново и приложение перезапустится
-    </p>
     <p class="hint">Версия {{ appVersion }}</p>
 
     <ion-list inset>
-      <ion-list-header>Резервная копия</ion-list-header>
+      <ion-list-header>
+        <ion-label>Резервная копия</ion-label>
+        <HintButton
+          text="Экспорт сохраняет все машины, параметры ТО, заправки и историю в файл. Импорт полностью заменит текущие данные содержимым файла"
+        />
+      </ion-list-header>
       <ion-item button :detail="false" @click="emit('export')">
         <SettingsIconBadge slot="start" :icon="downloadOutline" color="success" />
         <ion-label color="primary">Экспортировать данные</ion-label>
@@ -484,13 +496,14 @@ function handleFileSelected(event: Event) {
       />
     </ion-list>
     <p v-if="importError" class="hint error">{{ importError }}</p>
-    <p v-else class="hint">
-      Экспорт сохраняет все машины, параметры ТО, заправки и историю в файл. Импорт полностью
-      заменит текущие данные содержимым файла
-    </p>
 
     <ion-list inset>
-      <ion-list-header>Облако</ion-list-header>
+      <ion-list-header>
+        <ion-label>Облако</ion-label>
+        <HintButton
+          text="Выберите облако и войдите в свой аккаунт, чтобы хранить резервную копию онлайн и синхронизировать её между устройствами"
+        />
+      </ion-list-header>
       <ion-item lines="none">
         <ion-segment :value="cloudSync.state.activeProvider ?? undefined" @ionChange="handleSelectProvider">
           <ion-segment-button
@@ -541,13 +554,14 @@ function handleFileSelected(event: Event) {
       </p>
       <p v-else class="hint">Ещё не синхронизировалось</p>
     </template>
-    <p v-else class="hint">
-      Выберите облако и войдите в свой аккаунт, чтобы хранить резервную копию онлайн и синхронизировать её
-      между устройствами
-    </p>
 
     <ion-list inset>
-      <ion-list-header>Опасная зона</ion-list-header>
+      <ion-list-header>
+        <ion-label>Опасная зона</ion-label>
+        <HintButton
+          text="Удалит эту машину, её параметры ТО, заправки и историю без возможности восстановления. Другие ваши машины не затронет"
+        />
+      </ion-list-header>
       <ion-item button :detail="false" lines="none" @click="handleDelete">
         <SettingsIconBadge slot="start" :icon="trashOutline" color="danger" />
         <ion-label color="danger">{{ confirmingDelete ? 'Точно удалить эту машину?' : 'Удалить эту машину' }}</ion-label>
@@ -559,10 +573,6 @@ function handleFileSelected(event: Event) {
       @close="showAppLockSheet = false"
       @saved="handleAppLockSaved"
     />
-    <p class="hint">
-      Удалит эту машину, её параметры ТО, заправки и историю без возможности восстановления.
-      Другие ваши машины не затронет
-    </p>
 
     <PickerSheet
       v-if="activePicker === 'make'"
