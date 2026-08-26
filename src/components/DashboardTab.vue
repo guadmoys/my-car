@@ -13,6 +13,8 @@ import {
   IonList,
   IonListHeader,
   IonNote,
+  IonRefresher,
+  IonRefresherContent,
   IonRow,
   IonTitle,
   IonToolbar,
@@ -20,6 +22,7 @@ import {
 import { checkmarkCircleOutline, construct, ellipse, speedometerOutline, water } from 'ionicons/icons'
 import type { Car, MaintenanceStatus, TimelineEvent } from '../types'
 import SummaryCard from './SummaryCard.vue'
+import { handlePullToRefresh } from '../utils/pullToRefresh'
 
 const props = defineProps<{
   car: Car
@@ -133,6 +136,10 @@ function fmtCost(n: number): string {
   </ion-header>
 
   <ion-content :fullscreen="true">
+    <ion-refresher slot="fixed" @ionRefresh="handlePullToRefresh">
+      <ion-refresher-content></ion-refresher-content>
+    </ion-refresher>
+
     <ion-header collapse="condense">
       <ion-toolbar>
         <ion-title size="large">Обзор</ion-title>

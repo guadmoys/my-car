@@ -10,6 +10,8 @@ import {
   IonList,
   IonListHeader,
   IonNote,
+  IonRefresher,
+  IonRefresherContent,
   IonSegment,
   IonSegmentButton,
   IonTitle,
@@ -38,6 +40,7 @@ import {
 } from '../utils/dateFormat'
 import type { DateFormatId } from '../utils/dateFormat'
 import { checkForUpdate } from '../utils/appUpdate'
+import { handlePullToRefresh } from '../utils/pullToRefresh'
 import { useToast } from '../composables/useToast'
 import { haptic } from '../utils/haptics'
 import { useCloudSync } from '../composables/useCloudSync'
@@ -253,6 +256,10 @@ function handleFileSelected(event: Event) {
   </ion-header>
 
   <ion-content :fullscreen="true">
+    <ion-refresher slot="fixed" @ionRefresh="handlePullToRefresh">
+      <ion-refresher-content></ion-refresher-content>
+    </ion-refresher>
+
     <ion-header collapse="condense">
       <ion-toolbar>
         <ion-title size="large">Настройки</ion-title>

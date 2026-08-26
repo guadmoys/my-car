@@ -15,6 +15,8 @@ import {
   IonList,
   IonListHeader,
   IonNote,
+  IonRefresher,
+  IonRefresherContent,
   IonSegment,
   IonSegmentButton,
   IonText,
@@ -29,6 +31,7 @@ import ConsumptionChart from './ConsumptionChart.vue'
 import MonthlySpendChart from './MonthlySpendChart.vue'
 import StationPricesCard from './StationPricesCard.vue'
 import { formatDate } from '../utils/dateFormat'
+import { handlePullToRefresh } from '../utils/pullToRefresh'
 
 const props = defineProps<{
   fuelHistory: FuelConsumption[]
@@ -106,6 +109,10 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
   </ion-header>
 
   <ion-content :fullscreen="true">
+    <ion-refresher slot="fixed" @ionRefresh="handlePullToRefresh">
+      <ion-refresher-content></ion-refresher-content>
+    </ion-refresher>
+
     <ion-header collapse="condense">
       <ion-toolbar>
         <ion-title size="large">Расход</ion-title>

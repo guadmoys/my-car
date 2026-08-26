@@ -14,6 +14,8 @@ import {
   IonItem,
   IonLabel,
   IonList,
+  IonRefresher,
+  IonRefresherContent,
   IonSearchbar,
   IonSegment,
   IonSegmentButton,
@@ -26,6 +28,7 @@ import { add, caretDownOutline, caretUpOutline } from 'ionicons/icons'
 import type { MaintenanceItem, MaintenanceStatus } from '../types'
 import MaintenanceCard from './MaintenanceCard.vue'
 import { haptic } from '../utils/haptics'
+import { handlePullToRefresh } from '../utils/pullToRefresh'
 
 const props = defineProps<{
   sortedStatuses: MaintenanceStatus[]
@@ -144,6 +147,10 @@ function bulkSetEnabled(enabled: boolean) {
   </ion-header>
 
   <ion-content :fullscreen="true">
+    <ion-refresher slot="fixed" @ionRefresh="handlePullToRefresh">
+      <ion-refresher-content></ion-refresher-content>
+    </ion-refresher>
+
     <ion-list inset>
       <MaintenanceCard
         v-for="status in filteredStatuses"
