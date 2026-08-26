@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { IonAvatar, IonCard, IonCardContent, IonChip, IonIcon, IonItem, IonLabel } from '@ionic/vue'
+import { ellipse, water } from 'ionicons/icons'
 import type { Car } from '../types'
 
 defineProps<{
@@ -20,159 +22,58 @@ function fmt(n: number): string {
 </script>
 
 <template>
-  <div class="summary">
-    <button class="identity" @click="emit('switchCar')">
-      <span class="identity-avatar">{{ car.make.charAt(0).toUpperCase() }}</span>
-      <span>{{ car.year }} · {{ car.make }} {{ car.model }}</span>
-      <span class="identity-caret">›</span>
-    </button>
+  <ion-card color="primary" class="summary-card">
+    <ion-item color="primary" lines="none" button detail @click="emit('switchCar')">
+      <ion-avatar slot="start" class="car-avatar">{{ car.make.charAt(0).toUpperCase() }}</ion-avatar>
+      <ion-label>{{ car.year }} · {{ car.make }} {{ car.model }}</ion-label>
+    </ion-item>
 
-    <button class="mileage-row" @click="emit('editMileage')">
-      <div>
-        <div class="label">Текущий пробег</div>
-        <div class="value">{{ fmt(car.currentMileage) }} <span class="unit">км</span></div>
-      </div>
-      <div class="chevron">›</div>
-    </button>
+    <ion-item color="primary" lines="none" button detail @click="emit('editMileage')">
+      <ion-label>
+        <p>Текущий пробег</p>
+        <h1>{{ fmt(car.currentMileage) }} км</h1>
+      </ion-label>
+    </ion-item>
 
-    <div class="chips">
-      <div class="chip">
-        <span class="chip-dot ok" />
-        {{ okCount }} ок
+    <ion-card-content>
+      <div class="chips">
+        <ion-chip outline color="light">
+          <ion-icon :icon="ellipse" color="success" />
+          <ion-label>{{ okCount }} ок</ion-label>
+        </ion-chip>
+        <ion-chip v-if="soonCount > 0" outline color="light">
+          <ion-icon :icon="ellipse" color="warning" />
+          <ion-label>{{ soonCount }} скоро</ion-label>
+        </ion-chip>
+        <ion-chip v-if="dueCount > 0" outline color="light">
+          <ion-icon :icon="ellipse" color="danger" />
+          <ion-label>{{ dueCount }} просрочено</ion-label>
+        </ion-chip>
+        <ion-chip v-if="averageConsumption !== null" color="light">
+          <ion-icon :icon="water" />
+          <ion-label>{{ averageConsumption.toFixed(1) }} л/100км</ion-label>
+        </ion-chip>
       </div>
-      <div v-if="soonCount > 0" class="chip">
-        <span class="chip-dot soon" />
-        {{ soonCount }} скоро
-      </div>
-      <div v-if="dueCount > 0" class="chip">
-        <span class="chip-dot due" />
-        {{ dueCount }} просрочено
-      </div>
-      <div v-if="averageConsumption !== null" class="chip fuel">
-        ⛽ {{ averageConsumption.toFixed(1) }} л/100км
-      </div>
-    </div>
-  </div>
+    </ion-card-content>
+  </ion-card>
 </template>
 
 <style scoped>
-.summary {
-  background: linear-gradient(135deg, var(--blue), #0040dd);
-  color: #fff;
-  border-radius: var(--radius-lg);
-  padding: 18px 20px 20px;
-  box-shadow: var(--shadow);
-  margin-bottom: 28px;
+.summary-card {
+  margin: 16px;
 }
 
-.identity {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  opacity: 0.85;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  margin-bottom: 10px;
-}
-
-.identity:active {
-  opacity: 0.6;
-}
-
-.identity-caret {
-  font-size: 13px;
-  transform: rotate(90deg);
-}
-
-.identity-avatar {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.28);
-}
-
-.mileage-row {
-  width: 100%;
+.car-avatar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  text-align: left;
-}
-
-.mileage-row:active {
-  opacity: 0.8;
-}
-
-.label {
-  font-size: 13px;
-  opacity: 0.85;
-  font-weight: 500;
-}
-
-.value {
-  font-size: 34px;
+  justify-content: center;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-top: 2px;
-}
-
-.unit {
-  font-size: 17px;
-  font-weight: 500;
-  opacity: 0.85;
-}
-
-.chevron {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 20px;
-  font-weight: 500;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
-}
-
-.chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.18);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.chip.fuel {
-  background: rgba(255, 255, 255, 0.28);
-}
-
-.chip-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.chip-dot.ok {
-  background: var(--green);
-}
-
-.chip-dot.soon {
-  background: var(--orange);
-}
-
-.chip-dot.due {
-  background: var(--red);
 }
 </style>

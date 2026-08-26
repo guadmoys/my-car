@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { IonButton, IonButtons, IonContent, IonHeader, IonInput, IonItem, IonList, IonModal, IonNote, IonTitle, IonToolbar } from '@ionic/vue'
 
 const props = defineProps<{
   currentMileage: number
@@ -24,140 +25,42 @@ function handleSave() {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
-    <div class="sheet">
-      <div class="handle" />
-      <div class="header">
-        <button class="cancel" @click="emit('close')">Отмена</button>
-        <h2>Пробег</h2>
-        <button class="save" :class="{ disabled: !isValid }" @click="handleSave">
-          Готово
-        </button>
-      </div>
-      <div class="form">
-        <div class="group">
-          <div class="field">
-            <label>Текущий пробег, км</label>
-            <input v-model="value" type="text" inputmode="numeric" autofocus />
-          </div>
-        </div>
-        <p v-if="!isValid" class="hint">
-          Новый пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
-        </p>
-      </div>
-    </div>
-  </div>
+  <ion-modal :is-open="true" :breakpoints="[0, 1]" :initial-breakpoint="1" @did-dismiss="emit('close')">
+    <ion-header>
+      <ion-toolbar>
+        <ion-buttons slot="start">
+          <ion-button @click="emit('close')">Отмена</ion-button>
+        </ion-buttons>
+        <ion-title>Пробег</ion-title>
+        <ion-buttons slot="end">
+          <ion-button :strong="true" :disabled="!isValid" @click="handleSave">Готово</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content>
+      <ion-list inset>
+        <ion-item lines="none">
+          <ion-input
+            v-model="value"
+            label="Текущий пробег, км"
+            label-placement="stacked"
+            type="text"
+            inputmode="numeric"
+            autofocus
+          />
+        </ion-item>
+      </ion-list>
+      <ion-note v-if="!isValid" color="medium" class="hint">
+        Новый пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
+      </ion-note>
+    </ion-content>
+  </ion-modal>
 </template>
 
 <style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: flex-end;
-  z-index: 100;
-  animation: fade-in 0.15s ease;
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.sheet {
-  width: 100%;
-  background: var(--bg-grouped);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 8px 0 calc(24px + var(--safe-bottom));
-  animation: slide-up 0.25s var(--motion-spring);
-}
-
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-.handle {
-  width: 36px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--text-tertiary);
-  margin: 6px auto 4px;
-  opacity: 0.5;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px 4px;
-}
-
-.header h2 {
-  font-size: 17px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.cancel {
-  font-size: 17px;
-  color: var(--blue);
-}
-
-.save {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--blue);
-}
-
-.save.disabled {
-  opacity: 0.4;
-}
-
-.form {
-  padding: 12px 16px 0;
-}
-
-.group {
-  background: var(--bg-elevated);
-  border-radius: var(--radius-md);
-  padding: 0 14px;
-  border: 1px solid var(--card-border);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 0;
-}
-
-.field label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.field input {
-  border: none;
-  background: transparent;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--text);
-  outline: none;
-}
-
 .hint {
+  display: block;
   font-size: 13px;
-  color: var(--text-secondary);
-  margin: 10px 4px 0;
+  margin: 8px 32px 0;
 }
 </style>

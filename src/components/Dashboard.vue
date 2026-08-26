@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { IonPage } from '@ionic/vue'
 import { useCarStore } from '../composables/useCarStore'
 import { checkAndNotify, checkAndNotifyLowFuel, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
 import { haptic } from '../utils/haptics'
@@ -386,10 +387,8 @@ function fmtDate(ts: number): string {
 </script>
 
 <template>
-  <div v-if="car" class="shell">
-    <Transition name="tab-fade" mode="out-in">
-    <div class="tabs" :key="activeTab">
-      <DashboardTab
+  <ion-page v-if="car">
+    <DashboardTab
         v-if="activeTab === 'dashboard'"
         :car="car"
         :ok-count="okCount"
@@ -460,15 +459,8 @@ function fmtDate(ts: number): string {
         @share-passport="showPassportSheet = true"
         @notifications-enabled="handleNotificationsEnabled"
       />
-    </div>
-    </Transition>
 
-    <TabBar
-      :active-tab="activeTab"
-      :due-badge="dueCount"
-      :car-initial="car.make.charAt(0).toUpperCase()"
-      @change="activeTab = $event"
-    />
+    <TabBar :active-tab="activeTab" :due-badge="dueCount" @change="activeTab = $event" />
 
     <EditItemModal
       v-if="editingItem !== null"
@@ -534,26 +526,5 @@ function fmtDate(ts: number): string {
       :events="timelineEvents"
       @close="showEventsSheet = false"
     />
-  </div>
+  </ion-page>
 </template>
-
-<style scoped>
-.shell {
-  min-height: 100dvh;
-}
-
-.tab-fade-enter-active,
-.tab-fade-leave-active {
-  transition: opacity 0.16s ease, transform 0.16s ease;
-}
-
-.tab-fade-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.tab-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-</style>

@@ -1,9 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import {
+  IonButton,
+  IonButtons,
+  IonCheckbox,
+  IonChip,
+  IonIcon,
+  IonItem,
+  IonItemOption,
+  IonItemOptions,
+  IonItemSliding,
+  IonLabel,
+  IonNote,
+  IonProgressBar,
+  IonToggle,
+} from '@ionic/vue'
+import { calendarOutline, cartOutline, checkmark, ellipse, trash } from 'ionicons/icons'
 import type { MaintenanceStatus } from '../types'
-import SwipeRow from './SwipeRow.vue'
-import PartQuickLinks from './PartQuickLinks.vue'
-import ToggleSwitch from './ToggleSwitch.vue'
+import { PART_LINK_SITES, partSearchQuery } from '../utils/partLinks'
 
 const props = defineProps<{
   status: MaintenanceStatus
@@ -19,16 +33,7 @@ const emit = defineEmits<{
   select: [id: string]
 }>()
 
-const stateColor = computed(() => {
-  switch (props.status.state) {
-    case 'due':
-      return 'var(--red)'
-    case 'soon':
-      return 'var(--orange)'
-    default:
-      return 'var(--green)'
-  }
-})
+const stateColor = computed(() => props.status.state)
 
 const rangeLabel = computed(() => {
   const { item } = props.status
@@ -73,233 +78,100 @@ function fmt(n: number): string {
 </script>
 
 <template>
-  <div class="item" :class="{ dimmed: !status.item.enabled && !selectable }">
-    <button v-if="selectable" class="tap-target select-target" @click="emit('select', status.item.id)">
-      <div class="row">
-        <div class="checkbox" :class="{ checked: selected }">
-          <svg v-if="selected" viewBox="0 0 24 24" width="13" height="13" fill="none">
-            <path d="M5 13l4.5 4.5L19 8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </div>
-        <div class="dot" :style="{ background: stateColor }" />
-        <div class="info">
-          <div class="name">{{ status.item.name }}</div>
-          <div class="meta">
-            <span>{{ statusLabel }}</span>
-            <span class="sep">·</span>
-            <span>каждые {{ rangeLabel }}</span>
-          </div>
-        </div>
-      </div>
-    </button>
-    <SwipeRow
-      v-else
-      :left-action="{ label: '✓ Готово', colorVar: 'var(--green)', onTrigger: () => emit('markServiced', status.item.id) }"
-      :right-action="{ label: '🗑 Удалить', colorVar: 'var(--red)', onTrigger: () => emit('delete', status.item.id) }"
-    >
-      <button class="tap-target" @click="emit('edit', status.item.id)">
-        <div class="row">
-          <div class="dot" :style="{ background: stateColor }" />
-          <div class="info">
-            <div class="name">{{ status.item.name }}</div>
-            <div class="meta">
-              <span>{{ statusLabel }}</span>
-              <span class="sep">·</span>
-              <span>каждые {{ rangeLabel }}</span>
-            </div>
-            <div v-if="dateLabel" class="meta date-meta">
-              <span>📅 {{ dateLabel }}</span>
-            </div>
-          </div>
-          <div class="chevron">›</div>
-        </div>
-        <div class="track">
-          <div
-            class="fill"
-            :style="{ width: `${status.progress * 100}%`, background: stateColor }"
-          />
-        </div>
-      </button>
-    </SwipeRow>
-    <div v-if="!selectable" class="actions">
-      <button class="done" @click="emit('markServiced', status.item.id)">
-        Выполнено
-      </button>
-      <ToggleSwitch
-        :checked="status.item.enabled"
-        :aria-label="`Учитывать «${status.item.name}»`"
-        @update:checked="(v) => emit('toggle', status.item.id, v)"
-      />
-    </div>
+  <ion-item v-if="selectable" button :detail="false" @click="emit('select', status.item.id)">
+    <ion-checkbox slot="start" :checked="selected" @ion-change="emit('select', status.item.id)" />
+    <ion-icon slot="start" :icon="ellipse" :color="stateColor" />
+    <ion-label>
+      <h2>{{ status.item.name }}</h2>
+      <p>{{ statusLabel }} · каждые {{ rangeLabel }}</p>
+    </ion-label>
+  </ion-item>
 
-    <div v-if="showBuyHint && !selectable" class="buy-hint" :style="{ borderColor: stateColor }">
-      <div class="buy-hint-title" :style="{ color: stateColor }">
-        🛒 Пора купить {{ status.item.parts.length > 1 ? 'детали' : 'деталь' }}
-      </div>
-      <div v-for="part in status.item.parts" :key="part.id" class="part-row">
-        <div class="part-row-top">
-          <div class="part-info">
-            <div class="part-name">{{ part.name }}</div>
-            <div class="part-meta">
-              {{ [part.articleNumber, part.platform].filter(Boolean).join(' · ') || '—' }}
+  <template v-else>
+    <ion-item-sliding>
+      <ion-item-options side="start">
+        <ion-item-option color="success" @click="emit('markServiced', status.item.id)">
+          <ion-icon slot="icon-only" :icon="checkmark" />
+        </ion-item-option>
+      </ion-item-options>
+
+      <ion-item button :detail="false" :class="{ dimmed: !status.item.enabled }" @click="emit('edit', status.item.id)">
+        <ion-icon slot="start" :icon="ellipse" :color="stateColor" />
+        <ion-label class="ion-text-wrap">
+          <h2>{{ status.item.name }}</h2>
+          <p>{{ statusLabel }} · каждые {{ rangeLabel }}</p>
+          <p v-if="dateLabel">
+            <ion-icon :icon="calendarOutline" size="small" />
+            {{ dateLabel }}
+          </p>
+          <ion-progress-bar :value="status.progress" :color="stateColor" />
+        </ion-label>
+        <ion-buttons slot="end">
+          <ion-button size="small" fill="clear" @click.stop="emit('markServiced', status.item.id)">
+            Готово
+          </ion-button>
+        </ion-buttons>
+        <ion-toggle
+          slot="end"
+          :checked="status.item.enabled"
+          :aria-label="`Учитывать «${status.item.name}»`"
+          @click.stop
+          @ion-change="(e) => emit('toggle', status.item.id, e.detail.checked)"
+        />
+      </ion-item>
+
+      <ion-item-options side="end">
+        <ion-item-option color="danger" @click="emit('delete', status.item.id)">
+          <ion-icon slot="icon-only" :icon="trash" />
+        </ion-item-option>
+      </ion-item-options>
+    </ion-item-sliding>
+
+    <ion-item v-if="showBuyHint" lines="none" class="buy-hint">
+      <ion-label class="ion-text-wrap">
+        <p>
+          <ion-icon :icon="cartOutline" size="small" />
+          Пора купить {{ status.item.parts.length > 1 ? 'детали' : 'деталь' }}
+        </p>
+        <div v-for="part in status.item.parts" :key="part.id" class="part-row">
+          <div class="part-row-top">
+            <div class="part-info">
+              <div class="part-name">{{ part.name }}</div>
+              <ion-note>{{ [part.articleNumber, part.platform].filter(Boolean).join(' · ') || '—' }}</ion-note>
             </div>
+            <ion-button v-if="part.url" :href="part.url" target="_blank" rel="noopener noreferrer" size="small" fill="outline">
+              Купить
+            </ion-button>
           </div>
-          <a
-            v-if="part.url"
-            :href="part.url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="part-buy"
-            @click.stop
-          >
-            Купить ›
-          </a>
+          <div v-if="partSearchQuery(part)" class="quick-links">
+            <ion-chip
+              v-for="site in PART_LINK_SITES"
+              :key="site.key"
+              :href="site.url(partSearchQuery(part)!)"
+              target="_blank"
+              rel="noopener noreferrer"
+              outline
+            >
+              {{ site.label }}
+            </ion-chip>
+          </div>
         </div>
-        <PartQuickLinks :part="part" />
-      </div>
-    </div>
-  </div>
+      </ion-label>
+    </ion-item>
+  </template>
 </template>
 
 <style scoped>
-.item {
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--separator);
-  transition: opacity 0.2s;
+.dimmed {
+  opacity: 0.5;
 }
 
-.item:last-child {
-  border-bottom: none;
-}
-
-.item.dimmed {
-  opacity: 0.45;
-}
-
-.tap-target {
-  width: 100%;
-  display: block;
-  text-align: left;
-  padding: 0;
-  background: var(--bg-elevated);
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.select-target {
-  background: var(--bg-elevated);
-}
-
-.checkbox {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2px solid var(--separator);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--motion-fast), border-color var(--motion-fast);
-}
-
-.checkbox.checked {
-  background: var(--blue);
-  border-color: var(--blue);
-}
-
-.dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.info {
-  flex: 1;
-  min-width: 0;
-}
-
-.name {
-  font-size: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.meta {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-top: 1px;
-}
-
-.sep {
-  margin: 0 4px;
-}
-
-.chevron {
-  color: var(--text-tertiary);
-  font-size: 18px;
-  font-weight: 500;
-}
-
-.track {
-  height: 5px;
-  border-radius: 3px;
-  background: var(--fill-secondary);
-  margin-top: 10px;
-  overflow: hidden;
-}
-
-.fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 10px;
-}
-
-.done {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 12%, transparent);
-  padding: 6px 12px;
-  border-radius: var(--radius-pill);
-}
-
-.done:active {
-  opacity: 0.6;
-}
-
-.buy-hint {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid;
-  background: var(--fill-secondary);
-}
-
-.buy-hint-title {
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 6px;
+ion-progress-bar {
+  margin-top: 6px;
 }
 
 .part-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 5px 0;
+  margin-top: 8px;
 }
 
 .part-row-top {
@@ -309,38 +181,15 @@ function fmt(n: number): string {
   gap: 8px;
 }
 
-.part-info {
-  min-width: 0;
-}
-
 .part-name {
   font-size: 14px;
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.part-meta {
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.part-buy {
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 12%, transparent);
-  padding: 5px 10px;
-  border-radius: var(--radius-pill);
-  text-decoration: none;
-}
-
-.part-buy:active {
-  opacity: 0.6;
+.quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
 }
 </style>

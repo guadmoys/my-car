@@ -1,7 +1,7 @@
 {
   "name": "my-car",
   "private": true,
-  "version": "1.10.1",
+  "version": "1.11.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,9 @@
     "typecheck": "vue-tsc -b --noEmit"
   },
   "dependencies": {
+    "@ionic/vue": "^8.8.19",
     "idb": "^8.0.0",
+    "ionicons": "^7.4.0",
     "vue": "^3.4.38"
   },
   "devDependencies": {

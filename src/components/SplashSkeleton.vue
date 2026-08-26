@@ -1,13 +1,17 @@
+<script setup lang="ts">
+import { IonSkeletonText } from '@ionic/vue'
+</script>
+
 <template>
   <div class="skeleton-page">
-    <div class="sk sk-title" />
-    <div class="sk sk-hero" />
+    <ion-skeleton-text :animated="true" class="sk-title" />
+    <ion-skeleton-text :animated="true" class="sk-hero" />
     <div class="quick-row">
-      <div class="sk sk-quick" />
-      <div class="sk sk-quick" />
+      <ion-skeleton-text :animated="true" class="sk-quick" />
+      <ion-skeleton-text :animated="true" class="sk-quick" />
     </div>
-    <div class="sk sk-label" />
-    <div class="sk sk-card" />
+    <ion-skeleton-text :animated="true" class="sk-label" />
+    <ion-skeleton-text :animated="true" class="sk-card" />
   </div>
 </template>
 
@@ -16,19 +20,7 @@
   min-height: 100dvh;
   max-width: 560px;
   margin: 0 auto;
-  padding: calc(24px + var(--safe-top)) 16px;
-}
-
-.sk {
-  border-radius: var(--radius-lg);
-  background: linear-gradient(
-    100deg,
-    var(--fill-secondary) 40%,
-    color-mix(in srgb, var(--fill-secondary) 40%, transparent) 55%,
-    var(--fill-secondary) 70%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
+  padding: calc(24px + var(--ion-safe-area-top, 0px)) 16px;
 }
 
 .sk-title {
@@ -40,6 +32,7 @@
 
 .sk-hero {
   height: 150px;
+  border-radius: 16px;
   margin-bottom: 28px;
 }
 
@@ -52,6 +45,7 @@
 .sk-quick {
   flex: 1;
   height: 76px;
+  border-radius: 16px;
 }
 
 .sk-label {
@@ -63,14 +57,6 @@
 
 .sk-card {
   height: 130px;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+  border-radius: 16px;
 }
 </style>

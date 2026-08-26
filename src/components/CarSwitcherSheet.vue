@@ -1,5 +1,20 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import {
+  IonAvatar,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonModal,
+  IonTitle,
+  IonToolbar,
+} from '@ionic/vue'
+import { add, checkmark } from 'ionicons/icons'
 import type { Car } from '../types'
 
 const props = defineProps<{
@@ -40,224 +55,50 @@ function fmt(n: number): string {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
-    <div class="sheet">
-      <div class="handle" />
-      <div class="header">
-        <button class="cancel" @click="emit('close')">Закрыть</button>
-        <h2>Мои машины</h2>
-        <span class="spacer" />
-      </div>
+  <ion-modal :is-open="true" @did-dismiss="emit('close')">
+    <ion-header>
+      <ion-toolbar>
+        <ion-buttons slot="start">
+          <ion-button @click="emit('close')">Закрыть</ion-button>
+        </ion-buttons>
+        <ion-title>Мои машины</ion-title>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content>
+      <ion-list inset>
+        <ion-item v-for="c in cars" :key="c.id" button :detail="false" @click="handleSelect(c.id)">
+          <ion-icon v-if="c.id === activeCarId" slot="start" :icon="checkmark" color="primary" />
+          <ion-avatar slot="start" class="car-avatar">{{ c.make.charAt(0).toUpperCase() }}</ion-avatar>
+          <ion-label>
+            <h2>{{ c.year }} · {{ c.make }} {{ c.model }}</h2>
+            <p>{{ fmt(c.currentMileage) }} км</p>
+          </ion-label>
+          <ion-button
+            slot="end"
+            fill="clear"
+            :color="confirmingDeleteId === c.id ? 'danger' : 'medium'"
+            @click.stop="handleDeleteClick(c.id)"
+          >
+            {{ confirmingDeleteId === c.id ? 'Точно?' : 'Удалить' }}
+          </ion-button>
+        </ion-item>
+      </ion-list>
 
-      <div class="form">
-        <div class="card">
-          <div v-for="c in cars" :key="c.id" class="car-row" :class="{ active: c.id === activeCarId }">
-            <button class="car-main" @click="handleSelect(c.id)">
-              <span class="check" :class="{ visible: c.id === activeCarId }">✓</span>
-              <span class="car-avatar">{{ c.make.charAt(0).toUpperCase() }}</span>
-              <span class="car-info">
-                <span class="car-name">{{ c.year }} · {{ c.make }} {{ c.model }}</span>
-                <span class="car-mileage">{{ fmt(c.currentMileage) }} км</span>
-              </span>
-            </button>
-            <button
-              class="delete-btn"
-              :class="{ confirming: confirmingDeleteId === c.id }"
-              @click="handleDeleteClick(c.id)"
-            >
-              {{ confirmingDeleteId === c.id ? 'Точно?' : 'Удалить' }}
-            </button>
-          </div>
-        </div>
-
-        <button class="add-car" @click="emit('addCar')">+ Добавить машину</button>
-      </div>
-    </div>
-  </div>
+      <ion-button expand="block" fill="outline" class="ion-margin" @click="emit('addCar')">
+        <ion-icon slot="start" :icon="add" />
+        Добавить машину
+      </ion-button>
+    </ion-content>
+  </ion-modal>
 </template>
 
 <style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: flex-end;
-  z-index: 100;
-  animation: fade-in 0.15s ease;
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.sheet {
-  width: 100%;
-  max-height: 88dvh;
-  overflow-y: auto;
-  background: var(--bg-grouped);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 8px 0 calc(24px + var(--safe-bottom));
-  animation: slide-up 0.25s var(--motion-spring);
-}
-
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-.handle {
-  width: 36px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--text-tertiary);
-  margin: 6px auto 4px;
-  opacity: 0.5;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px 4px;
-}
-
-.header h2 {
-  font-size: 17px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.cancel {
-  font-size: 17px;
-  color: var(--blue);
-}
-
-.spacer {
-  width: 56px;
-}
-
-.form {
-  padding: 12px 16px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.card {
-  background: var(--bg-elevated);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--card-border);
-  overflow: hidden;
-}
-
-.car-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px 4px 4px;
-  border-bottom: 1px solid var(--separator);
-}
-
-.car-row:last-child {
-  border-bottom: none;
-}
-
-.car-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 6px;
-  text-align: left;
-}
-
-.check {
-  width: 20px;
-  color: var(--blue);
-  font-weight: 700;
-  font-size: 15px;
-  opacity: 0;
-  flex-shrink: 0;
-}
-
-.check.visible {
-  opacity: 1;
-}
-
 .car-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, var(--blue), #0040dd);
-}
-
-.car-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.car-name {
-  font-size: 16px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.car-mileage {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-top: 1px;
-}
-
-.delete-btn {
-  flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--red);
-  padding: 8px 10px;
-  border-radius: 8px;
-}
-
-.delete-btn.confirming {
-  background: color-mix(in srgb, var(--red) 12%, transparent);
-}
-
-.delete-btn:active {
-  opacity: 0.6;
-}
-
-.add-car {
-  width: 100%;
-  padding: 14px;
-  border-radius: var(--radius-pill);
-  background: var(--fill-secondary);
-  color: var(--blue);
-  font-size: 16px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.add-car:active {
-  opacity: 0.6;
+  background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-primary-shade));
 }
 </style>

@@ -1,9 +1,26 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import {
+  IonAvatar,
+  IonContent,
+  IonHeader,
+  IonInput,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonListHeader,
+  IonNote,
+  IonSegment,
+  IonSegmentButton,
+  IonTitle,
+  IonToggle,
+  IonToolbar,
+  type SegmentCustomEvent,
+  type ToggleCustomEvent,
+} from '@ionic/vue'
 import type { Car } from '../types'
 import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
 import PickerSheet from './PickerSheet.vue'
-import ToggleSwitch from './ToggleSwitch.vue'
 import {
   getNotificationPermission,
   isNotificationApiSupported,
@@ -89,7 +106,8 @@ const dateFormat = ref<DateFormatId>(getDateFormat())
 const showYear = ref(isShowYearEnabled())
 const datePreview = computed(() => formatDate(Date.now()))
 
-function selectDateFormat(value: DateFormatId) {
+function selectDateFormat(event: SegmentCustomEvent) {
+  const value = event.detail.value as DateFormatId
   dateFormat.value = value
   setDateFormat(value)
 }
@@ -187,7 +205,8 @@ function formatSyncDate(ts: number): string {
   return new Date(ts).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-function handleSelectProvider(provider: CloudProvider) {
+function handleSelectProvider(event: SegmentCustomEvent) {
+  const provider = event.detail.value as CloudProvider
   if (!cloudSync.isProviderConfigured(provider) || cloudSync.state.activeProvider === provider) return
   void cloudSync.connect(provider)
 }
@@ -227,201 +246,199 @@ function handleFileSelected(event: Event) {
 </script>
 
 <template>
-  <div class="tab-page">
-    <header class="topbar">
-      <h1>Настройки</h1>
-    </header>
+  <ion-header :translucent="true">
+    <ion-toolbar>
+      <ion-title>Настройки</ion-title>
+    </ion-toolbar>
+  </ion-header>
 
-    <div class="form">
-      <div class="car-zone">
-        <div class="section-title">Автомобиль</div>
-        <div class="group">
-          <button class="field picker-field" @click="activePicker = 'make'">
-            <label>Марка</label>
-            <span class="picker-value" :class="{ placeholder: !make }">{{ make || 'Выбрать' }}</span>
-          </button>
-          <div class="divider" />
-          <button
-            class="field picker-field"
-            :class="{ disabled: !make }"
-            @click="make && (activePicker = 'model')"
-          >
-            <label>Модель</label>
-            <span class="picker-value" :class="{ placeholder: !model }">
-              {{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}
-            </span>
-          </button>
-          <div class="divider" />
-          <div class="field">
-            <label>Год выпуска</label>
-            <input v-model="year" type="text" inputmode="numeric" @blur="commitCarInfo" />
-          </div>
-          <div class="divider" />
-          <div class="field">
-            <label>Объём бака, л (необязательно)</label>
-            <input
-              v-model="tankCapacity"
-              type="text"
-              inputmode="decimal"
-              placeholder="—"
-              @blur="commitCarInfo"
-            />
-          </div>
-        </div>
-        <p class="hint">
-          Зная объём бака, можно точно считать расход и по неполным заправкам — если отмечать
-          остаток в баке. Не знаете точное значение — посмотрите в ПТС, руководстве по
-          эксплуатации или на крышке бензобака. Ориентировочно: седаны и хэтчбеки — 40–55 л,
-          кроссоверы — 55–65 л, крупные внедорожники — 70–95 л.
-        </p>
-        <button class="backup-btn" @click="emit('openCarSwitcher')">
-          Мои машины ({{ carCount }})
-        </button>
-        <button class="backup-btn" @click="emit('sharePassport')">
-          Поделиться паспортом машины
-        </button>
-      </div>
+  <ion-content :fullscreen="true">
+    <ion-header collapse="condense">
+      <ion-toolbar>
+        <ion-title size="large">Настройки</ion-title>
+      </ion-toolbar>
+    </ion-header>
 
-      <div v-if="notificationsSupported" class="notifications-zone">
-        <div class="section-title">Уведомления</div>
-        <div class="group">
-          <div class="field notif-row">
-            <span>
-              <span class="notif-label">Уведомлять о ТО</span>
-              <span class="hint notif-hint">Когда параметр становится «скоро» или «просрочено»</span>
-            </span>
-            <ToggleSwitch
-              :checked="notificationsOn"
-              aria-label="Уведомлять о ТО"
-              @update:checked="handleToggleNotifications"
-            />
-          </div>
-        </div>
-        <p v-if="notificationsBlocked" class="hint error">
-          Уведомления заблокированы в браузере — включите их в настройках сайта, чтобы приложение
-          могло их показывать
-        </p>
-      </div>
-
-      <div class="date-format-zone">
-        <div class="section-title">Формат даты</div>
-        <div class="group">
-          <div class="format-chips">
-            <button
-              v-for="opt in DATE_FORMAT_OPTIONS"
-              :key="opt.value"
-              class="format-chip"
-              :class="{ active: dateFormat === opt.value }"
-              @click="selectDateFormat(opt.value)"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
-          <div class="divider" />
-          <div class="field notif-row">
-            <span class="notif-label">Показывать год</span>
-            <ToggleSwitch :checked="showYear" aria-label="Показывать год" @update:checked="handleToggleShowYear" />
-          </div>
-        </div>
-        <p class="hint">
-          «Авто» использует формат вашего региона. Пример: {{ datePreview }}. Применяется к датам
-          заправок
-        </p>
-      </div>
-
-      <div class="update-zone">
-        <div class="section-title">Обновления</div>
-        <button class="backup-btn" :disabled="checkingUpdate" @click="handleCheckForUpdate">
-          {{ checkingUpdate ? 'Проверяем…' : 'Проверить обновления' }}
-        </button>
-        <p class="hint">
-          Приложение само проверяет обновления в фоне. Нажмите, чтобы проверить прямо сейчас — если
-          вышла новая версия, скрипты скачаются заново и приложение перезапустится
-        </p>
-        <p class="hint version-hint">Версия {{ appVersion }}</p>
-      </div>
-
-      <div class="backup-zone">
-        <div class="section-title">Резервная копия</div>
-        <button class="backup-btn" @click="emit('export')">Экспортировать данные</button>
-        <button class="backup-btn" @click="triggerImport">Импортировать резервную копию</button>
-        <input
-          ref="fileInput"
-          type="file"
-          accept="application/json"
-          class="sr-only"
-          @change="handleFileSelected"
+    <ion-list inset>
+      <ion-list-header>Автомобиль</ion-list-header>
+      <ion-item button detail @click="activePicker = 'make'">
+        <ion-label>Марка</ion-label>
+        <ion-note slot="end">{{ make || 'Выбрать' }}</ion-note>
+      </ion-item>
+      <ion-item button detail :disabled="!make" @click="activePicker = 'model'">
+        <ion-label>Модель</ion-label>
+        <ion-note slot="end">{{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}</ion-note>
+      </ion-item>
+      <ion-item>
+        <ion-input
+          v-model="year"
+          label="Год выпуска"
+          label-placement="stacked"
+          inputmode="numeric"
+          @ion-blur="commitCarInfo"
         />
-        <p v-if="importError" class="hint error">{{ importError }}</p>
-        <p v-else class="hint">
-          Экспорт сохраняет все машины, параметры ТО, заправки и историю в файл. Импорт полностью
-          заменит текущие данные содержимым файла
-        </p>
-      </div>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-input
+          v-model="tankCapacity"
+          label="Объём бака, л (необязательно)"
+          label-placement="stacked"
+          inputmode="decimal"
+          placeholder="—"
+          @ion-blur="commitCarInfo"
+        />
+      </ion-item>
+    </ion-list>
+    <p class="hint">
+      Зная объём бака, можно точно считать расход и по неполным заправкам — если отмечать
+      остаток в баке. Не знаете точное значение — посмотрите в ПТС, руководстве по
+      эксплуатации или на крышке бензобака. Ориентировочно: седаны и хэтчбеки — 40–55 л,
+      кроссоверы — 55–65 л, крупные внедорожники — 70–95 л.
+    </p>
 
-      <div class="cloud-zone">
-        <div class="section-title">Облако</div>
-        <div class="format-chips">
-          <button
+    <ion-list inset>
+      <ion-item button detail @click="emit('openCarSwitcher')">
+        <ion-label>Мои машины ({{ carCount }})</ion-label>
+      </ion-item>
+      <ion-item button detail lines="none" @click="emit('sharePassport')">
+        <ion-label>Поделиться паспортом машины</ion-label>
+      </ion-item>
+    </ion-list>
+
+    <ion-list v-if="notificationsSupported" inset>
+      <ion-list-header>Уведомления</ion-list-header>
+      <ion-item lines="none">
+        <ion-toggle
+          justify="space-between"
+          :checked="notificationsOn"
+          @ion-change="(e: ToggleCustomEvent) => handleToggleNotifications(e.detail.checked)"
+        >
+          Уведомлять о ТО
+        </ion-toggle>
+      </ion-item>
+    </ion-list>
+    <p v-if="notificationsSupported" class="hint">
+      Когда параметр становится «скоро» или «просрочено»
+    </p>
+    <p v-if="notificationsBlocked" class="hint error">
+      Уведомления заблокированы в браузере — включите их в настройках сайта, чтобы приложение
+      могло их показывать
+    </p>
+
+    <ion-list inset>
+      <ion-list-header>Формат даты</ion-list-header>
+      <ion-item>
+        <ion-segment :value="dateFormat" @ionChange="selectDateFormat">
+          <ion-segment-button v-for="opt in DATE_FORMAT_OPTIONS" :key="opt.value" :value="opt.value">
+            <ion-label>{{ opt.label }}</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-toggle justify="space-between" :checked="showYear" @ion-change="(e: ToggleCustomEvent) => handleToggleShowYear(e.detail.checked)">
+          Показывать год
+        </ion-toggle>
+      </ion-item>
+    </ion-list>
+    <p class="hint">«Авто» использует формат вашего региона. Пример: {{ datePreview }}. Применяется к датам заправок</p>
+
+    <ion-list inset>
+      <ion-list-header>Обновления</ion-list-header>
+      <ion-item button :detail="false" lines="none" :disabled="checkingUpdate" @click="handleCheckForUpdate">
+        <ion-label color="primary">{{ checkingUpdate ? 'Проверяем…' : 'Проверить обновления' }}</ion-label>
+      </ion-item>
+    </ion-list>
+    <p class="hint">
+      Приложение само проверяет обновления в фоне. Нажмите, чтобы проверить прямо сейчас — если
+      вышла новая версия, скрипты скачаются заново и приложение перезапустится
+    </p>
+    <p class="hint">Версия {{ appVersion }}</p>
+
+    <ion-list inset>
+      <ion-list-header>Резервная копия</ion-list-header>
+      <ion-item button :detail="false" @click="emit('export')">
+        <ion-label color="primary">Экспортировать данные</ion-label>
+      </ion-item>
+      <ion-item button :detail="false" lines="none" @click="triggerImport">
+        <ion-label color="primary">Импортировать резервную копию</ion-label>
+      </ion-item>
+      <input
+        ref="fileInput"
+        type="file"
+        accept="application/json"
+        class="sr-only"
+        @change="handleFileSelected"
+      />
+    </ion-list>
+    <p v-if="importError" class="hint error">{{ importError }}</p>
+    <p v-else class="hint">
+      Экспорт сохраняет все машины, параметры ТО, заправки и историю в файл. Импорт полностью
+      заменит текущие данные содержимым файла
+    </p>
+
+    <ion-list inset>
+      <ion-list-header>Облако</ion-list-header>
+      <ion-item lines="none">
+        <ion-segment :value="cloudSync.state.activeProvider ?? undefined" @ionChange="handleSelectProvider">
+          <ion-segment-button
             v-for="p in cloudProviders"
             :key="p.id"
-            class="format-chip"
-            :class="{ active: cloudSync.state.activeProvider === p.id }"
+            :value="p.id"
             :disabled="!cloudSync.isProviderConfigured(p.id)"
-            @click="handleSelectProvider(p.id)"
           >
-            {{ p.label }}
-          </button>
-        </div>
+            <ion-label>{{ p.label }}</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+      </ion-item>
+    </ion-list>
 
-        <template v-if="activeAccount">
-          <div class="group cloud-account-row">
-            <span class="cloud-avatar">{{ accountInitial }}</span>
-            <span class="cloud-account-info">
-              <span class="cloud-account-name">{{ activeAccount.name }}</span>
-              <span v-if="activeAccount.email" class="cloud-account-email">{{ activeAccount.email }}</span>
-            </span>
-          </div>
-          <div class="group">
-            <div class="field notif-row">
-              <span class="notif-label">Автосинхронизация</span>
-              <ToggleSwitch
-                :checked="cloudSync.state.autoSync"
-                aria-label="Автосинхронизация"
-                @update:checked="cloudSync.setAutoSync"
-              />
-            </div>
-          </div>
-          <button class="backup-btn" :disabled="cloudSync.state.syncing" @click="handleSyncNow">
-            {{ cloudSync.state.syncing ? 'Синхронизация…' : 'Синхронизировать сейчас' }}
-          </button>
-          <button class="backup-btn" :disabled="cloudSync.state.syncing" @click="handleRestoreFromCloud">
-            Восстановить из облака
-          </button>
-          <button class="reset" @click="handleDisconnectCloud">Отключить облако</button>
-          <p v-if="cloudSync.state.error" class="hint error">{{ cloudSync.state.error }}</p>
-          <p v-else-if="activeLastSync" class="hint">
-            Последняя синхронизация: {{ formatSyncDate(activeLastSync.savedAt) }} · версия {{ activeLastSync.appVersion }}
-          </p>
-          <p v-else class="hint">Ещё не синхронизировалось</p>
-        </template>
-        <p v-else class="hint">
-          Выберите облако и войдите в свой аккаунт, чтобы хранить резервную копию онлайн и синхронизировать её
-          между устройствами
-        </p>
-      </div>
+    <template v-if="activeAccount">
+      <ion-list inset>
+        <ion-item lines="full">
+          <ion-avatar slot="start" class="cloud-avatar">{{ accountInitial }}</ion-avatar>
+          <ion-label>
+            <h2>{{ activeAccount.name }}</h2>
+            <p v-if="activeAccount.email">{{ activeAccount.email }}</p>
+          </ion-label>
+        </ion-item>
+        <ion-item lines="none">
+          <ion-toggle justify="space-between" :checked="cloudSync.state.autoSync" @ion-change="(e: ToggleCustomEvent) => cloudSync.setAutoSync(e.detail.checked)">
+            Автосинхронизация
+          </ion-toggle>
+        </ion-item>
+      </ion-list>
+      <ion-list inset>
+        <ion-item button :detail="false" :disabled="cloudSync.state.syncing" @click="handleSyncNow">
+          <ion-label color="primary">{{ cloudSync.state.syncing ? 'Синхронизация…' : 'Синхронизировать сейчас' }}</ion-label>
+        </ion-item>
+        <ion-item button :detail="false" :disabled="cloudSync.state.syncing" @click="handleRestoreFromCloud">
+          <ion-label color="primary">Восстановить из облака</ion-label>
+        </ion-item>
+        <ion-item button :detail="false" lines="none" @click="handleDisconnectCloud">
+          <ion-label color="danger">Отключить облако</ion-label>
+        </ion-item>
+      </ion-list>
+      <p v-if="cloudSync.state.error" class="hint error">{{ cloudSync.state.error }}</p>
+      <p v-else-if="activeLastSync" class="hint">
+        Последняя синхронизация: {{ formatSyncDate(activeLastSync.savedAt) }} · версия {{ activeLastSync.appVersion }}
+      </p>
+      <p v-else class="hint">Ещё не синхронизировалось</p>
+    </template>
+    <p v-else class="hint">
+      Выберите облако и войдите в свой аккаунт, чтобы хранить резервную копию онлайн и синхронизировать её
+      между устройствами
+    </p>
 
-      <div class="danger-zone">
-        <div class="section-title">Опасная зона</div>
-        <button class="reset" @click="handleDelete">
-          {{ confirmingDelete ? 'Точно удалить эту машину?' : 'Удалить эту машину' }}
-        </button>
-        <p class="hint">
-          Удалит эту машину, её параметры ТО, заправки и историю без возможности восстановления.
-          Другие ваши машины не затронет
-        </p>
-      </div>
-    </div>
+    <ion-list inset>
+      <ion-list-header>Опасная зона</ion-list-header>
+      <ion-item button :detail="false" lines="none" @click="handleDelete">
+        <ion-label color="danger">{{ confirmingDelete ? 'Точно удалить эту машину?' : 'Удалить эту машину' }}</ion-label>
+      </ion-item>
+    </ion-list>
+    <p class="hint">
+      Удалит эту машину, её параметры ТО, заправки и историю без возможности восстановления.
+      Другие ваши машины не затронет
+    </p>
 
     <PickerSheet
       v-if="activePicker === 'make'"
@@ -443,244 +460,27 @@ function handleFileSelected(event: Event) {
       @close="activePicker = null"
       @select="selectModel"
     />
-  </div>
+  </ion-content>
 </template>
 
 <style scoped>
-.tab-page {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: calc(16px + var(--safe-top)) 16px calc(96px + var(--safe-bottom));
-}
-
-.topbar {
-  padding: 8px 4px 20px;
-}
-
-.topbar h1 {
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0;
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.section-title {
+.hint {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  padding: 0 4px 8px;
-}
-
-.group {
-  background: var(--bg-elevated);
-  border-radius: var(--radius-md);
-  padding: 0 14px;
-  border: 1px solid var(--card-border);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 0;
-}
-
-.field label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.field input {
-  border: none;
-  background: transparent;
-  font-size: 17px;
-  color: var(--text);
-  outline: none;
-}
-
-.picker-field {
-  width: 100%;
-  text-align: left;
-  align-items: flex-start;
-}
-
-.picker-field.disabled {
-  opacity: 0.5;
-}
-
-.picker-value {
-  font-size: 17px;
-  color: var(--text);
-}
-
-.picker-value.placeholder {
-  color: var(--text-tertiary);
-}
-
-.divider {
-  height: 1px;
-  background: var(--separator);
-}
-
-.car-zone,
-.notifications-zone,
-.date-format-zone,
-.update-zone,
-.backup-zone,
-.cloud-zone,
-.danger-zone {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.format-chip:disabled {
-  opacity: 0.4;
-}
-
-.cloud-account-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-}
-
-.cloud-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, var(--blue), #0040dd);
-}
-
-.cloud-account-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.cloud-account-name {
-  font-size: 16px;
-  color: var(--text);
-}
-
-.cloud-account-email {
-  font-size: 13px;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.format-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 0;
-}
-
-.format-chip {
-  padding: 7px 14px;
-  border-radius: var(--radius-pill);
-  background: var(--fill-secondary);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.format-chip.active {
-  background: var(--blue);
-  color: #fff;
-}
-
-.format-chip:active {
-  opacity: 0.7;
-}
-
-.notif-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
-  cursor: pointer;
-}
-
-.notif-label {
-  display: block;
-  font-size: 16px;
-  color: var(--text);
-}
-
-.notif-hint {
-  display: block;
-  margin: 2px 0 0;
-  padding: 0;
-}
-
-.backup-btn {
-  width: 100%;
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-pill);
-  padding: 13px;
-  color: var(--blue);
-  font-size: 17px;
-  font-weight: 500;
-  text-align: center;
-}
-
-.backup-btn:active {
-  opacity: 0.6;
-}
-
-.backup-btn:disabled {
-  opacity: 0.5;
+  color: var(--ion-color-medium);
+  margin: 4px 32px 16px;
+  line-height: 1.4;
 }
 
 .hint.error {
-  color: var(--red);
+  color: var(--ion-color-danger);
 }
 
-.version-hint {
-  color: var(--text-tertiary);
-}
-
-.reset {
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-pill);
-  padding: 13px;
-  color: var(--red);
-  font-size: 17px;
-  font-weight: 500;
-  text-align: center;
-}
-
-.reset:active {
-  opacity: 0.6;
-}
-
-.hint {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0 4px;
-  line-height: 1.4;
+.cloud-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-primary-shade));
 }
 </style>

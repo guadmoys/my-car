@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { IonCard, IonCardContent } from '@ionic/vue'
 import type { FuelConsumption } from '../types'
 
 const props = defineProps<{
@@ -67,12 +68,17 @@ function toggle(id: string) {
 }
 
 function dotColor(quality: FuelConsumption['quality']): string {
-  return quality === 'good' ? 'var(--green)' : quality === 'bad' ? 'var(--red)' : 'var(--text-tertiary)'
+  return quality === 'good'
+    ? 'var(--ion-color-success)'
+    : quality === 'bad'
+      ? 'var(--ion-color-danger)'
+      : 'var(--ion-color-medium)'
 }
 </script>
 
 <template>
-  <div v-if="points.length > 0" class="chart-card">
+  <ion-card v-if="points.length > 0" class="chart-card">
+    <ion-card-content>
     <div class="chart-header">
       <span class="chart-title">Расход, л/100км</span>
       <div class="legend">
@@ -85,8 +91,8 @@ function dotColor(quality: FuelConsumption['quality']): string {
       <svg class="chart-svg" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
         <defs>
           <linearGradient id="consumption-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--blue)" stop-opacity="0.28" />
-            <stop offset="100%" stop-color="var(--blue)" stop-opacity="0" />
+            <stop offset="0%" stop-color="var(--ion-color-primary)" stop-opacity="0.28" />
+            <stop offset="100%" stop-color="var(--ion-color-primary)" stop-opacity="0" />
           </linearGradient>
         </defs>
         <line
@@ -98,7 +104,7 @@ function dotColor(quality: FuelConsumption['quality']): string {
           :y2="averageY"
         />
         <path :d="areaPath" fill="url(#consumption-area)" stroke="none" />
-        <path :d="linePath" fill="none" stroke="var(--blue)" stroke-width="1.6" vector-effect="non-scaling-stroke" />
+        <path :d="linePath" fill="none" stroke="var(--ion-color-primary)" stroke-width="1.6" vector-effect="non-scaling-stroke" />
         <circle
           v-for="c in coords"
           :key="c.row.entry.id"
@@ -106,7 +112,7 @@ function dotColor(quality: FuelConsumption['quality']): string {
           :cy="c.y"
           :r="c.row.entry.id === activeId ? 2.6 : 2"
           :fill="dotColor(c.row.quality)"
-          stroke="var(--bg-elevated)"
+          stroke="var(--ion-card-background, #fff)"
           stroke-width="1"
         />
       </svg>
@@ -131,16 +137,13 @@ function dotColor(quality: FuelConsumption['quality']): string {
       Расход считается между заправками «под пробку» — неполные заправки не искажают цифру, но
       сами не получают точного значения (если не указан остаток в баке)
     </p>
-  </div>
+    </ion-card-content>
+  </ion-card>
 </template>
 
 <style scoped>
 .chart-card {
-  background: var(--bg-elevated);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--shadow);
-  padding: 14px 16px 12px;
+  margin: 0;
 }
 
 .chart-header {
@@ -165,7 +168,7 @@ function dotColor(quality: FuelConsumption['quality']): string {
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--ion-color-medium);
 }
 
 .dot {
@@ -176,11 +179,11 @@ function dotColor(quality: FuelConsumption['quality']): string {
 }
 
 .dot.good {
-  background: var(--green);
+  background: var(--ion-color-success);
 }
 
 .dot.bad {
-  background: var(--red);
+  background: var(--ion-color-danger);
 }
 
 .chart-area {
@@ -196,7 +199,7 @@ function dotColor(quality: FuelConsumption['quality']): string {
 }
 
 .avg-line {
-  stroke: var(--text-tertiary);
+  stroke: var(--ion-color-medium);
   stroke-width: 1;
   stroke-dasharray: 3 2;
   opacity: 0.7;
@@ -218,21 +221,21 @@ function dotColor(quality: FuelConsumption['quality']): string {
   margin-top: 10px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--ion-text-color);
   text-align: center;
   min-height: 15px;
 }
 
 .chart-footer .muted {
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--ion-color-medium);
 }
 
 .method-note {
   margin: 8px 4px 0;
   font-size: 11px;
   line-height: 1.4;
-  color: var(--text-tertiary);
+  color: var(--ion-color-medium);
   text-align: center;
 }
 </style>
