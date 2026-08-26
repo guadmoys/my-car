@@ -1,7 +1,27 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import {
+  IonAccordion,
+  IonAccordionGroup,
+  IonButton,
+  IonButtons,
+  IonChip,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonInput,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonModal,
+  IonNote,
+  IonTitle,
+  IonToggle,
+  IonToolbar,
+  type ToggleCustomEvent,
+} from '@ionic/vue'
+import { checkmark } from 'ionicons/icons'
 import { haptic } from '../utils/haptics'
-import ToggleSwitch from './ToggleSwitch.vue'
 
 const props = defineProps<{
   currentMileage: number
@@ -41,7 +61,6 @@ const hasRemaining = ref(false)
 const remainingLiters = ref('')
 const station = ref('')
 const comment = ref('')
-const showMore = ref(false)
 const quickEntry = ref('')
 
 // Parses a free-form line like "40л 3200р 80000км" into individual fields,
@@ -73,6 +92,8 @@ function parseQuickEntry(raw: string): {
   }
 }
 
+const accordionValue = ref<string | undefined>(undefined)
+
 function applyQuickEntry() {
   if (!quickEntry.value.trim()) return
   const parsed = parseQuickEntry(quickEntry.value)
@@ -81,7 +102,7 @@ function applyQuickEntry() {
   if (parsed.cost !== undefined) cost.value = String(parsed.cost)
   if (parsed.pricePerLiter !== undefined) {
     pricePerLiter.value = String(parsed.pricePerLiter)
-    showMore.value = true
+    accordionValue.value = 'more'
   }
   if (Object.values(parsed).some((v) => v !== undefined)) {
     haptic('success')
@@ -176,16 +197,16 @@ function selectFuelType(value: string) {
   fuelType.value = fuelType.value === value ? '' : value
 }
 
-function toggleFullTank() {
+function toggleFullTank(checked: boolean) {
   haptic('tap')
-  isFullTank.value = !isFullTank.value
+  isFullTank.value = checked
   if (isFullTank.value) hasRemaining.value = false
 }
 
-function toggleHasRemaining() {
+function toggleHasRemaining(checked: boolean) {
   if (isFullTank.value) return
   haptic('tap')
-  hasRemaining.value = !hasRemaining.value
+  hasRemaining.value = checked
 }
 
 const suggestionLabel = computed(() => {
@@ -202,7 +223,7 @@ function applySuggestion() {
   if (props.lastFuelType) fuelType.value = props.lastFuelType
   if (props.lastStation) station.value = props.lastStation
   if (props.lastPrice !== null) pricePerLiter.value = props.lastPrice.toFixed(2)
-  showMore.value = true
+  accordionValue.value = 'more'
 }
 
 function handleSave() {
@@ -229,406 +250,133 @@ function handleSave() {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
-    <div class="sheet">
-      <div class="handle" />
-      <div class="header">
-        <button class="cancel" @click="emit('close')">Отмена</button>
-        <h2>Заправка</h2>
-        <button class="save" :class="{ disabled: !isValid }" @click="handleSave">
-          Готово
-        </button>
-      </div>
-
-      <div class="form">
-        <div class="quick-entry-row">
-          <input
+  <ion-modal :is-open="true" @did-dismiss="emit('close')">
+    <ion-header>
+      <ion-toolbar>
+        <ion-buttons slot="start">
+          <ion-button @click="emit('close')">Отмена</ion-button>
+        </ion-buttons>
+        <ion-title>Заправка</ion-title>
+        <ion-buttons slot="end">
+          <ion-button :strong="true" :disabled="!isValid" @click="handleSave">Готово</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content>
+      <ion-list inset>
+        <ion-item lines="none">
+          <ion-input
             v-model="quickEntry"
-            type="text"
-            class="quick-entry-input"
-            placeholder="Быстрый ввод: 40л 3200р 80000км"
+            label="Быстрый ввод"
+            label-placement="stacked"
+            placeholder="40л 3200р 80000км"
             aria-label="Быстрый ввод заправки"
             @keydown.enter="applyQuickEntry"
-          />
-          <button
-            v-if="quickEntry.trim()"
-            type="button"
-            class="quick-entry-apply"
-            aria-label="Применить"
-            @click="applyQuickEntry"
           >
-            ✓
-          </button>
-        </div>
-        <button v-if="suggestionLabel" type="button" class="suggestion-chip" @click="applySuggestion">
+            <ion-button v-if="quickEntry.trim()" slot="end" fill="clear" aria-label="Применить" @click="applyQuickEntry">
+              <ion-icon slot="icon-only" :icon="checkmark" />
+            </ion-button>
+          </ion-input>
+        </ion-item>
+      </ion-list>
+
+      <div v-if="suggestionLabel" class="ion-padding-horizontal">
+        <ion-chip color="primary" outline @click="applySuggestion">
           Как в прошлый раз: {{ suggestionLabel }}
-        </button>
-        <div class="group">
-          <div class="field">
-            <label>Пробег на заправке, км</label>
-            <input v-model="mileage" type="text" inputmode="numeric" />
-          </div>
-          <div class="divider" />
-          <div class="field">
-            <label>Литры</label>
-            <input v-model="liters" type="text" inputmode="decimal" placeholder="35.5" />
-          </div>
-          <div class="divider" />
-          <div class="field">
-            <label>Стоимость, ₽ (необязательно)</label>
-            <input v-model="cost" type="text" inputmode="decimal" placeholder="—" />
-          </div>
-        </div>
-        <p v-if="mileage.trim() && mileageNumber < currentMileage" class="hint">
-          Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
-        </p>
-        <p v-if="looksLikeDuplicate" class="hint warn">
-          ⚠ Такой же пробег, как в прошлой заправке — не дубль ли это?
-        </p>
-        <p v-if="litersExceedTank" class="hint warn">
-          ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
-        </p>
-        <p v-if="priceLooksOff" class="hint warn">
-          ⚠ Цена сильно отличается от обычной (~{{ averagePrice?.toFixed(1) }} ₽/л) — проверьте значение
-        </p>
+        </ion-chip>
+      </div>
 
-        <div class="more-block">
-          <button class="section-title toggleable" @click="showMore = !showMore">
-            <span>Ещё</span>
-            <span class="caret" :class="{ open: showMore }">›</span>
-          </button>
+      <ion-list inset>
+        <ion-item>
+          <ion-input v-model="mileage" label="Пробег на заправке, км" label-placement="stacked" inputmode="numeric" />
+        </ion-item>
+        <ion-item>
+          <ion-input v-model="liters" label="Литры" label-placement="stacked" inputmode="decimal" placeholder="35.5" />
+        </ion-item>
+        <ion-item lines="none">
+          <ion-input v-model="cost" label="Стоимость, ₽ (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
+        </ion-item>
+      </ion-list>
+      <ion-note v-if="mileage.trim() && mileageNumber < currentMileage" color="danger" class="hint">
+        Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
+      </ion-note>
+      <ion-note v-if="looksLikeDuplicate" color="warning" class="hint">
+        ⚠ Такой же пробег, как в прошлой заправке — не дубль ли это?
+      </ion-note>
+      <ion-note v-if="litersExceedTank" color="warning" class="hint">
+        ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
+      </ion-note>
+      <ion-note v-if="priceLooksOff" color="warning" class="hint">
+        ⚠ Цена сильно отличается от обычной (~{{ averagePrice?.toFixed(1) }} ₽/л) — проверьте значение
+      </ion-note>
 
-          <div v-if="showMore" class="group">
-            <div class="field">
-              <label>Вид топлива</label>
-              <div class="type-chips">
-                <button
-                  v-for="ft in FUEL_TYPES"
-                  :key="ft"
-                  type="button"
-                  class="type-chip"
-                  :class="{ active: fuelType === ft }"
-                  @click="selectFuelType(ft)"
-                >
-                  {{ ft }}
-                </button>
-              </div>
-            </div>
-            <div class="divider" />
-            <div class="field">
-              <label>Цена, ₽/л (необязательно)</label>
-              <input v-model="pricePerLiter" type="text" inputmode="decimal" placeholder="—" />
-            </div>
-            <div class="divider" />
-            <div class="field switch-row">
-              <span>Полный бак</span>
-              <ToggleSwitch :checked="isFullTank" aria-label="Полный бак" @update:checked="toggleFullTank" />
-            </div>
-            <div class="divider" />
-            <div class="field switch-row" :class="{ disabled: isFullTank }">
-              <span>Остаток в баке</span>
-              <ToggleSwitch
-                :checked="hasRemaining"
-                :disabled="isFullTank"
-                aria-label="Остаток в баке"
-                @update:checked="toggleHasRemaining"
-              />
-            </div>
-            <template v-if="hasRemaining && !isFullTank">
-              <div class="divider" />
-              <div class="field">
-                <label>Сколько оставалось до заправки, л</label>
-                <input v-model="remainingLiters" type="text" inputmode="decimal" placeholder="5" />
-              </div>
-            </template>
-            <div class="divider" />
-            <div class="field">
-              <label>АЗС (необязательно)</label>
-              <input v-model="station" type="text" placeholder="Название или адрес" />
-            </div>
-            <div class="divider" />
-            <div class="field">
-              <label>Комментарий (необязательно)</label>
-              <input v-model="comment" type="text" placeholder="—" />
-            </div>
-          </div>
-          <p v-if="remainingExceedsTank" class="hint warn advanced-hint">
+      <ion-accordion-group v-model="accordionValue">
+        <ion-accordion value="more">
+          <ion-item slot="header">
+            <ion-label>Ещё</ion-label>
+          </ion-item>
+          <ion-list slot="content" inset>
+            <ion-item lines="full">
+              <ion-label class="ion-text-wrap">
+                <p>Вид топлива</p>
+                <div class="type-chips">
+                  <ion-chip
+                    v-for="ft in FUEL_TYPES"
+                    :key="ft"
+                    :color="fuelType === ft ? 'primary' : undefined"
+                    :outline="fuelType !== ft"
+                    @click="selectFuelType(ft)"
+                  >
+                    {{ ft }}
+                  </ion-chip>
+                </div>
+              </ion-label>
+            </ion-item>
+            <ion-item>
+              <ion-input v-model="pricePerLiter" label="Цена, ₽/л (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
+            </ion-item>
+            <ion-item>
+              <ion-toggle :checked="isFullTank" @ion-change="(e: ToggleCustomEvent) => toggleFullTank(e.detail.checked)">Полный бак</ion-toggle>
+            </ion-item>
+            <ion-item>
+              <ion-toggle :checked="hasRemaining" :disabled="isFullTank" @ion-change="(e: ToggleCustomEvent) => toggleHasRemaining(e.detail.checked)">
+                Остаток в баке
+              </ion-toggle>
+            </ion-item>
+            <ion-item v-if="hasRemaining && !isFullTank">
+              <ion-input v-model="remainingLiters" label="Сколько оставалось до заправки, л" label-placement="stacked" inputmode="decimal" placeholder="5" />
+            </ion-item>
+            <ion-item>
+              <ion-input v-model="station" label="АЗС (необязательно)" label-placement="stacked" placeholder="Название или адрес" />
+            </ion-item>
+            <ion-item lines="none">
+              <ion-input v-model="comment" label="Комментарий (необязательно)" label-placement="stacked" placeholder="—" />
+            </ion-item>
+          </ion-list>
+          <ion-note v-if="remainingExceedsTank" slot="content" color="warning" class="hint">
             ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
-          </p>
-          <p v-if="showMore && !isFullTank" class="hint advanced-hint">
+          </ion-note>
+          <ion-note v-if="!isFullTank" slot="content" color="medium" class="hint">
             Точный расход считается между заправками «под пробку». Если бак не полный, отметьте
             «Остаток в баке», чтобы эта заправка тоже участвовала в расчёте
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
+          </ion-note>
+        </ion-accordion>
+      </ion-accordion-group>
+    </ion-content>
+  </ion-modal>
 </template>
 
 <style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: flex-end;
-  z-index: 100;
-  animation: fade-in 0.15s ease;
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.sheet {
-  width: 100%;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  background: var(--bg-grouped);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 8px 0 calc(24px + var(--safe-bottom));
-  animation: slide-up 0.25s var(--motion-spring);
-}
-
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-.handle {
-  width: 36px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--text-tertiary);
-  margin: 6px auto 4px;
-  opacity: 0.5;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px 4px;
-}
-
-.header h2 {
-  font-size: 17px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.cancel {
-  font-size: 17px;
-  color: var(--blue);
-}
-
-.save {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--blue);
-}
-
-.save.disabled {
-  opacity: 0.4;
-}
-
-.form {
-  padding: 12px 16px 0;
-}
-
-.group {
-  background: var(--bg-elevated);
-  border-radius: var(--radius-md);
-  padding: 0 14px;
-  border: 1px solid var(--card-border);
-}
-
-.quick-entry-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  margin-bottom: 12px;
-  height: 40px;
-  border-radius: var(--radius-pill);
-  background: var(--fill-secondary);
-}
-
-.quick-entry-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  font-size: 15px;
-  color: var(--text);
-  outline: none;
-}
-
-.quick-entry-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.quick-entry-apply {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--blue);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.quick-entry-apply:active {
-  opacity: 0.7;
-}
-
-.suggestion-chip {
-  display: block;
-  width: 100%;
-  margin-bottom: 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--blue) 12%, transparent);
-  color: var(--blue);
-  font-size: 14px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.suggestion-chip:active {
-  opacity: 0.7;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 0;
-}
-
-.field label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.field input {
-  border: none;
-  background: transparent;
-  font-size: 17px;
-  color: var(--text);
-  outline: none;
-}
-
-.field input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.divider {
-  height: 1px;
-  background: var(--separator);
-}
-
 .hint {
+  display: block;
   font-size: 13px;
-  color: var(--red);
-  margin: 10px 4px 0;
-}
-
-.hint.warn {
-  color: var(--orange);
-}
-
-.more-block {
-  margin-top: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  padding: 0 4px;
-}
-
-.section-title.toggleable {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.caret {
-  display: inline-block;
-  transform: rotate(90deg);
-  transition: transform 0.2s;
-}
-
-.caret.open {
-  transform: rotate(270deg);
-}
-
-.advanced-hint {
-  padding: 0 4px;
-  color: var(--text-tertiary);
+  margin: 8px 32px;
 }
 
 .type-chips {
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 2px 0 4px;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
 }
-
-.type-chip {
-  flex-shrink: 0;
-  padding: 7px 14px;
-  border-radius: var(--radius-pill);
-  background: var(--fill-secondary);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.type-chip.active {
-  background: var(--blue);
-  color: #fff;
-}
-
-.type-chip:active {
-  opacity: 0.7;
-}
-
-.switch-row {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.switch-row span:first-child {
-  font-size: 17px;
-  color: var(--text);
-}
-
-.switch-row.disabled span:first-child {
-  color: var(--text-tertiary);
-}
-
 </style>

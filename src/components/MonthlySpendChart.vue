@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { IonCard, IonCardContent } from '@ionic/vue'
 import type { FuelEntry, HistoryEntry } from '../types'
 
 const props = defineProps<{
@@ -80,7 +81,8 @@ function toggle(key: string) {
 </script>
 
 <template>
-  <div v-if="hasData" class="chart-card">
+  <ion-card v-if="hasData" class="chart-card">
+    <ion-card-content>
     <div class="chart-header">
       <span class="chart-title">Расходы по месяцам</span>
     </div>
@@ -89,20 +91,20 @@ function toggle(key: string) {
       <svg class="chart-svg" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
         <defs>
           <linearGradient id="spend-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="var(--blue)" stop-opacity="0.28" />
-            <stop offset="100%" stop-color="var(--blue)" stop-opacity="0" />
+            <stop offset="0%" stop-color="var(--ion-color-primary)" stop-opacity="0.28" />
+            <stop offset="100%" stop-color="var(--ion-color-primary)" stop-opacity="0" />
           </linearGradient>
         </defs>
         <path :d="areaPath" fill="url(#spend-area)" stroke="none" />
-        <path :d="linePath" fill="none" stroke="var(--blue)" stroke-width="1.6" vector-effect="non-scaling-stroke" />
+        <path :d="linePath" fill="none" stroke="var(--ion-color-primary)" stroke-width="1.6" vector-effect="non-scaling-stroke" />
         <circle
           v-for="c in coords"
           :key="c.month.key"
           :cx="c.x"
           :cy="c.y"
           :r="c.month.key === activeKey ? 2.6 : 2"
-          fill="var(--blue)"
-          stroke="var(--bg-elevated)"
+          fill="var(--ion-color-primary)"
+          stroke="var(--ion-card-background, #fff)"
           stroke-width="1"
         />
       </svg>
@@ -124,16 +126,13 @@ function toggle(key: string) {
     <div class="chart-footer">
       <span v-if="activeMonth">{{ activeMonth.label }} · {{ fmtCost(activeMonth.total) }}</span>
     </div>
-  </div>
+    </ion-card-content>
+  </ion-card>
 </template>
 
 <style scoped>
 .chart-card {
-  background: var(--bg-elevated);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--shadow);
-  padding: 14px 16px 12px;
+  margin: 0;
 }
 
 .chart-header {
@@ -177,7 +176,7 @@ function toggle(key: string) {
   flex: 1;
   text-align: center;
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--ion-color-medium);
   text-transform: capitalize;
 }
 
@@ -185,7 +184,7 @@ function toggle(key: string) {
   margin-top: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--ion-text-color);
   text-align: center;
   min-height: 15px;
 }

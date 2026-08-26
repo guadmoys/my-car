@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { IonApp } from '@ionic/vue'
 import { useCarStore } from './composables/useCarStore'
 import { useCloudSync } from './composables/useCloudSync'
 import OnboardingView from './components/OnboardingView.vue'
@@ -26,8 +27,10 @@ async function handleOnboardingSubmit(payload: {
 </script>
 
 <template>
-  <SplashSkeleton v-if="!isLoaded" />
-  <OnboardingView v-else-if="cars.length === 0" @submit="handleOnboardingSubmit" />
-  <Dashboard v-else />
-  <ToastHost />
+  <ion-app>
+    <SplashSkeleton v-if="!isLoaded" />
+    <OnboardingView v-else-if="cars.length === 0" @submit="handleOnboardingSubmit" />
+    <Dashboard v-else />
+    <ToastHost />
+  </ion-app>
 </template>

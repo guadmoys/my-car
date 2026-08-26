@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { IonButton, IonContent, IonIcon, IonInput, IonItem, IonLabel, IonList, IonNote, IonPage } from '@ionic/vue'
+import { carSportOutline } from 'ionicons/icons'
 import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
 import PickerSheet from './PickerSheet.vue'
 
@@ -49,108 +51,92 @@ function handleSubmit() {
 </script>
 
 <template>
-  <div class="onboarding">
-    <div class="hero">
-      <div class="glyph">
-        <svg viewBox="0 0 48 48" width="40" height="40" fill="none">
-          <path
-            d="M6 26 L9.5 15.5C10.7 11.9 14 9.5 17.8 9.5H30.2C34 9.5 37.3 11.9 38.5 15.5L42 26"
-            stroke="currentColor"
-            stroke-width="2.6"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <rect x="4" y="26" width="40" height="12" rx="4" stroke="currentColor" stroke-width="2.6" />
-          <circle cx="14" cy="38" r="3.4" fill="currentColor" />
-          <circle cx="34" cy="38" r="3.4" fill="currentColor" />
-        </svg>
-      </div>
-      <h1>Моя машина</h1>
-      <p>Учёт пробега и техобслуживания — всё офлайн, прямо на вашем устройстве</p>
-    </div>
+  <ion-page>
+    <ion-content class="ion-padding">
+      <div class="onboarding">
+        <div class="hero">
+          <div class="glyph">
+            <ion-icon :icon="carSportOutline" />
+          </div>
+          <h1>Моя машина</h1>
+          <p>Учёт пробега и техобслуживания — всё офлайн, прямо на вашем устройстве</p>
+        </div>
 
-    <form class="card" @submit.prevent="handleSubmit">
-      <button type="button" class="field picker-field" @click="activePicker = 'make'">
-        <label>Марка</label>
-        <span class="picker-value" :class="{ placeholder: !make }">{{ make || 'Выбрать' }}</span>
-      </button>
-      <div class="divider" />
-      <button
-        type="button"
-        class="field picker-field"
-        :class="{ disabled: !make }"
-        @click="make && (activePicker = 'model')"
-      >
-        <label>Модель</label>
-        <span class="picker-value" :class="{ placeholder: !model }">
-          {{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}
-        </span>
-      </button>
-      <div class="divider" />
-      <div class="field">
-        <label for="year">Год выпуска</label>
-        <input
-          id="year"
-          v-model.number="year"
-          type="number"
-          inputmode="numeric"
-          :min="1950"
-          :max="currentYear + 1"
-          placeholder="2020"
-        />
-      </div>
-      <div class="divider" />
-      <div class="field">
-        <label for="mileage">Текущий пробег, км</label>
-        <input
-          id="mileage"
-          v-model="mileage"
-          type="text"
-          inputmode="numeric"
-          placeholder="45000"
-        />
+        <form @submit.prevent="handleSubmit">
+          <ion-list inset>
+            <ion-item button detail @click="activePicker = 'make'">
+              <ion-label>Марка</ion-label>
+              <ion-note slot="end">{{ make || 'Выбрать' }}</ion-note>
+            </ion-item>
+            <ion-item button detail :disabled="!make" @click="activePicker = 'model'">
+              <ion-label>Модель</ion-label>
+              <ion-note slot="end">{{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}</ion-note>
+            </ion-item>
+            <ion-item>
+              <ion-input
+                v-model.number="year"
+                label="Год выпуска"
+                label-placement="stacked"
+                type="number"
+                inputmode="numeric"
+                :min="1950"
+                :max="currentYear + 1"
+                placeholder="2020"
+              />
+            </ion-item>
+            <ion-item lines="none">
+              <ion-input
+                v-model="mileage"
+                label="Текущий пробег, км"
+                label-placement="stacked"
+                type="text"
+                inputmode="numeric"
+                placeholder="45000"
+              />
+            </ion-item>
+          </ion-list>
+
+          <ion-note v-if="touched && !isValid" color="danger" class="error">
+            Заполните все поля корректно, чтобы продолжить
+          </ion-note>
+
+          <ion-button type="submit" expand="block" :disabled="touched && !isValid" class="submit">
+            Начать
+          </ion-button>
+        </form>
       </div>
 
-      <p v-if="touched && !isValid" class="error">
-        Заполните все поля корректно, чтобы продолжить
-      </p>
-
-      <button type="submit" class="submit" :class="{ disabled: !isValid }">
-        Начать
-      </button>
-    </form>
-
-    <PickerSheet
-      v-if="activePicker === 'make'"
-      title="Марка"
-      :items="CAR_MAKES"
-      :selected="make"
-      placeholder="Поиск марки"
-      custom-label="Своя марка"
-      @close="activePicker = null"
-      @select="selectMake"
-    />
-    <PickerSheet
-      v-if="activePicker === 'model'"
-      title="Модель"
-      :items="modelOptions"
-      :selected="model"
-      placeholder="Поиск модели"
-      custom-label="Своя модель"
-      @close="activePicker = null"
-      @select="(value) => (model = value)"
-    />
-  </div>
+      <PickerSheet
+        v-if="activePicker === 'make'"
+        title="Марка"
+        :items="CAR_MAKES"
+        :selected="make"
+        placeholder="Поиск марки"
+        custom-label="Своя марка"
+        @close="activePicker = null"
+        @select="selectMake"
+      />
+      <PickerSheet
+        v-if="activePicker === 'model'"
+        title="Модель"
+        :items="modelOptions"
+        :selected="model"
+        placeholder="Поиск модели"
+        custom-label="Своя модель"
+        @close="activePicker = null"
+        @select="(value) => (model = value)"
+      />
+    </ion-content>
+  </ion-page>
 </template>
 
 <style scoped>
 .onboarding {
-  min-height: 100dvh;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: calc(24px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
   gap: 32px;
 }
 
@@ -171,8 +157,8 @@ function handleSubmit() {
   align-items: center;
   justify-content: center;
   color: #fff;
-  background: linear-gradient(180deg, var(--blue), #0040dd);
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--ion-color-primary), var(--ion-color-primary-shade));
+  font-size: 40px;
   margin-bottom: 4px;
 }
 
@@ -185,97 +171,24 @@ function handleSubmit() {
 
 .hero p {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--ion-color-medium);
   font-size: 15px;
   line-height: 1.4;
 }
 
-.card {
+form {
   width: 100%;
   max-width: 400px;
-  background: var(--bg-elevated);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--shadow);
-  padding: 4px 16px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 0;
-}
-
-.field label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.field input {
-  border: none;
-  background: transparent;
-  font-size: 17px;
-  color: var(--text);
-  padding: 2px 0;
-  outline: none;
-}
-
-.field input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.picker-field {
-  width: 100%;
-  text-align: left;
-  align-items: flex-start;
-}
-
-.picker-field.disabled {
-  opacity: 0.5;
-}
-
-.picker-value {
-  font-size: 17px;
-  color: var(--text);
-  padding: 2px 0;
-}
-
-.picker-value.placeholder {
-  color: var(--text-tertiary);
-}
-
-.divider {
-  height: 1px;
-  background: var(--separator);
-  margin-left: 0;
 }
 
 .error {
-  color: var(--red);
+  display: block;
   font-size: 13px;
-  margin: 12px 0 0;
+  margin: 12px 16px 0;
   text-align: center;
 }
 
 .submit {
-  width: 100%;
-  margin: 20px 0 16px;
-  padding: 14px;
-  border-radius: var(--radius-pill);
-  background: var(--blue);
-  color: #fff;
-  font-size: 17px;
-  font-weight: 600;
-  transition: opacity 0.2s, transform 0.1s;
-}
-
-.submit:active {
-  transform: scale(0.98);
-}
-
-.submit.disabled {
-  opacity: 0.4;
+  margin: 20px 16px 16px;
 }
 </style>

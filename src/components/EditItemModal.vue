@@ -1,5 +1,24 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import {
+  IonAccordion,
+  IonAccordionGroup,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonInput,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonListHeader,
+  IonModal,
+  IonNote,
+  IonTitle,
+  IonToolbar,
+} from '@ionic/vue'
+import { calendarOutline, close, trash } from 'ionicons/icons'
 import type { HistoryEntry, MaintenanceItem, Part } from '../types'
 import CostEditSheet from './CostEditSheet.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
@@ -79,7 +98,7 @@ const lastServiceMileage = ref('')
 const parts = ref<Part[]>([])
 const notifyBeforeKm = ref('')
 const notifyBeforeDays = ref('')
-const showAdvanced = ref(false)
+const advancedValue = ref<string | undefined>(undefined)
 
 const kmThresholdDefault = computed(() => {
   const intervalKm = Number(interval.value) || 0
@@ -116,7 +135,7 @@ watch(
       parts.value = item.parts.map((p) => ({ ...p }))
       notifyBeforeKm.value = item.notifyBeforeKm ? String(item.notifyBeforeKm) : ''
       notifyBeforeDays.value = item.notifyBeforeDays ? String(item.notifyBeforeDays) : ''
-      showAdvanced.value = Boolean(item.notifyBeforeKm || item.notifyBeforeDays)
+      advancedValue.value = item.notifyBeforeKm || item.notifyBeforeDays ? 'advanced' : undefined
     } else {
       name.value = ''
       interval.value = ''
@@ -126,7 +145,7 @@ watch(
       parts.value = []
       notifyBeforeKm.value = ''
       notifyBeforeDays.value = ''
-      showAdvanced.value = false
+      advancedValue.value = undefined
     }
   },
   { immediate: true },
@@ -228,488 +247,146 @@ function handleAddToCalendar() {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
-    <div class="sheet">
-      <div class="handle" />
-      <div class="header">
-        <button class="cancel" @click="emit('close')">Отмена</button>
-        <h2>{{ isCreate ? 'Новый параметр' : 'Изменить' }}</h2>
-        <button class="save" :class="{ disabled: !isValid }" @click="handleSave">
-          Готово
-        </button>
-      </div>
+  <ion-modal :is-open="true" @did-dismiss="emit('close')">
+    <ion-header>
+      <ion-toolbar>
+        <ion-buttons slot="start">
+          <ion-button @click="emit('close')">Отмена</ion-button>
+        </ion-buttons>
+        <ion-title>{{ isCreate ? 'Новый параметр' : 'Изменить' }}</ion-title>
+        <ion-buttons slot="end">
+          <ion-button :strong="true" :disabled="!isValid" @click="handleSave">Готово</ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content>
+      <ion-list inset>
+        <ion-item lines="none">
+          <ion-input v-model="name" label="Название" label-placement="stacked" placeholder="Например, Замена масла" />
+        </ion-item>
+      </ion-list>
 
-      <div class="form">
-        <div class="group">
-          <div class="field">
-            <label>Название</label>
-            <input v-model="name" type="text" placeholder="Например, Замена масла" />
-          </div>
-        </div>
+      <ion-list inset>
+        <ion-item>
+          <ion-input v-model="interval" label="Интервал, км" label-placement="stacked" inputmode="numeric" placeholder="5000" />
+        </ion-item>
+        <ion-item>
+          <ion-input v-model="intervalMax" label="До (необязательно, для диапазона)" label-placement="stacked" inputmode="numeric" placeholder="—" />
+        </ion-item>
+        <ion-item lines="none">
+          <ion-input v-model="intervalMonths" label="Или раз в N месяцев (необязательно)" label-placement="stacked" inputmode="numeric" placeholder="—" />
+        </ion-item>
+      </ion-list>
 
-        <div class="group">
-          <div class="field">
-            <label>Интервал, км</label>
-            <input v-model="interval" type="text" inputmode="numeric" placeholder="5000" />
-          </div>
-          <div class="divider" />
-          <div class="field">
-            <label>До (необязательно, для диапазона)</label>
-            <input v-model="intervalMax" type="text" inputmode="numeric" placeholder="—" />
-          </div>
-          <div class="divider" />
-          <div class="field">
-            <label>Или раз в N месяцев (необязательно)</label>
-            <input v-model="intervalMonths" type="text" inputmode="numeric" placeholder="—" />
-          </div>
-        </div>
-
-        <div class="advanced-block">
-          <button class="section-title toggleable" @click="showAdvanced = !showAdvanced">
-            <span>Дополнительно</span>
-            <span class="caret" :class="{ open: showAdvanced }">›</span>
-          </button>
-          <div v-if="showAdvanced" class="group">
-            <div class="field">
-              <label>Уведомлять за, км до ТО</label>
-              <input
+      <ion-accordion-group v-model="advancedValue">
+        <ion-accordion value="advanced">
+          <ion-item slot="header">
+            <ion-label>Дополнительно</ion-label>
+          </ion-item>
+          <ion-list slot="content" inset>
+            <ion-item :lines="intervalMonths.trim() ? undefined : 'none'">
+              <ion-input
                 v-model="notifyBeforeKm"
-                type="text"
+                label="Уведомлять за, км до ТО"
+                label-placement="stacked"
                 inputmode="numeric"
                 :placeholder="`по умолчанию ${Math.round(kmThresholdDefault.value)}`"
               />
-            </div>
-            <template v-if="intervalMonths.trim()">
-              <div class="divider" />
-              <div class="field">
-                <label>Уведомлять за, дней до ТО</label>
-                <input
-                  v-model="notifyBeforeDays"
-                  type="text"
-                  inputmode="numeric"
-                  :placeholder="`по умолчанию ${Math.round(dayThresholdDefault.value)}`"
-                />
-              </div>
-            </template>
-          </div>
-          <p v-if="showAdvanced" class="hint advanced-hint">
+            </ion-item>
+            <ion-item v-if="intervalMonths.trim()" lines="none">
+              <ion-input
+                v-model="notifyBeforeDays"
+                label="Уведомлять за, дней до ТО"
+                label-placement="stacked"
+                inputmode="numeric"
+                :placeholder="`по умолчанию ${Math.round(dayThresholdDefault.value)}`"
+              />
+            </ion-item>
+          </ion-list>
+          <ion-note slot="content" color="medium" class="hint">
             Определяет, когда параметр станет «скоро» и придёт уведомление (если оно включено в настройках)
-          </p>
-          <p v-if="showAdvanced && !notifyBeforeKm.trim() && kmThresholdDefault.adaptive" class="hint advanced-hint adaptive-hint">
+          </ion-note>
+          <ion-note v-if="!notifyBeforeKm.trim() && kmThresholdDefault.adaptive" slot="content" color="primary" class="hint">
             📈 Подстроено под вашу историю: обычно вы делаете это ТО раньше срока — порог сдвинут пораньше
-          </p>
-          <p v-if="showAdvanced && !notifyBeforeDays.trim() && dayThresholdDefault.adaptive" class="hint advanced-hint adaptive-hint">
+          </ion-note>
+          <ion-note v-if="!notifyBeforeDays.trim() && dayThresholdDefault.adaptive" slot="content" color="primary" class="hint">
             📈 Подстроено под вашу историю: обычно вы делаете это ТО раньше срока — порог сдвинут пораньше
-          </p>
-        </div>
+          </ion-note>
+        </ion-accordion>
+      </ion-accordion-group>
 
-        <div v-if="!isCreate" class="group">
-          <div class="field">
-            <label>Пробег последнего ТО, км</label>
-            <input v-model="lastServiceMileage" type="text" inputmode="numeric" />
-          </div>
-        </div>
-        <p v-if="!isCreate && Number(lastServiceMileage) > currentMileage" class="hint mileage-hint">
-          Не может быть больше текущего пробега машины ({{ fmtMileage(currentMileage) }} км)
-        </p>
+      <ion-list v-if="!isCreate" inset>
+        <ion-item lines="none">
+          <ion-input v-model="lastServiceMileage" label="Пробег последнего ТО, км" label-placement="stacked" inputmode="numeric" />
+        </ion-item>
+      </ion-list>
+      <ion-note v-if="!isCreate && Number(lastServiceMileage) > currentMileage" color="danger" class="hint">
+        Не может быть больше текущего пробега машины ({{ fmtMileage(currentMileage) }} км)
+      </ion-note>
 
-        <button v-if="nextDueAt !== null" class="calendar-btn" @click="handleAddToCalendar">
-          🗓 Добавить напоминание в календарь
-        </button>
+      <ion-button v-if="nextDueAt !== null" expand="block" fill="outline" class="ion-margin" @click="handleAddToCalendar">
+        <ion-icon slot="start" :icon="calendarOutline" />
+        Добавить напоминание в календарь
+      </ion-button>
 
-        <div v-if="!isCreate && history.length > 0" class="history-block">
-          <div class="parts-header">
-            <span>История ТО</span>
-          </div>
-          <div class="group history-list">
-            <button
-              v-for="entry in history"
-              :key="entry.id"
-              class="history-row"
-              @click="editingHistoryId = entry.id"
-            >
-              <span class="history-date">{{ fmtHistoryDate(entry.date) }}</span>
-              <span class="history-right">
-                <span v-if="entry.cost !== undefined" class="history-cost">{{ fmtCost(entry.cost) }}</span>
-                <span class="history-mileage">{{ fmtMileage(entry.mileage) }} км</span>
-              </span>
-            </button>
-          </div>
-        </div>
+      <ion-list v-if="!isCreate && history.length > 0" inset>
+        <ion-list-header>История ТО</ion-list-header>
+        <ion-item v-for="entry in history" :key="entry.id" button :detail="false" @click="editingHistoryId = entry.id">
+          <ion-label>{{ fmtHistoryDate(entry.date) }}</ion-label>
+          <ion-note v-if="entry.cost !== undefined" slot="end" color="primary">{{ fmtCost(entry.cost) }}</ion-note>
+          <ion-note slot="end">{{ fmtMileage(entry.mileage) }} км</ion-note>
+        </ion-item>
+      </ion-list>
 
-        <CostEditSheet
-          v-if="editingHistoryEntry"
-          title="ТО"
-          :subtitle="fmtHistoryDate(editingHistoryEntry.date)"
-          :current-cost="editingHistoryEntry.cost"
-          @close="editingHistoryId = null"
-          @save="handleSaveHistoryCost"
-        />
+      <CostEditSheet
+        v-if="editingHistoryEntry"
+        title="ТО"
+        :subtitle="fmtHistoryDate(editingHistoryEntry.date)"
+        :current-cost="editingHistoryEntry.cost"
+        @close="editingHistoryId = null"
+        @save="handleSaveHistoryCost"
+      />
 
-        <div class="parts-block">
-          <div class="parts-header">
-            <span>Детали</span>
-            <span class="parts-hint">название, артикул и площадка для быстрой покупки</span>
-          </div>
+      <ion-list inset>
+        <ion-list-header>Детали</ion-list-header>
+        <template v-for="(part, index) in parts" :key="part.id">
+          <ion-item lines="full">
+            <ion-label color="medium">Деталь {{ index + 1 }}</ion-label>
+            <ion-button slot="end" fill="clear" color="medium" aria-label="Удалить деталь" @click="removePart(part.id)">
+              <ion-icon slot="icon-only" :icon="close" />
+            </ion-button>
+          </ion-item>
+          <ion-item>
+            <ion-input v-model="part.name" label="Название" label-placement="stacked" placeholder="Фильтр масляный" />
+          </ion-item>
+          <ion-item>
+            <ion-input v-model="part.articleNumber" label="Артикул" label-placement="stacked" placeholder="2630035503" />
+          </ion-item>
+          <ion-item>
+            <ion-input v-model="part.platform" label="Площадка" label-placement="stacked" placeholder="Exist.ru" />
+          </ion-item>
+          <ion-item>
+            <ion-input v-model="part.url" type="url" label="Ссылка на покупку (необязательно)" label-placement="stacked" placeholder="https://..." />
+          </ion-item>
+          <ion-item lines="none">
+            <PartQuickLinks :part="part" />
+          </ion-item>
+        </template>
+      </ion-list>
+      <ion-button expand="block" fill="outline" class="ion-margin" @click="addPart">+ Добавить деталь</ion-button>
 
-          <div v-for="(part, index) in parts" :key="part.id" class="group part-card">
-            <div class="part-card-header">
-              <span>Деталь {{ index + 1 }}</span>
-              <button class="part-remove" aria-label="Удалить деталь" @click="removePart(part.id)">
-                ✕
-              </button>
-            </div>
-            <div class="divider" />
-            <div class="field">
-              <label>Название</label>
-              <input v-model="part.name" type="text" placeholder="Фильтр масляный" />
-            </div>
-            <div class="divider" />
-            <div class="field">
-              <label>Артикул</label>
-              <input v-model="part.articleNumber" type="text" placeholder="2630035503" />
-            </div>
-            <div class="divider" />
-            <div class="field">
-              <label>Площадка</label>
-              <input v-model="part.platform" type="text" placeholder="Exist.ru" />
-            </div>
-            <div class="divider" />
-            <div class="field">
-              <label>Ссылка на покупку (необязательно)</label>
-              <input v-model="part.url" type="url" placeholder="https://..." />
-            </div>
-            <div class="divider" />
-            <div class="part-links">
-              <PartQuickLinks :part="part" />
-            </div>
-          </div>
-
-          <button class="add-part" @click="addPart">+ Добавить деталь</button>
-        </div>
-
-        <button v-if="!isCreate" class="delete" @click="handleDelete">
-          Удалить параметр
-        </button>
-      </div>
-    </div>
-  </div>
+      <ion-button v-if="!isCreate" expand="block" fill="outline" color="danger" class="ion-margin" @click="handleDelete">
+        <ion-icon slot="start" :icon="trash" />
+        Удалить параметр
+      </ion-button>
+    </ion-content>
+  </ion-modal>
 </template>
 
 <style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: flex-end;
-  z-index: 100;
-  animation: fade-in 0.15s ease;
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.sheet {
-  width: 100%;
-  max-height: 88dvh;
-  overflow-y: auto;
-  background: var(--bg-grouped);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 8px 0 calc(24px + var(--safe-bottom));
-  animation: slide-up 0.25s var(--motion-spring);
-}
-
-@keyframes slide-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-.handle {
-  width: 36px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--text-tertiary);
-  margin: 6px auto 4px;
-  opacity: 0.5;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px 4px;
-}
-
-.header h2 {
-  font-size: 17px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.cancel {
-  font-size: 17px;
-  color: var(--blue);
-}
-
-.save {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--blue);
-}
-
-.save.disabled {
-  opacity: 0.4;
-}
-
-.form {
-  padding: 12px 16px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.group {
-  background: var(--bg-elevated);
-  border-radius: var(--radius-md);
-  padding: 0 14px;
-  border: 1px solid var(--card-border);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 0;
-}
-
-.field label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.field input {
-  border: none;
-  background: transparent;
-  font-size: 17px;
-  color: var(--text);
-  outline: none;
-}
-
-.divider {
-  height: 1px;
-  background: var(--separator);
-}
-
-.history-block {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.history-list {
-  padding: 0 14px;
-}
-
-.history-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--separator);
-  font-size: 15px;
-  text-align: left;
-}
-
-.history-row:active {
-  opacity: 0.6;
-}
-
-.history-row:last-child {
-  border-bottom: none;
-}
-
-.history-date {
-  color: var(--text);
-}
-
-.history-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.history-cost {
-  color: var(--blue);
-  font-weight: 600;
-}
-
-.history-mileage {
-  color: var(--text-secondary);
-}
-
-.advanced-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  padding: 0 4px;
-}
-
-.section-title.toggleable {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.caret {
-  display: inline-block;
-  transform: rotate(90deg);
-  transition: transform 0.2s;
-}
-
-.caret.open {
-  transform: rotate(270deg);
-}
-
-.advanced-hint {
-  padding: 0 4px;
-}
-
-.adaptive-hint {
-  color: var(--blue);
-}
-
-.mileage-hint {
-  margin-top: -12px;
-  padding: 0 4px;
-  color: var(--red);
-}
-
 .hint {
+  display: block;
   font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.parts-block {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.parts-header {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0 4px;
-}
-
-.parts-header span:first-child {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.parts-hint {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.part-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.part-remove {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--fill-secondary);
-  color: var(--text-secondary);
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.part-remove:active {
-  opacity: 0.6;
-}
-
-.part-links {
-  padding: 10px 0;
-}
-
-.add-part {
-  width: 100%;
-  padding: 12px;
-  border-radius: var(--radius-pill);
-  background: var(--fill-secondary);
-  color: var(--blue);
-  font-size: 15px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.add-part:active {
-  opacity: 0.6;
-}
-
-.calendar-btn {
-  width: 100%;
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-pill);
-  padding: 13px;
-  color: var(--blue);
-  font-size: 15px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.calendar-btn:active {
-  opacity: 0.6;
-}
-
-.delete {
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-pill);
-  padding: 13px;
-  color: var(--red);
-  font-size: 17px;
-  font-weight: 500;
-  text-align: center;
-}
-
-.delete:active {
-  opacity: 0.6;
+  margin: 6px 32px;
 }
 </style>
