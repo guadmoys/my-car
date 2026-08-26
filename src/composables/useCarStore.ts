@@ -144,13 +144,6 @@ async function updateMileage(newMileage: number): Promise<void> {
   if (updated) await db.putCar(updated)
 }
 
-async function toggleItem(id: string, enabled: boolean): Promise<void> {
-  const item = items.find((i) => i.id === id)
-  if (!item) return
-  item.enabled = enabled
-  await db.putMaintenanceItem({ ...item })
-}
-
 async function updateItem(
   id: string,
   patch: Partial<
@@ -231,7 +224,6 @@ async function addCustomItem(input: {
     intervalKm: input.intervalKm,
     intervalKmMax: input.intervalKmMax,
     intervalMonths: input.intervalMonths,
-    enabled: true,
     lastServiceMileage: car.value.currentMileage,
     lastServiceDate: nowTs(),
     isCustom: true,
@@ -256,20 +248,6 @@ async function restoreItem(item: MaintenanceItem): Promise<void> {
   if (items.some((i) => i.id === item.id)) return
   items.push(item)
   await db.putMaintenanceItem(item)
-}
-
-async function reorderDisabledItem(id: string, direction: 'up' | 'down'): Promise<void> {
-  const disabled = items.filter((i) => !i.enabled).sort((a, b) => a.order - b.order)
-  const idx = disabled.findIndex((i) => i.id === id)
-  if (idx === -1) return
-  const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-  if (swapIdx < 0 || swapIdx >= disabled.length) return
-  const a = disabled[idx]
-  const b = disabled[swapIdx]
-  const aOrder = a.order
-  a.order = b.order
-  b.order = aOrder
-  await Promise.all([db.putMaintenanceItem({ ...a }), db.putMaintenanceItem({ ...b })])
 }
 
 async function addFuelEntry(input: {
@@ -428,19 +406,14 @@ const statuses = computed<MaintenanceStatus[]>(() => {
     .map((item) => statusFor(item, car.value!.currentMileage, now, dailyKm))
 })
 
-const enabledStatuses = computed(() => statuses.value.filter((s) => s.item.enabled))
-const disabledItems = computed(() =>
-  items.filter((i) => !i.enabled).slice().sort((a, b) => a.order - b.order),
-)
-
 const dueCount = computed(
-  () => enabledStatuses.value.filter((s) => s.state === 'due').length,
+  () => statuses.value.filter((s) => s.state === 'due').length,
 )
 const soonCount = computed(
-  () => enabledStatuses.value.filter((s) => s.state === 'soon').length,
+  () => statuses.value.filter((s) => s.state === 'soon').length,
 )
 const okCount = computed(
-  () => enabledStatuses.value.filter((s) => s.state === 'ok').length,
+  () => statuses.value.filter((s) => s.state === 'ok').length,
 )
 
 /**
@@ -907,15 +880,14 @@ const hasAnyCost = computed(
 const MONTH_DAYS = 30.44
 
 /**
- * Expected number of times an enabled item will trigger within `days`.
- * Items with a month-based interval use that cadence directly; purely
- * km-based items need a driving-pace estimate (avgDailyKm) — without one,
- * they're left out rather than guessed at.
+ * Expected number of times an item will trigger within `days`. Items with
+ * a month-based interval use that cadence directly; purely km-based items
+ * need a driving-pace estimate (avgDailyKm) — without one, they're left out
+ * rather than guessed at.
  */
 function expectedServicesIn(days: number, dailyKm: number | null): number {
   let count = 0
   for (const item of items) {
-    if (!item.enabled) continue
     if (item.intervalMonths) {
       count += days / (item.intervalMonths * MONTH_DAYS)
     } else if (dailyKm !== null && dailyKm > 0) {
@@ -929,7 +901,7 @@ function expectedServicesIn(days: number, dailyKm: number | null): number {
  * Cost-of-ownership projection for 6 and 12 months out: a fuel-spend rate
  * (recent 90-day window, falling back to the full tracked history) times
  * the horizon, plus an expected maintenance cost — the average priced
- * service times how many services the enabled items are expected to
+ * service times how many services the tracked items are expected to
  * trigger in that horizon. A rough estimate by design (one flat average
  * service cost, not a per-item one), not a budgeting tool.
  */
@@ -1053,8 +1025,6 @@ export function useCarStore() {
     historyEntries,
     isLoaded,
     statuses,
-    enabledStatuses,
-    disabledItems,
     dueCount,
     soonCount,
     okCount,
@@ -1077,14 +1047,12 @@ export function useCarStore() {
     deleteCar,
     updateCarInfo,
     updateMileage,
-    toggleItem,
     updateItem,
     markServiced,
     undoMarkServiced,
     addCustomItem,
     deleteItem,
     restoreItem,
-    reorderDisabledItem,
     addFuelEntry,
     deleteFuelEntry,
     restoreFuelEntry,

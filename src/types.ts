@@ -30,7 +30,6 @@ export interface MaintenanceItem {
   intervalKmMax?: number
   /** Optional time-based interval in months, checked alongside the km interval ("whichever comes first"). */
   intervalMonths?: number
-  enabled: boolean
   /** Odometer reading at which this item was last serviced. */
   lastServiceMileage: number
   lastServiceDate: number | null

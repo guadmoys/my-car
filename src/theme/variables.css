@@ -93,3 +93,15 @@
   --ion-color-shade: var(--ion-color-success-shade);
   --ion-color-tint: var(--ion-color-success-tint);
 }
+
+/* Light-mode page background one shade off white so `ion-list inset` and
+   `ion-card` read as distinct grouped cards (stock iOS Settings look) instead
+   of blending into the page. Matched to `body`, not `:root`, so
+   @ionic/vue/css/palettes/dark.system.css's own `body` dark-mode rule (which
+   sets a real dark background) wins on specificity ties in dark mode. */
+body {
+  --ion-background-color: var(--ion-color-light);
+  --ion-background-color-rgb: var(--ion-color-light-rgb);
+  --ion-item-background: #ffffff;
+  --ion-card-background: #ffffff;
+}

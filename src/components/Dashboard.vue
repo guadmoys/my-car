@@ -25,8 +25,7 @@ const store = useCarStore()
 const {
   car,
   cars,
-  enabledStatuses,
-  disabledItems,
+  statuses,
   dueCount,
   soonCount,
   okCount,
@@ -96,7 +95,7 @@ const lastPrice = computed<number | null>(() => {
 const STATE_RANK: Record<string, number> = { due: 2, soon: 1, ok: 0 }
 
 const sortedStatuses = computed(() =>
-  enabledStatuses.value.slice().sort((a, b) => {
+  statuses.value.slice().sort((a, b) => {
     const rankDiff = STATE_RANK[b.state] - STATE_RANK[a.state]
     return rankDiff !== 0 ? rankDiff : a.remainingKm - b.remainingKm
   }),
@@ -129,7 +128,7 @@ const passportData = computed<PassportData | null>(() => {
 })
 
 watch(
-  [car, enabledStatuses],
+  [car, statuses],
   ([carVal, statusesVal]) => {
     updateAppBadge(dueCount.value + soonCount.value)
     if (carVal) checkAndNotify(carVal.id, statusesVal)
@@ -146,11 +145,11 @@ watch(
 )
 
 /** Re-runs the due/soon and low-fuel checks against the current state, since
- * turning the toggle on doesn't itself change `car`/`enabledStatuses` and so
+ * enabling notifications doesn't itself change `car`/`statuses` and so
  * wouldn't otherwise trigger the watchers below for items already due. */
 function handleNotificationsEnabled() {
   if (!car.value) return
-  checkAndNotify(car.value.id, enabledStatuses.value)
+  checkAndNotify(car.value.id, statuses.value)
   checkAndNotifyLowFuel(car.value.id, estimatedRangeKm.value)
 }
 
@@ -178,21 +177,6 @@ async function handleMarkServiced(id: string) {
     label: 'Отменить',
     onAction: () => store.undoMarkServiced(id, result),
   })
-}
-
-async function handleToggle(id: string, enabled: boolean) {
-  haptic('tap')
-  await store.toggleItem(id, enabled)
-}
-
-async function handleBulkToggle(ids: string[], enabled: boolean) {
-  if (ids.length === 0) return
-  haptic('tap')
-  await Promise.all(ids.map((id) => store.toggleItem(id, enabled)))
-}
-
-async function handleReorderDisabled(id: string, direction: 'up' | 'down') {
-  await store.reorderDisabledItem(id, direction)
 }
 
 async function handleSaveItem(payload: {
@@ -233,6 +217,19 @@ async function handleDeleteItem(id: string) {
   toast.show(item ? `«${item.name}» удалён` : 'Параметр удалён', {
     label: 'Отменить',
     onAction: () => store.restoreItem(removed),
+  })
+}
+
+async function handleBulkDelete(ids: string[]) {
+  if (ids.length === 0) return
+  const removed = (await Promise.all(ids.map((id) => store.deleteItem(id)))).filter(
+    (item): item is MaintenanceItem => item !== null,
+  )
+  if (removed.length === 0) return
+  haptic('delete')
+  toast.show(removed.length === 1 ? `«${removed[0].name}» удалён` : `Удалено параметров: ${removed.length}`, {
+    label: 'Отменить',
+    onAction: () => Promise.all(removed.map((item) => store.restoreItem(item))),
   })
 }
 
@@ -418,13 +415,10 @@ function fmtDate(ts: number): string {
       <MaintenanceTab
         v-if="activeTab === 'maintenance'"
         :sorted-statuses="sortedStatuses"
-        :disabled-items="disabledItems"
         @mark-serviced="handleMarkServiced"
-        @toggle="handleToggle"
-        @bulk-toggle="handleBulkToggle"
         @edit="openEdit"
         @delete="handleDeleteItem"
-        @reorder-disabled="handleReorderDisabled"
+        @bulk-delete="handleBulkDelete"
         @add-item="editingItem = 'new'"
       />
 

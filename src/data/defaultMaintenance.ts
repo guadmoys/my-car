@@ -36,7 +36,6 @@ export function buildDefaultItems(initialMileage: number, carId: string): Mainte
     name: tpl.name,
     intervalKm: tpl.intervalKm,
     intervalKmMax: tpl.intervalKmMax,
-    enabled: true,
     lastServiceMileage: initialMileage,
     lastServiceDate: Date.now(),
     isCustom: false,
