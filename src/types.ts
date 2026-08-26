@@ -60,6 +60,36 @@ export interface MaintenanceStatus {
   state: 'ok' | 'soon' | 'due'
 }
 
+/**
+ * A one-off manual reminder ("напоминание"), distinct from recurring
+ * MaintenanceItems: it fires once, either when the odometer reaches
+ * `dueMileage` or when the current time passes `dueDate`, then stays in the
+ * list (marked due) until the user deletes it. Exactly one of `dueMileage`/
+ * `dueDate` is set per reminder.
+ */
+export interface Reminder {
+  id: string
+  carId: string
+  /** Free-text description, e.g. "проверить масло". */
+  text: string
+  createdAt: number
+  /** Fires once the car's odometer reaches this reading. */
+  dueMileage?: number
+  /** Fires once the current time passes this timestamp. */
+  dueDate?: number
+  /** Whether dueDate carries a specific time of day, vs. just a calendar day. */
+  hasTime?: boolean
+}
+
+export interface ReminderStatus {
+  reminder: Reminder
+  isDue: boolean
+  /** Set when the reminder targets an odometer reading. */
+  remainingKm?: number
+  /** Set when the reminder targets a date. */
+  remainingDays?: number
+}
+
 export interface HistoryEntry {
   id: string
   carId: string
@@ -128,6 +158,8 @@ export interface BackupData {
   items: MaintenanceItem[]
   fuelEntries: FuelEntry[]
   historyEntries: HistoryEntry[]
+  /** Absent when importing a backup made before reminders existed. */
+  reminders?: Reminder[]
 }
 
 /** Shape of a v1 backup (single car, no carId fields), kept only for import compatibility. */

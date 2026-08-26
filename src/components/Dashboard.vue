@@ -2,7 +2,14 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { IonPage } from '@ionic/vue'
 import { useCarStore } from '../composables/useCarStore'
-import { checkAndNotify, checkAndNotifyLowFuel, clearNotifiedItem, updateAppBadge } from '../utils/notifications'
+import {
+  checkAndNotify,
+  checkAndNotifyLowFuel,
+  checkAndNotifyReminders,
+  clearNotifiedItem,
+  clearNotifiedReminder,
+  updateAppBadge,
+} from '../utils/notifications'
 import { haptic } from '../utils/haptics'
 import { useToast } from '../composables/useToast'
 import DashboardTab from './DashboardTab.vue'
@@ -18,6 +25,7 @@ import AddCarSheet from './AddCarSheet.vue'
 import CostEditSheet from './CostEditSheet.vue'
 import CarPassportSheet from './CarPassportSheet.vue'
 import EventsHistorySheet from './EventsHistorySheet.vue'
+import ReminderSheet from './ReminderSheet.vue'
 import type { PassportData } from '../utils/carPassport'
 import type { FuelEntry, MaintenanceItem, MaintenanceStatus, Part } from '../types'
 
@@ -42,6 +50,7 @@ const {
   totalCost,
   hasAnyCost,
   costForecast,
+  reminderStatuses,
 } = store
 
 const toast = useToast()
@@ -54,6 +63,7 @@ const showCarSwitcher = ref(false)
 const showAddCar = ref(false)
 const showPassportSheet = ref(false)
 const showEventsSheet = ref(false)
+const showReminderSheet = ref(false)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
 const editingFuelCostId = ref<string | null>(null)
 const importError = ref<string | null>(null)
@@ -144,13 +154,22 @@ watch(
   { immediate: true },
 )
 
-/** Re-runs the due/soon and low-fuel checks against the current state, since
- * enabling notifications doesn't itself change `car`/`statuses` and so
- * wouldn't otherwise trigger the watchers below for items already due. */
+watch(
+  [car, reminderStatuses],
+  ([carVal, statusesVal]) => {
+    if (carVal) checkAndNotifyReminders(carVal.id, statusesVal.filter((s) => s.isDue))
+  },
+  { immediate: true },
+)
+
+/** Re-runs the due/soon, low-fuel and reminder checks against the current
+ * state, since enabling notifications doesn't itself change `car`/`statuses`
+ * and so wouldn't otherwise trigger the watchers below for items already due. */
 function handleNotificationsEnabled() {
   if (!car.value) return
   checkAndNotify(car.value.id, statuses.value)
   checkAndNotifyLowFuel(car.value.id, estimatedRangeKm.value)
+  checkAndNotifyReminders(car.value.id, reminderStatuses.value.filter((s) => s.isDue))
 }
 
 function openEdit(id: string) {
@@ -250,6 +269,27 @@ async function handleSaveFuel(payload: {
 }) {
   await store.addFuelEntry(payload)
   showFuelSheet.value = false
+}
+
+async function handleSaveReminder(payload: {
+  text: string
+  dueMileage?: number
+  dueDate?: number
+  hasTime?: boolean
+}) {
+  await store.addReminder(payload)
+  showReminderSheet.value = false
+}
+
+async function handleDeleteReminder(id: string) {
+  const removed = await store.deleteReminder(id)
+  if (!removed) return
+  if (car.value) clearNotifiedReminder(car.value.id, id)
+  haptic('success')
+  toast.show(`«${removed.text}» — готово`, {
+    label: 'Отменить',
+    onAction: () => store.restoreReminder(removed),
+  })
 }
 
 async function handleDeleteFuel(id: string) {
@@ -403,6 +443,7 @@ function fmtDate(ts: number): string {
         :urgent-statuses="urgentPreview"
         :urgent-total="urgentStatuses.length"
         :estimated-range-km="estimatedRangeKm"
+        :reminder-statuses="reminderStatuses"
         @edit-mileage="showMileageSheet = true"
         @switch-car="showCarSwitcher = true"
         @quick-fuel="showFuelSheet = true"
@@ -410,6 +451,8 @@ function fmtDate(ts: number): string {
         @view-all-maintenance="activeTab = 'maintenance'"
         @view-all-fuel="activeTab = 'fuel'"
         @view-all-events="showEventsSheet = true"
+        @add-reminder="showReminderSheet = true"
+        @delete-reminder="handleDeleteReminder"
       />
 
       <MaintenanceTab
@@ -460,6 +503,7 @@ function fmtDate(ts: number): string {
       @change="activeTab = $event"
       @quick-mileage="showMileageSheet = true"
       @quick-fuel="showFuelSheet = true"
+      @quick-reminder="showReminderSheet = true"
     />
 
     <EditItemModal
@@ -479,6 +523,13 @@ function fmtDate(ts: number): string {
       :current-mileage="car.currentMileage"
       @close="showMileageSheet = false"
       @save="handleSaveMileage"
+    />
+
+    <ReminderSheet
+      v-if="showReminderSheet"
+      :current-mileage="car.currentMileage"
+      @close="showReminderSheet = false"
+      @save="handleSaveReminder"
     />
 
     <FuelSheet

@@ -1,4 +1,4 @@
-import type { MaintenanceStatus } from '../types'
+import type { MaintenanceStatus, ReminderStatus } from '../types'
 
 const ENABLED_KEY = 'my-car-notifications-enabled'
 const ICON = `${import.meta.env.BASE_URL}icons/icon-192.png`
@@ -85,6 +85,50 @@ export async function checkAndNotify(carId: string, statuses: MaintenanceStatus[
 
   for (const s of fresh) notifiedIds.add(s.item.id)
   saveNotifiedIds(carId, notifiedIds)
+}
+
+function remindersNotifiedKey(carId: string): string {
+  return `my-car-reminders-notified-${carId}`
+}
+
+function getRemindersNotifiedIds(carId: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(remindersNotifiedKey(carId))
+    return new Set(raw ? (JSON.parse(raw) as string[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveRemindersNotifiedIds(carId: string, ids: Set<string>): void {
+  localStorage.setItem(remindersNotifiedKey(carId), JSON.stringify([...ids]))
+}
+
+/** Call when a reminder is deleted, so its id can be reused without being treated as already-notified. */
+export function clearNotifiedReminder(carId: string, reminderId: string): void {
+  const ids = getRemindersNotifiedIds(carId)
+  if (ids.delete(reminderId)) saveRemindersNotifiedIds(carId, ids)
+}
+
+/**
+ * Notifies once per reminder when it becomes due (odometer or date/time
+ * reached), tracked per-car like checkAndNotify above so it doesn't re-fire
+ * on every reload while the reminder still sits in the list awaiting
+ * deletion.
+ */
+export async function checkAndNotifyReminders(carId: string, dueStatuses: ReminderStatus[]): Promise<void> {
+  if (!isNotificationsEnabled() || getNotificationPermission() !== 'granted') return
+
+  const notifiedIds = getRemindersNotifiedIds(carId)
+  const fresh = dueStatuses.filter((s) => !notifiedIds.has(s.reminder.id))
+  if (fresh.length === 0) return
+
+  const title = fresh.length === 1 ? 'Напоминание' : `Напоминания: ${fresh.length}`
+  const body = fresh.map((s) => s.reminder.text).join(', ')
+  await showLocalNotification(title, body)
+
+  for (const s of fresh) notifiedIds.add(s.reminder.id)
+  saveRemindersNotifiedIds(carId, notifiedIds)
 }
 
 const LOW_FUEL_RANGE_KM = 60
