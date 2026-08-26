@@ -1,14 +1,6 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import { IonicVue } from '@ionic/vue'
-import { defineCustomElement as defineIonTabBar } from '@ionic/core/components/ion-tab-bar.js'
-import { defineCustomElement as defineIonTabButton } from '@ionic/core/components/ion-tab-button.js'
-
-// TabBar.vue renders these as raw custom elements (see vite.config.ts), so
-// they need to be registered directly — the @ionic/vue wrappers that
-// normally do this expect an ancestor <IonTabs>, which this app doesn't use.
-defineIonTabBar()
-defineIonTabButton()
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/vue/css/core.css'

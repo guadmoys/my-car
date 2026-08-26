@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { IonActionSheet, IonBadge, IonFabButton, IonIcon } from '@ionic/vue'
+import { IonActionSheet, IonIcon } from '@ionic/vue'
 import {
   add,
   construct,
@@ -55,29 +55,29 @@ const quickActionButtons = [
 </script>
 
 <template>
-  <div class="tab-bar-wrapper">
-    <ion-fab-button
-      class="quick-action-button"
-      size="small"
-      aria-label="Быстрые действия"
-      @click="openQuickActions"
-    >
-      <ion-icon :icon="add" />
-    </ion-fab-button>
-
-    <ion-tab-bar :selected-tab="activeTab" translucent>
-      <ion-tab-button
+  <div class="tab-bar-row">
+    <nav class="floating-tab-bar" role="tablist" aria-label="Разделы">
+      <button
         v-for="tab in tabs"
         :key="tab.key"
-        :tab="tab.key"
-        :selected="activeTab === tab.key"
+        type="button"
+        role="tab"
+        class="tab-button"
+        :class="{ selected: activeTab === tab.key }"
+        :aria-selected="activeTab === tab.key"
         :aria-label="tab.label"
         @click="select(tab.key)"
       >
-        <ion-icon :icon="activeTab === tab.key ? tab.iconActive : tab.icon" />
-        <ion-badge v-if="tab.key === 'maintenance' && dueBadge > 0" color="danger">{{ dueBadge }}</ion-badge>
-      </ion-tab-button>
-    </ion-tab-bar>
+        <span class="tab-icon-wrap">
+          <ion-icon :icon="activeTab === tab.key ? tab.iconActive : tab.icon" />
+          <span v-if="tab.key === 'maintenance' && dueBadge > 0" class="badge">{{ dueBadge }}</span>
+        </span>
+      </button>
+    </nav>
+
+    <button type="button" class="quick-action-button" aria-label="Быстрые действия" @click="openQuickActions">
+      <ion-icon :icon="add" />
+    </button>
   </div>
 
   <ion-action-sheet
@@ -89,22 +89,101 @@ const quickActionButtons = [
 </template>
 
 <style scoped>
-.tab-bar-wrapper {
-  position: relative;
+/* Plain HTML/CSS tab bar (no ion-tab-bar/ion-tab-button) — those require an
+   ancestor IonTabs to register properly, which this app's manual-tabs
+   navigation doesn't have. Colors/spacing still come from the app's Ionic
+   CSS-variable theme, so it stays visually part of the same design system. */
+.tab-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px calc(env(safe-area-inset-bottom, 0) + 8px);
 }
 
-ion-tab-button.tab-selected::part(native) {
+.floating-tab-bar {
+  flex: 1;
+  display: flex;
+  border-radius: 28px;
+  background: var(--ion-tab-bar-background, var(--ion-item-background, #ffffff));
+  background: color-mix(in srgb, var(--ion-item-background, #ffffff) 88%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.tab-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  background: none;
+  border: none;
+  padding: 6px;
+  margin: 0;
+  color: var(--ion-color-medium);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-button ion-icon {
+  font-size: 24px;
+}
+
+.tab-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 20px;
+  transition: background-color 0.15s ease;
+}
+
+.tab-button.selected {
+  color: var(--ion-color-primary);
+}
+
+.tab-button.selected .tab-icon-wrap {
   background: rgba(var(--ion-color-primary-rgb), 0.12);
-  border-radius: 14px;
-  margin: 6px 10px;
-  width: auto;
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--ion-color-danger);
+  color: var(--ion-color-danger-contrast);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
 }
 
 .quick-action-button {
-  position: absolute;
-  right: 16px;
-  bottom: 100%;
-  margin-bottom: 12px;
-  --box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ion-color-primary);
+  color: var(--ion-color-primary-contrast);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.quick-action-button ion-icon {
+  font-size: 20px;
 }
 </style>

@@ -12,7 +12,6 @@ import {
   IonLabel,
   IonNote,
   IonProgressBar,
-  IonToggle,
 } from '@ionic/vue'
 import { calendarOutline, cartOutline, checkmark, ellipse, trash } from 'ionicons/icons'
 import type { MaintenanceStatus } from '../types'
@@ -26,7 +25,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   markServiced: [id: string]
-  toggle: [id: string, enabled: boolean]
   edit: [id: string]
   delete: [id: string]
   select: [id: string]
@@ -94,7 +92,7 @@ function fmt(n: number): string {
         </ion-item-option>
       </ion-item-options>
 
-      <ion-item button :detail="false" :class="{ dimmed: !status.item.enabled }" @click="emit('edit', status.item.id)">
+      <ion-item button :detail="false" @click="emit('edit', status.item.id)">
         <ion-icon slot="start" :icon="ellipse" :color="stateColor" />
         <ion-label class="ion-text-wrap">
           <h2>{{ status.item.name }}</h2>
@@ -105,17 +103,9 @@ function fmt(n: number): string {
           </p>
           <ion-progress-bar :value="status.progress" :color="stateColor" />
         </ion-label>
-        <div slot="end" class="end-controls">
-          <ion-button size="small" fill="outline" @click.stop="emit('markServiced', status.item.id)">
-            Готово
-          </ion-button>
-          <ion-toggle
-            :checked="status.item.enabled"
-            :aria-label="`Учитывать «${status.item.name}»`"
-            @click.stop
-            @ion-change="(e) => emit('toggle', status.item.id, e.detail.checked)"
-          />
-        </div>
+        <ion-button slot="end" size="small" fill="outline" @click.stop="emit('markServiced', status.item.id)">
+          Готово
+        </ion-button>
       </ion-item>
 
       <ion-item-options side="end">
@@ -160,21 +150,6 @@ function fmt(n: number): string {
 </template>
 
 <style scoped>
-.dimmed {
-  opacity: 0.5;
-}
-
-.end-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.end-controls ion-button {
-  margin: 0;
-}
-
 ion-progress-bar {
   margin-top: 6px;
 }

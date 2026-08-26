@@ -14,19 +14,7 @@ export default defineConfig(({ command, isPreview }) => {
       __APP_VERSION__: JSON.stringify(pkg.version),
     },
     plugins: [
-      vue({
-        template: {
-          compilerOptions: {
-            // ion-tab-bar / ion-tab-button are used as raw custom elements (not
-            // their @ionic/vue wrappers) in TabBar.vue — the Vue wrapper for
-            // IonTabBar/IonTabButton hard-requires an ancestor <IonTabs> (via
-            // provide/inject) which this app doesn't use, since tab switching
-            // is plain local state, not vue-router. The underlying web
-            // components work standalone; only the Vue binding layer doesn't.
-            isCustomElement: (tag) => tag === 'ion-tab-bar' || tag === 'ion-tab-button',
-          },
-        },
-      }),
+      vue(),
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: false,
