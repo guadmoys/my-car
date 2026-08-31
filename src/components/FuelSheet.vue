@@ -55,7 +55,7 @@ const mileage = ref(String(props.currentMileage))
 const liters = ref('')
 const cost = ref('')
 const pricePerLiter = ref('')
-const fuelType = ref('')
+const fuelType = ref(props.lastFuelType ?? '')
 const isFullTank = ref(true)
 const hasRemaining = ref(false)
 const remainingLiters = ref('')
@@ -92,7 +92,9 @@ function parseQuickEntry(raw: string): {
   }
 }
 
-const accordionValue = ref<string | undefined>(undefined)
+// Pre-opened when there's a last fuel type to show, so the pre-filled
+// selection is visible without an extra tap on "Ещё".
+const accordionValue = ref<string | undefined>(props.lastFuelType ? 'more' : undefined)
 
 function applyQuickEntry() {
   if (!quickEntry.value.trim()) return
