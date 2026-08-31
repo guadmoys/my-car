@@ -96,12 +96,17 @@
 
 /* Light-mode page background one shade off white so `ion-list inset` and
    `ion-card` read as distinct grouped cards (stock iOS Settings look) instead
-   of blending into the page. Matched to `body`, not `:root`, so
-   @ionic/vue/css/palettes/dark.system.css's own `body` dark-mode rule (which
-   sets a real dark background) wins on specificity ties in dark mode. */
-body {
-  --ion-background-color: var(--ion-color-light);
-  --ion-background-color-rgb: var(--ion-color-light-rgb);
-  --ion-item-background: #ffffff;
-  --ion-card-background: #ffffff;
+   of blending into the page. Custom properties inherit down the DOM tree by
+   nearest ancestor, not by selector specificity, so a `body` rule here would
+   always beat @ionic/vue/css/palettes/dark.system.css's `:root.ios`/`:root.md`
+   dark values for every descendant regardless of import order — guarding
+   with `@media not (prefers-color-scheme: dark)` keeps this light-only, and
+   dark mode inherits the palette's real dark background/item/card colors. */
+@media not (prefers-color-scheme: dark) {
+  body {
+    --ion-background-color: var(--ion-color-light);
+    --ion-background-color-rgb: var(--ion-color-light-rgb);
+    --ion-item-background: #ffffff;
+    --ion-card-background: #ffffff;
+  }
 }
