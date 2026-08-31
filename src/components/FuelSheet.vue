@@ -22,6 +22,7 @@ import {
 } from '@ionic/vue'
 import { checkmark } from 'ionicons/icons'
 import { haptic } from '../utils/haptics'
+import { mileageInputSeed } from '../utils/mileage'
 
 const props = defineProps<{
   currentMileage: number
@@ -51,7 +52,11 @@ const emit = defineEmits<{
 
 const FUEL_TYPES = ['АИ-92', 'АИ-95', 'АИ-98', 'Дизель', 'Газ']
 
-const mileage = ref(String(props.currentMileage))
+const mileage = ref(mileageInputSeed(props.currentMileage))
+// The seeded value is deliberately below currentMileage (only the trailing
+// digits are missing) — don't flag it as "too low" until the user actually
+// types something.
+const mileageTouched = ref(false)
 const liters = ref('')
 const cost = ref('')
 const pricePerLiter = ref('')
@@ -99,7 +104,10 @@ const accordionValue = ref<string | undefined>(props.lastFuelType ? 'more' : und
 function applyQuickEntry() {
   if (!quickEntry.value.trim()) return
   const parsed = parseQuickEntry(quickEntry.value)
-  if (parsed.mileage !== undefined) mileage.value = String(parsed.mileage)
+  if (parsed.mileage !== undefined) {
+    mileage.value = String(parsed.mileage)
+    mileageTouched.value = true
+  }
   if (parsed.liters !== undefined) liters.value = String(parsed.liters)
   if (parsed.cost !== undefined) cost.value = String(parsed.cost)
   if (parsed.pricePerLiter !== undefined) {
@@ -290,7 +298,13 @@ function handleSave() {
 
       <ion-list inset>
         <ion-item>
-          <ion-input v-model="mileage" label="Пробег на заправке, км" label-placement="stacked" inputmode="numeric" />
+          <ion-input
+            v-model="mileage"
+            label="Пробег на заправке, км"
+            label-placement="stacked"
+            inputmode="numeric"
+            @ion-input="mileageTouched = true"
+          />
         </ion-item>
         <ion-item>
           <ion-input v-model="liters" label="Литры" label-placement="stacked" inputmode="decimal" placeholder="35.5" />
@@ -299,10 +313,10 @@ function handleSave() {
           <ion-input v-model="cost" label="Стоимость, ₽ (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
-      <ion-note v-if="mileage.trim() && mileageNumber < currentMileage" color="danger" class="hint">
+      <ion-note v-if="mileageTouched && mileage.trim() && mileageNumber < currentMileage" color="danger" class="hint">
         Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
       </ion-note>
-      <ion-note v-if="looksLikeDuplicate" color="warning" class="hint">
+      <ion-note v-if="mileageTouched && looksLikeDuplicate" color="warning" class="hint">
         ⚠ Такой же пробег, как в прошлой заправке — не дубль ли это?
       </ion-note>
       <ion-note v-if="litersExceedTank" color="warning" class="hint">

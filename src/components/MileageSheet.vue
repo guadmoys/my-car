@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { IonButton, IonButtons, IonContent, IonHeader, IonInput, IonItem, IonList, IonModal, IonNote, IonTitle, IonToolbar } from '@ionic/vue'
+import { mileageInputSeed } from '../utils/mileage'
 
 const props = defineProps<{
   currentMileage: number
@@ -11,7 +12,11 @@ const emit = defineEmits<{
   save: [mileage: number]
 }>()
 
-const value = ref(String(props.currentMileage))
+const value = ref(mileageInputSeed(props.currentMileage))
+// The seeded value is deliberately below currentMileage (only the trailing
+// digits are missing) — don't flag it as "too low" until the user actually
+// types something.
+const touched = ref(false)
 
 const number = computed(() => Number(value.value.replace(/\s/g, '')))
 const isValid = computed(
@@ -47,10 +52,11 @@ function handleSave() {
             type="text"
             inputmode="numeric"
             autofocus
+            @ion-input="touched = true"
           />
         </ion-item>
       </ion-list>
-      <ion-note v-if="!isValid" color="medium" class="hint">
+      <ion-note v-if="touched && !isValid" color="medium" class="hint">
         Новый пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
       </ion-note>
     </ion-content>
