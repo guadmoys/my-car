@@ -303,17 +303,48 @@ async function restoreFuelEntry(entry: FuelEntry): Promise<void> {
   await db.putFuelEntry(entry)
 }
 
-async function updateFuelCost(id: string, cost: number | null): Promise<void> {
+async function updateFuelEntry(
+  id: string,
+  input: {
+    mileage: number
+    liters: number
+    date: number
+    cost?: number
+    fuelType?: string
+    isFullTank?: boolean
+    remainingLiters?: number
+    station?: string
+    comment?: string
+  },
+): Promise<void> {
   const entry = fuelEntries.find((e) => e.id === id)
   if (!entry) return
-  entry.cost = cost ?? undefined
+  entry.mileage = input.mileage
+  entry.liters = input.liters
+  entry.date = input.date
+  entry.cost = input.cost ?? undefined
+  entry.fuelType = input.fuelType
+  entry.isFullTank = input.isFullTank
+  entry.remainingLiters = input.remainingLiters
+  entry.station = input.station
+  entry.comment = input.comment
   await db.putFuelEntry({ ...entry })
+
+  if (car.value && input.mileage > car.value.currentMileage) {
+    await updateMileage(input.mileage)
+  }
 }
 
-async function updateHistoryCost(id: string, cost: number | null): Promise<void> {
+async function updateHistoryEntry(
+  id: string,
+  input: { itemName: string; mileage: number; date: number; cost?: number },
+): Promise<void> {
   const entry = historyEntries.find((h) => h.id === id)
   if (!entry) return
-  entry.cost = cost ?? undefined
+  entry.itemName = input.itemName
+  entry.mileage = input.mileage
+  entry.date = input.date
+  entry.cost = input.cost ?? undefined
   await db.putHistoryEntry({ ...entry })
 }
 
@@ -1123,8 +1154,8 @@ export function useCarStore() {
     addFuelEntry,
     deleteFuelEntry,
     restoreFuelEntry,
-    updateFuelCost,
-    updateHistoryCost,
+    updateFuelEntry,
+    updateHistoryEntry,
     getItemHistory,
     exportData,
     importData,

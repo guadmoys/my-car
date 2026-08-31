@@ -64,7 +64,7 @@ const dateLabel = computed(() => {
   if (estimatedDueDate !== undefined) {
     const daysUntil = Math.round((estimatedDueDate - Date.now()) / DAY_MS)
     if (daysUntil <= 0) return null
-    return `≈ через ${daysUntil} дн. при вашем темпе езды`
+    return `≈ через ${daysUntil} дн.`
   }
   return null
 })
@@ -75,12 +75,12 @@ function fmt(n: number): string {
 </script>
 
 <template>
-  <ion-item v-if="selectable" button :detail="false" @click="emit('select', status.item.id)">
+  <ion-item v-if="selectable" button :detail="false" class="compact-item" @click="emit('select', status.item.id)">
     <ion-checkbox slot="start" :checked="selected" @ion-change="emit('select', status.item.id)" />
     <ion-icon slot="start" :icon="ellipse" :color="stateColor" />
     <ion-label>
       <h2>{{ status.item.name }}</h2>
-      <p>{{ statusLabel }} · каждые {{ rangeLabel }}</p>
+      <p class="subline">{{ statusLabel }} · каждые {{ rangeLabel }}</p>
     </ion-label>
   </ion-item>
 
@@ -92,13 +92,13 @@ function fmt(n: number): string {
         </ion-item-option>
       </ion-item-options>
 
-      <ion-item button :detail="false" @click="emit('edit', status.item.id)">
+      <ion-item button :detail="false" class="compact-item" @click="emit('edit', status.item.id)">
         <ion-icon slot="start" :icon="ellipse" :color="stateColor" />
-        <ion-label class="ion-text-wrap">
+        <ion-label>
           <h2>{{ status.item.name }}</h2>
-          <p>{{ statusLabel }} · каждые {{ rangeLabel }}</p>
-          <p v-if="dateLabel">
-            <ion-icon :icon="calendarOutline" size="small" />
+          <p class="subline">{{ statusLabel }} · каждые {{ rangeLabel }}</p>
+          <p v-if="dateLabel" class="subline">
+            <ion-icon :icon="calendarOutline" />
             {{ dateLabel }}
           </p>
           <ion-progress-bar :value="status.progress" :color="stateColor" />
@@ -150,8 +150,46 @@ function fmt(n: number): string {
 </template>
 
 <style scoped>
+.compact-item {
+  --min-height: 0;
+  --padding-top: 8px;
+  --padding-bottom: 8px;
+}
+
+.compact-item ion-label {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.compact-item h2 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subline {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subline ion-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 ion-progress-bar {
-  margin-top: 6px;
+  margin-top: 5px;
+  height: 3px;
+  border-radius: 2px;
 }
 
 .part-row {
