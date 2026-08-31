@@ -7,6 +7,8 @@ import {
   IonButtons,
   IonChip,
   IonContent,
+  IonDatetime,
+  IonDatetimeButton,
   IonHeader,
   IonIcon,
   IonInput,
@@ -23,6 +25,7 @@ import {
 import { checkmark } from 'ionicons/icons'
 import { haptic } from '../utils/haptics'
 import { mileageInputSeed } from '../utils/mileage'
+import type { FuelEntry } from '../types'
 
 const props = defineProps<{
   currentMileage: number
@@ -32,6 +35,8 @@ const props = defineProps<{
   lastStation?: string
   lastPrice: number | null
   lastMileage?: number
+  /** When set, the sheet edits this existing entry instead of creating a new one. */
+  entry?: FuelEntry
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +45,7 @@ const emit = defineEmits<{
     payload: {
       mileage: number
       liters: number
+      date?: number
       cost?: number
       fuelType?: string
       isFullTank?: boolean
@@ -52,21 +58,25 @@ const emit = defineEmits<{
 
 const FUEL_TYPES = ['АИ-92', 'АИ-95', 'АИ-98', 'Дизель', 'Газ']
 
-const mileage = ref(mileageInputSeed(props.currentMileage))
+const isEditing = computed(() => props.entry !== undefined)
+
+const mileage = ref(props.entry ? String(props.entry.mileage) : mileageInputSeed(props.currentMileage))
 // The seeded value is deliberately below currentMileage (only the trailing
 // digits are missing) — don't flag it as "too low" until the user actually
-// types something.
-const mileageTouched = ref(false)
-const liters = ref('')
-const cost = ref('')
+// types something. An existing entry's mileage is real, so flag it immediately.
+const mileageTouched = ref(isEditing.value)
+const liters = ref(props.entry ? String(props.entry.liters) : '')
+const cost = ref(props.entry?.cost !== undefined ? String(props.entry.cost) : '')
 const pricePerLiter = ref('')
-const fuelType = ref(props.lastFuelType ?? '')
-const isFullTank = ref(true)
-const hasRemaining = ref(false)
-const remainingLiters = ref('')
-const station = ref('')
-const comment = ref('')
+const fuelType = ref(props.entry?.fuelType ?? props.lastFuelType ?? '')
+const isFullTank = ref(props.entry?.isFullTank ?? true)
+const hasRemaining = ref(props.entry?.remainingLiters !== undefined)
+const remainingLiters = ref(props.entry?.remainingLiters !== undefined ? String(props.entry.remainingLiters) : '')
+const station = ref(props.entry?.station ?? '')
+const comment = ref(props.entry?.comment ?? '')
 const quickEntry = ref('')
+const dateIso = ref(new Date(props.entry?.date ?? Date.now()).toISOString())
+const maxDateIso = new Date().toISOString()
 
 // Parses a free-form line like "40л 3200р 80000км" into individual fields,
 // so a fill-up can be logged in one shot instead of tabbing through inputs.
@@ -97,9 +107,12 @@ function parseQuickEntry(raw: string): {
   }
 }
 
-// Pre-opened when there's a last fuel type to show, so the pre-filled
-// selection is visible without an extra tap on "Ещё".
-const accordionValue = ref<string | undefined>(props.lastFuelType ? 'more' : undefined)
+// Pre-opened when there's a last fuel type to show (or an existing entry has
+// any of these fields set), so the pre-filled selection is visible without an
+// extra tap on "Ещё".
+const accordionValue = ref<string | undefined>(
+  props.lastFuelType || props.entry?.fuelType || props.entry?.station || props.entry?.comment ? 'more' : undefined,
+)
 
 function applyQuickEntry() {
   if (!quickEntry.value.trim()) return
@@ -132,7 +145,7 @@ const isValid = computed(() => {
   if (
     mileage.value.trim().length === 0 ||
     Number.isNaN(mileageNumber.value) ||
-    mileageNumber.value < props.currentMileage ||
+    (isEditing.value ? mileageNumber.value <= 0 : mileageNumber.value < props.currentMileage) ||
     liters.value.trim().length === 0 ||
     Number.isNaN(litersNumber.value) ||
     litersNumber.value <= 0
@@ -196,7 +209,7 @@ const priceLooksOff = computed(() => {
 // fill-up's mileage is a strong, low-noise signal of an accidental
 // double-submit or a stale mileage typo — not a coincidence.
 const looksLikeDuplicate = computed(() => {
-  if (props.lastMileage === undefined || mileage.value.trim() === '' || Number.isNaN(mileageNumber.value)) {
+  if (isEditing.value || props.lastMileage === undefined || mileage.value.trim() === '' || Number.isNaN(mileageNumber.value)) {
     return false
   }
   return mileageNumber.value === props.lastMileage
@@ -249,6 +262,7 @@ function handleSave() {
   emit('save', {
     mileage: Math.round(mileageNumber.value),
     liters: litersNumber.value,
+    date: isEditing.value ? new Date(dateIso.value).getTime() : undefined,
     cost: finalCost,
     fuelType: fuelType.value || undefined,
     isFullTank: isFullTank.value,
@@ -266,14 +280,14 @@ function handleSave() {
         <ion-buttons slot="start">
           <ion-button @click="emit('close')">Отмена</ion-button>
         </ion-buttons>
-        <ion-title>Заправка</ion-title>
+        <ion-title>{{ isEditing ? 'Изменить заправку' : 'Заправка' }}</ion-title>
         <ion-buttons slot="end">
           <ion-button :strong="true" :disabled="!isValid" @click="handleSave">Готово</ion-button>
         </ion-buttons>
       </ion-toolbar>
     </ion-header>
     <ion-content>
-      <ion-list inset>
+      <ion-list v-if="!isEditing" inset>
         <ion-item lines="none">
           <ion-input
             v-model="quickEntry"
@@ -290,11 +304,21 @@ function handleSave() {
         </ion-item>
       </ion-list>
 
-      <div v-if="suggestionLabel" class="ion-padding-horizontal">
+      <div v-if="!isEditing && suggestionLabel" class="ion-padding-horizontal">
         <ion-chip color="primary" outline @click="applySuggestion">
           Как в прошлый раз: {{ suggestionLabel }}
         </ion-chip>
       </div>
+
+      <ion-list v-if="isEditing" inset>
+        <ion-item lines="none">
+          <ion-label>Дата</ion-label>
+          <ion-datetime-button slot="end" datetime="fuel-entry-date" />
+        </ion-item>
+      </ion-list>
+      <ion-modal v-if="isEditing" :keep-contents-mounted="true">
+        <ion-datetime id="fuel-entry-date" v-model="dateIso" presentation="date" locale="ru-RU" :max="maxDateIso" />
+      </ion-modal>
 
       <ion-list inset>
         <ion-item>
@@ -313,7 +337,7 @@ function handleSave() {
           <ion-input v-model="cost" label="Стоимость, ₽ (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
-      <ion-note v-if="mileageTouched && mileage.trim() && mileageNumber < currentMileage" color="danger" class="hint">
+      <ion-note v-if="!isEditing && mileageTouched && mileage.trim() && mileageNumber < currentMileage" color="danger" class="hint">
         Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
       </ion-note>
       <ion-note v-if="mileageTouched && looksLikeDuplicate" color="warning" class="hint">

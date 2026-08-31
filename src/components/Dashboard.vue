@@ -22,7 +22,6 @@ import MileageSheet from './MileageSheet.vue'
 import FuelSheet from './FuelSheet.vue'
 import CarSwitcherSheet from './CarSwitcherSheet.vue'
 import AddCarSheet from './AddCarSheet.vue'
-import CostEditSheet from './CostEditSheet.vue'
 import CarPassportSheet from './CarPassportSheet.vue'
 import EventsHistorySheet from './EventsHistorySheet.vue'
 import ReminderSheet from './ReminderSheet.vue'
@@ -65,11 +64,11 @@ const showPassportSheet = ref(false)
 const showEventsSheet = ref(false)
 const showReminderSheet = ref(false)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
-const editingFuelCostId = ref<string | null>(null)
+const editingFuelEntryId = ref<string | null>(null)
 const importError = ref<string | null>(null)
 
 const editingFuelEntry = computed<FuelEntry | null>(
-  () => store.fuelEntries.find((e) => e.id === editingFuelCostId.value) ?? null,
+  () => store.fuelEntries.find((e) => e.id === editingFuelEntryId.value) ?? null,
 )
 
 // Opens the matching sheet when launched from a PWA shortcut (manifest.shortcuts
@@ -302,13 +301,31 @@ async function handleDeleteFuel(id: string) {
   })
 }
 
-async function handleSaveFuelCost(cost: number | null) {
-  if (editingFuelCostId.value) await store.updateFuelCost(editingFuelCostId.value, cost)
-  editingFuelCostId.value = null
+async function handleSaveFuelEntry(payload: {
+  mileage: number
+  liters: number
+  date?: number
+  cost?: number
+  fuelType?: string
+  isFullTank?: boolean
+  remainingLiters?: number
+  station?: string
+  comment?: string
+}) {
+  if (!editingFuelEntryId.value) return
+  const entry = editingFuelEntry.value
+  await store.updateFuelEntry(editingFuelEntryId.value, {
+    ...payload,
+    date: payload.date ?? entry?.date ?? Date.now(),
+  })
+  editingFuelEntryId.value = null
 }
 
-async function handleUpdateHistoryCost(id: string, cost: number | null) {
-  await store.updateHistoryCost(id, cost)
+async function handleUpdateHistory(
+  id: string,
+  payload: { itemName: string; mileage: number; date: number; cost?: number },
+) {
+  await store.updateHistoryEntry(id, payload)
 }
 
 async function handleSaveCarInfo(payload: {
@@ -417,10 +434,6 @@ async function handleImportFile(file: File) {
   const result = await store.importData(parsed)
   if (!result.ok) importError.value = result.error
 }
-
-function fmtDate(ts: number): string {
-  return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-}
 </script>
 
 <template>
@@ -479,7 +492,7 @@ function fmtDate(ts: number): string {
         :cost-forecast="costForecast"
         @add-fuel="showFuelSheet = true"
         @delete-fuel="handleDeleteFuel"
-        @edit-cost="editingFuelCostId = $event"
+        @edit-fuel="editingFuelEntryId = $event"
         @export-csv="handleExportFuelCsv"
       />
 
@@ -515,7 +528,7 @@ function fmtDate(ts: number): string {
       @save="handleSaveItem"
       @create="handleCreateItem"
       @delete="handleDeleteItem"
-      @update-history-cost="handleUpdateHistoryCost"
+      @update-history="handleUpdateHistory"
     />
 
     <MileageSheet
@@ -545,13 +558,18 @@ function fmtDate(ts: number): string {
       @save="handleSaveFuel"
     />
 
-    <CostEditSheet
+    <FuelSheet
       v-if="editingFuelEntry"
-      title="Заправка"
-      :subtitle="fmtDate(editingFuelEntry.date)"
-      :current-cost="editingFuelEntry.cost"
-      @close="editingFuelCostId = null"
-      @save="handleSaveFuelCost"
+      :entry="editingFuelEntry"
+      :current-mileage="car.currentMileage"
+      :tank-capacity="car.tankCapacity"
+      :average-price="averageFuelPrice"
+      :last-fuel-type="lastFuelType"
+      :last-station="lastStation"
+      :last-price="lastPrice"
+      :last-mileage="lastFuelEntry?.mileage"
+      @close="editingFuelEntryId = null"
+      @save="handleSaveFuelEntry"
     />
 
     <CarPassportSheet

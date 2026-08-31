@@ -20,7 +20,7 @@ import {
 } from '@ionic/vue'
 import { calendarOutline, close, trash } from 'ionicons/icons'
 import type { HistoryEntry, MaintenanceItem, Part } from '../types'
-import CostEditSheet from './CostEditSheet.vue'
+import HistoryEditSheet from './HistoryEditSheet.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
 import { downloadIcsReminder } from '../utils/ics'
 import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
@@ -75,7 +75,7 @@ const emit = defineEmits<{
     },
   ]
   delete: [id: string]
-  updateHistoryCost: [id: string, cost: number | null]
+  updateHistory: [id: string, payload: { itemName: string; mileage: number; date: number; cost?: number }]
 }>()
 
 const editingHistoryId = ref<string | null>(null)
@@ -83,8 +83,8 @@ const editingHistoryEntry = computed(
   () => props.history.find((h) => h.id === editingHistoryId.value) ?? null,
 )
 
-function handleSaveHistoryCost(cost: number | null) {
-  if (editingHistoryId.value) emit('updateHistoryCost', editingHistoryId.value, cost)
+function handleSaveHistory(payload: { itemName: string; mileage: number; date: number; cost?: number }) {
+  if (editingHistoryId.value) emit('updateHistory', editingHistoryId.value, payload)
   editingHistoryId.value = null
 }
 
@@ -338,13 +338,12 @@ function handleAddToCalendar() {
         </ion-item>
       </ion-list>
 
-      <CostEditSheet
+      <HistoryEditSheet
         v-if="editingHistoryEntry"
-        title="ТО"
-        :subtitle="fmtHistoryDate(editingHistoryEntry.date)"
-        :current-cost="editingHistoryEntry.cost"
+        :entry="editingHistoryEntry"
+        :current-mileage="currentMileage"
         @close="editingHistoryId = null"
-        @save="handleSaveHistoryCost"
+        @save="handleSaveHistory"
       />
 
       <ion-list inset>

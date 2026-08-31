@@ -51,7 +51,7 @@ const fuelEntriesRaw = computed(() => props.fuelHistory.map((row) => row.entry))
 const emit = defineEmits<{
   addFuel: []
   deleteFuel: [id: string]
-  editCost: [id: string]
+  editFuel: [id: string]
   exportCsv: []
 }>()
 
@@ -188,7 +188,7 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
     <ion-list inset>
       <ion-list-header>Заправки</ion-list-header>
       <ion-item-sliding v-for="row in visible" :key="row.entry.id">
-        <ion-item button :detail="false" @click="emit('editCost', row.entry.id)">
+        <ion-item button :detail="false" @click="emit('editFuel', row.entry.id)">
           <ion-icon slot="start" :icon="ellipse" :color="qualityColor(row.quality)" />
           <ion-label class="ion-text-wrap">
             <h2>
