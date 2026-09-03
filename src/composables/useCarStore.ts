@@ -146,12 +146,21 @@ async function updateCarInfo(
 
 /**
  * `date` lets a reading be logged with the time it was actually taken (e.g.
- * backfilling an odometer check from a few days ago) instead of always
- * stamping `updatedAt` with "now".
+ * backfilling an odometer check from a few days ago, or any earlier date)
+ * instead of always stamping `updatedAt` with "now".
+ *
+ * `allowDecrease` skips the floor at `initialMileage` — set only after the
+ * caller has explicitly confirmed a genuine odometer rollback (a replaced
+ * cluster, a corrected earlier mistake). Without it, a lower reading is
+ * clamped up to `initialMileage` as a last-resort safety net.
  */
-async function updateMileage(newMileage: number, date?: number): Promise<void> {
+async function updateMileage(
+  newMileage: number,
+  date?: number,
+  options?: { allowDecrease?: boolean },
+): Promise<void> {
   if (!car.value) return
-  const clamped = Math.max(newMileage, car.value.initialMileage)
+  const clamped = options?.allowDecrease ? newMileage : Math.max(newMileage, car.value.initialMileage)
   const updated = patchCar(car.value.id, {
     currentMileage: clamped,
     ...(date !== undefined ? { updatedAt: date } : {}),
