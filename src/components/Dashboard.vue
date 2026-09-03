@@ -25,8 +25,11 @@ import AddCarSheet from './AddCarSheet.vue'
 import CarPassportSheet from './CarPassportSheet.vue'
 import EventsHistorySheet from './EventsHistorySheet.vue'
 import ReminderSheet from './ReminderSheet.vue'
+import MarkServicedSheet from './MarkServicedSheet.vue'
+import MasterListSheet from './MasterListSheet.vue'
+import MasterFormSheet from './MasterFormSheet.vue'
 import type { PassportData } from '../utils/carPassport'
-import type { FuelEntry, MaintenanceItem, MaintenanceStatus, Part } from '../types'
+import type { FuelEntry, MaintenanceItem, MaintenanceStatus, Master, Part } from '../types'
 
 const store = useCarStore()
 const {
@@ -63,6 +66,9 @@ const showAddCar = ref(false)
 const showPassportSheet = ref(false)
 const showEventsSheet = ref(false)
 const showReminderSheet = ref(false)
+const showMasterList = ref(false)
+const editingMaster = ref<Master | null | 'new'>(null)
+const markServicedItem = ref<MaintenanceItem | null>(null)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
 const editingFuelEntryId = ref<string | null>(null)
 const importError = ref<string | null>(null)
@@ -185,15 +191,48 @@ function closeEdit() {
   editingItem.value = null
 }
 
-async function handleMarkServiced(id: string) {
+function handleMarkServiced(id: string) {
   const item = store.items.find((i) => i.id === id)
-  const result = await store.markServiced(id)
-  if (car.value) clearNotifiedItem(car.value.id, id)
+  if (item) markServicedItem.value = item
+}
+
+async function handleConfirmMarkServiced(cost: number | undefined) {
+  const item = markServicedItem.value
+  if (!item) return
+  markServicedItem.value = null
+  const result = await store.markServiced(item.id, undefined, cost)
+  if (car.value) clearNotifiedItem(car.value.id, item.id)
   if (!result) return
   haptic('success')
-  toast.show(item ? `«${item.name}» — выполнено` : 'Отмечено как выполненное', {
+  toast.show(`«${item.name}» — выполнено`, {
     label: 'Отменить',
-    onAction: () => store.undoMarkServiced(id, result),
+    onAction: () => store.undoMarkServiced(item.id, result),
+  })
+}
+
+async function handleSaveMaster(payload: {
+  name: string
+  phone?: string
+  cardNumber?: string
+  link?: string
+  specialty?: string
+}) {
+  if (editingMaster.value && editingMaster.value !== 'new') {
+    await store.updateMaster(editingMaster.value.id, payload)
+  } else {
+    await store.addMaster(payload)
+  }
+  editingMaster.value = null
+}
+
+async function handleDeleteMaster(id: string) {
+  const master = store.masters.find((m) => m.id === id)
+  const removed = await store.deleteMaster(id)
+  if (!removed) return
+  haptic('delete')
+  toast.show(master ? `«${master.name}» удалён` : 'Мастер удалён', {
+    label: 'Отменить',
+    onAction: () => store.restoreMaster(removed),
   })
 }
 
@@ -500,12 +539,14 @@ async function handleImportFile(file: File) {
         v-if="activeTab === 'settings'"
         :car="car"
         :car-count="cars.length"
+        :master-count="store.masters.length"
         :import-error="importError"
         @save="handleSaveCarInfo"
         @delete-car="handleDeleteCar"
         @export="handleExport"
         @import="handleImportFile"
         @open-car-switcher="showCarSwitcher = true"
+        @open-masters="showMasterList = true"
         @share-passport="showPassportSheet = true"
         @notifications-enabled="handleNotificationsEnabled"
       />
@@ -596,6 +637,29 @@ async function handleImportFile(file: File) {
       v-if="showEventsSheet"
       :events="timelineEvents"
       @close="showEventsSheet = false"
+    />
+
+    <MarkServicedSheet
+      v-if="markServicedItem"
+      :item-name="markServicedItem.name"
+      @close="markServicedItem = null"
+      @save="handleConfirmMarkServiced"
+    />
+
+    <MasterListSheet
+      v-if="showMasterList"
+      :masters="store.masters"
+      @close="showMasterList = false"
+      @edit="editingMaster = $event"
+      @delete="handleDeleteMaster"
+      @add-master="editingMaster = 'new'"
+    />
+
+    <MasterFormSheet
+      v-if="editingMaster !== null"
+      :master="editingMaster !== 'new' ? editingMaster : null"
+      @close="editingMaster = null"
+      @save="handleSaveMaster"
     />
   </ion-page>
 </template>

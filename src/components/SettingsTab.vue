@@ -34,6 +34,7 @@ import {
   keyOutline,
   lockClosedOutline,
   notificationsOutline,
+  peopleOutline,
   refreshOutline,
   syncOutline,
   trashOutline,
@@ -79,6 +80,7 @@ import type { CloudProvider } from '../utils/cloudSync'
 const props = defineProps<{
   car: Car
   carCount: number
+  masterCount: number
   importError: string | null
 }>()
 
@@ -88,6 +90,7 @@ const emit = defineEmits<{
   export: []
   import: [file: File]
   openCarSwitcher: []
+  openMasters: []
   sharePassport: []
   notificationsEnabled: []
 }>()
@@ -377,6 +380,10 @@ function handleFileSelected(event: Event) {
       <ion-item button detail @click="emit('openCarSwitcher')">
         <SettingsIconBadge slot="start" :icon="carOutline" color="success" />
         <ion-label>Мои машины ({{ carCount }})</ion-label>
+      </ion-item>
+      <ion-item button detail @click="emit('openMasters')">
+        <SettingsIconBadge slot="start" :icon="peopleOutline" color="tertiary" />
+        <ion-label>Проверенные мастера ({{ masterCount }})</ion-label>
       </ion-item>
       <ion-item button detail lines="none" @click="emit('sharePassport')">
         <SettingsIconBadge slot="start" :icon="documentTextOutline" color="primary" />

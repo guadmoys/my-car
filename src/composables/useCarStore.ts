@@ -10,6 +10,7 @@ import type {
   LegacyBackupData,
   MaintenanceItem,
   MaintenanceStatus,
+  Master,
   Part,
   Reminder,
   ReminderStatus,
@@ -27,6 +28,7 @@ const items = reactive<MaintenanceItem[]>([])
 const fuelEntries = reactive<FuelEntry[]>([])
 const historyEntries = reactive<HistoryEntry[]>([])
 const reminders = reactive<Reminder[]>([])
+const masters = reactive<Master[]>([])
 const isLoaded = ref(false)
 
 const car = computed(() => cars.find((c) => c.id === activeCarId.value) ?? null)
@@ -48,16 +50,18 @@ function patchCar(carId: string, patch: Partial<Car>): Car | null {
 }
 
 async function loadCarData(carId: string): Promise<void> {
-  const [loadedItems, loadedFuel, loadedHistory, loadedReminders] = await Promise.all([
+  const [loadedItems, loadedFuel, loadedHistory, loadedReminders, loadedMasters] = await Promise.all([
     db.getMaintenanceItemsForCar(carId),
     db.getFuelEntriesForCar(carId),
     db.getHistoryForCar(carId),
     db.getRemindersForCar(carId),
+    db.getMastersForCar(carId),
   ])
   items.splice(0, items.length, ...loadedItems.map((item) => ({ ...item, parts: item.parts ?? [] })))
   fuelEntries.splice(0, fuelEntries.length, ...loadedFuel)
   historyEntries.splice(0, historyEntries.length, ...loadedHistory)
   reminders.splice(0, reminders.length, ...loadedReminders)
+  masters.splice(0, masters.length, ...loadedMasters)
 }
 
 async function load(): Promise<void> {
@@ -112,6 +116,7 @@ async function createCar(input: {
   fuelEntries.splice(0, fuelEntries.length)
   historyEntries.splice(0, historyEntries.length)
   reminders.splice(0, reminders.length)
+  masters.splice(0, masters.length)
 }
 
 async function deleteCar(carId: string): Promise<void> {
@@ -133,6 +138,7 @@ async function deleteCar(carId: string): Promise<void> {
     fuelEntries.splice(0, fuelEntries.length)
     historyEntries.splice(0, historyEntries.length)
     reminders.splice(0, reminders.length)
+    masters.splice(0, masters.length)
   }
 }
 
@@ -196,7 +202,7 @@ export interface MarkServicedResult {
   previous: { lastServiceMileage: number; lastServiceDate: number | null }
 }
 
-async function markServiced(id: string, atMileage?: number): Promise<MarkServicedResult | null> {
+async function markServiced(id: string, atMileage?: number, cost?: number): Promise<MarkServicedResult | null> {
   const item = items.find((i) => i.id === id)
   if (!item || !car.value) return null
   const previous = { lastServiceMileage: item.lastServiceMileage, lastServiceDate: item.lastServiceDate }
@@ -212,6 +218,7 @@ async function markServiced(id: string, atMileage?: number): Promise<MarkService
     itemName: item.name,
     mileage,
     date: nowTs(),
+    cost,
   }
   historyEntries.unshift(entry)
   await db.putHistoryEntry(entry)
@@ -399,6 +406,56 @@ async function restoreReminder(reminder: Reminder): Promise<void> {
   if (reminders.some((r) => r.id === reminder.id)) return
   reminders.push(reminder)
   await db.putReminder(reminder)
+}
+
+async function addMaster(input: {
+  name: string
+  phone?: string
+  cardNumber?: string
+  link?: string
+  specialty?: string
+}): Promise<void> {
+  if (!car.value) return
+  const master: Master = {
+    id: makeId(),
+    carId: car.value.id,
+    name: input.name.trim(),
+    phone: input.phone?.trim() || undefined,
+    cardNumber: input.cardNumber?.trim() || undefined,
+    link: input.link?.trim() || undefined,
+    specialty: input.specialty?.trim() || undefined,
+    createdAt: nowTs(),
+  }
+  masters.push(master)
+  await db.putMaster(master)
+}
+
+async function updateMaster(
+  id: string,
+  patch: { name: string; phone?: string; cardNumber?: string; link?: string; specialty?: string },
+): Promise<void> {
+  const master = masters.find((m) => m.id === id)
+  if (!master) return
+  master.name = patch.name.trim()
+  master.phone = patch.phone?.trim() || undefined
+  master.cardNumber = patch.cardNumber?.trim() || undefined
+  master.link = patch.link?.trim() || undefined
+  master.specialty = patch.specialty?.trim() || undefined
+  await db.putMaster({ ...master })
+}
+
+async function deleteMaster(id: string): Promise<Master | null> {
+  const index = masters.findIndex((m) => m.id === id)
+  if (index === -1) return null
+  const [removed] = masters.splice(index, 1)
+  await db.deleteMaster(id)
+  return removed
+}
+
+async function restoreMaster(master: Master): Promise<void> {
+  if (masters.some((m) => m.id === master.id)) return
+  masters.push(master)
+  await db.putMaster(master)
 }
 
 function addMonths(ts: number, months: number): number {
@@ -1050,12 +1107,13 @@ function isLegacyBackup(data: unknown): data is LegacyBackupData {
 }
 
 async function exportData(): Promise<BackupData> {
-  const [allCars, allItems, allFuel, allHistory, allReminders] = await Promise.all([
+  const [allCars, allItems, allFuel, allHistory, allReminders, allMasters] = await Promise.all([
     db.getAllCars(),
     db.getAllMaintenanceItemsRaw(),
     db.getAllFuelEntriesRaw(),
     db.getAllHistoryRaw(),
     db.getAllRemindersRaw(),
+    db.getAllMastersRaw(),
   ])
   return {
     version: 2,
@@ -1066,6 +1124,7 @@ async function exportData(): Promise<BackupData> {
     fuelEntries: allFuel,
     historyEntries: allHistory,
     reminders: allReminders,
+    masters: allMasters,
   }
 }
 
@@ -1075,6 +1134,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   let importedFuel: FuelEntry[]
   let importedHistory: HistoryEntry[]
   let importedReminders: Reminder[]
+  let importedMasters: Master[]
   let newActiveCarId: string | undefined
 
   if (isMultiCarBackup(data)) {
@@ -1083,6 +1143,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     importedFuel = Array.isArray(data.fuelEntries) ? data.fuelEntries : []
     importedHistory = Array.isArray(data.historyEntries) ? data.historyEntries : []
     importedReminders = Array.isArray(data.reminders) ? data.reminders : []
+    importedMasters = Array.isArray(data.masters) ? data.masters : []
     newActiveCarId =
       data.activeCarId && importedCars.some((c) => c.id === data.activeCarId)
         ? data.activeCarId
@@ -1094,6 +1155,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     importedFuel = (data.fuelEntries ?? []).map((f) => ({ ...f, carId }))
     importedHistory = (data.historyEntries ?? []).map((h) => ({ ...h, carId }))
     importedReminders = []
+    importedMasters = []
     newActiveCarId = carId
   } else {
     return { ok: false, error: 'Файл повреждён или это не резервная копия «Моей машины»' }
@@ -1109,6 +1171,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   if (importedFuel.length) await db.putFuelEntries(importedFuel)
   if (importedHistory.length) await db.putHistoryEntries(importedHistory)
   if (importedReminders.length) await db.putReminders(importedReminders)
+  if (importedMasters.length) await db.putMasters(importedMasters)
 
   cars.splice(0, cars.length, ...importedCars)
   activeCarId.value = newActiveCarId
@@ -1122,6 +1185,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     ...importedHistory.filter((h) => h.carId === newActiveCarId),
   )
   reminders.splice(0, reminders.length, ...importedReminders.filter((r) => r.carId === newActiveCarId))
+  masters.splice(0, masters.length, ...importedMasters.filter((m) => m.carId === newActiveCarId))
 
   return { ok: true }
 }
@@ -1134,6 +1198,7 @@ export function useCarStore() {
     fuelEntries,
     historyEntries,
     reminders,
+    masters,
     isLoaded,
     statuses,
     dueCount,
@@ -1168,6 +1233,10 @@ export function useCarStore() {
     addReminder,
     deleteReminder,
     restoreReminder,
+    addMaster,
+    updateMaster,
+    deleteMaster,
+    restoreMaster,
     addFuelEntry,
     deleteFuelEntry,
     restoreFuelEntry,

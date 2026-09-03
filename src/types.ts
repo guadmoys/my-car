@@ -90,6 +90,25 @@ export interface ReminderStatus {
   remainingDays?: number
 }
 
+/**
+ * A trusted mechanic/service provider ("проверенный мастер") the user has
+ * used before and wants to keep on hand for next time.
+ */
+export interface Master {
+  id: string
+  carId: string
+  name: string
+  /** Phone number to reach them. */
+  phone?: string
+  /** Bank card number for sending payment. */
+  cardNumber?: string
+  /** Link to their profile/chat/listing (Telegram, Avito, VK, etc). */
+  link?: string
+  /** What they do, e.g. "Развал-схождение", "Кузовной ремонт". */
+  specialty?: string
+  createdAt: number
+}
+
 export interface HistoryEntry {
   id: string
   carId: string
@@ -160,6 +179,8 @@ export interface BackupData {
   historyEntries: HistoryEntry[]
   /** Absent when importing a backup made before reminders existed. */
   reminders?: Reminder[]
+  /** Absent when importing a backup made before trusted masters existed. */
+  masters?: Master[]
 }
 
 /** Shape of a v1 backup (single car, no carId fields), kept only for import compatibility. */
