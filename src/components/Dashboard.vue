@@ -251,8 +251,8 @@ async function handleBulkDelete(ids: string[]) {
   })
 }
 
-async function handleSaveMileage(mileage: number, date: number) {
-  await store.updateMileage(mileage, date)
+async function handleSaveMileage(mileage: number, date: number, isRollback: boolean) {
+  await store.updateMileage(mileage, date, { allowDecrease: isRollback })
   showMileageSheet.value = false
 }
 
@@ -533,7 +533,9 @@ async function handleImportFile(file: File) {
 
     <MileageSheet
       v-if="showMileageSheet"
-      :current-mileage="car.currentMileage"
+      :car="car"
+      :fuel-entries="store.fuelEntries"
+      :history-entries="store.historyEntries"
       @close="showMileageSheet = false"
       @save="handleSaveMileage"
     />
