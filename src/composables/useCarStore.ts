@@ -42,7 +42,7 @@ function makeId(): string {
 function patchCar(carId: string, patch: Partial<Car>): Car | null {
   const idx = cars.findIndex((c) => c.id === carId)
   if (idx === -1) return null
-  const updated: Car = { ...cars[idx], ...patch, updatedAt: nowTs() }
+  const updated: Car = { ...cars[idx], ...patch, updatedAt: patch.updatedAt ?? nowTs() }
   cars[idx] = updated
   return updated
 }
@@ -144,10 +144,18 @@ async function updateCarInfo(
   if (updated) await db.putCar(updated)
 }
 
-async function updateMileage(newMileage: number): Promise<void> {
+/**
+ * `date` lets a reading be logged with the time it was actually taken (e.g.
+ * backfilling an odometer check from a few days ago) instead of always
+ * stamping `updatedAt` with "now".
+ */
+async function updateMileage(newMileage: number, date?: number): Promise<void> {
   if (!car.value) return
   const clamped = Math.max(newMileage, car.value.initialMileage)
-  const updated = patchCar(car.value.id, { currentMileage: clamped })
+  const updated = patchCar(car.value.id, {
+    currentMileage: clamped,
+    ...(date !== undefined ? { updatedAt: date } : {}),
+  })
   if (updated) await db.putCar(updated)
 }
 

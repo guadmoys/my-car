@@ -251,8 +251,8 @@ async function handleBulkDelete(ids: string[]) {
   })
 }
 
-async function handleSaveMileage(mileage: number) {
-  await store.updateMileage(mileage)
+async function handleSaveMileage(mileage: number, date: number) {
+  await store.updateMileage(mileage, date)
   showMileageSheet.value = false
 }
 
