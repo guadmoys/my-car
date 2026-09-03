@@ -1,6 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { IonButton, IonButtons, IonContent, IonHeader, IonInput, IonItem, IonList, IonModal, IonNote, IonTitle, IonToolbar } from '@ionic/vue'
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonDatetime,
+  IonDatetimeButton,
+  IonHeader,
+  IonInput,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonModal,
+  IonNote,
+  IonTitle,
+  IonToolbar,
+} from '@ionic/vue'
 import { mileageInputSeed } from '../utils/mileage'
 
 const props = defineProps<{
@@ -9,7 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [mileage: number]
+  save: [mileage: number, date: number]
 }>()
 
 const value = ref(mileageInputSeed(props.currentMileage))
@@ -17,6 +32,8 @@ const value = ref(mileageInputSeed(props.currentMileage))
 // digits are missing) — don't flag it as "too low" until the user actually
 // types something.
 const touched = ref(false)
+const dateIso = ref(new Date().toISOString())
+const maxDateIso = new Date().toISOString()
 
 const number = computed(() => Number(value.value.replace(/\s/g, '')))
 const isValid = computed(
@@ -25,7 +42,7 @@ const isValid = computed(
 
 function handleSave() {
   if (!isValid.value) return
-  emit('save', Math.round(number.value))
+  emit('save', Math.round(number.value), new Date(dateIso.value).getTime())
 }
 </script>
 
@@ -44,7 +61,7 @@ function handleSave() {
     </ion-header>
     <ion-content>
       <ion-list inset>
-        <ion-item lines="none">
+        <ion-item lines="full">
           <ion-input
             v-model="value"
             label="Текущий пробег, км"
@@ -55,7 +72,14 @@ function handleSave() {
             @ion-input="touched = true"
           />
         </ion-item>
+        <ion-item lines="none">
+          <ion-label>Дата и время</ion-label>
+          <ion-datetime-button slot="end" datetime="mileage-entry-date" />
+        </ion-item>
       </ion-list>
+      <ion-modal :keep-contents-mounted="true">
+        <ion-datetime id="mileage-entry-date" v-model="dateIso" presentation="date-time" locale="ru-RU" :max="maxDateIso" />
+      </ion-modal>
       <ion-note v-if="touched && !isValid" color="medium" class="hint">
         Новый пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
       </ion-note>
