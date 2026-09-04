@@ -251,7 +251,7 @@ function fmtCost(n: number): string {
         <ion-label>Топливо</ion-label>
         <ion-note slot="end">{{ fmtCost(totalFuelCost) }}</ion-note>
       </ion-item>
-      <ion-item button detail @click="emit('viewAllFuel')">
+      <ion-item button detail @click="emit('viewAllMaintenance')">
         <ion-label>ТО</ion-label>
         <ion-note slot="end">{{ fmtCost(totalServiceCost) }}</ion-note>
       </ion-item>

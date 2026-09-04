@@ -72,6 +72,10 @@ const dateLabel = computed(() => {
 function fmt(n: number): string {
   return Math.round(n).toLocaleString('ru-RU')
 }
+
+function openSite(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <template>
@@ -135,10 +139,8 @@ function fmt(n: number): string {
             <ion-chip
               v-for="site in PART_LINK_SITES"
               :key="site.key"
-              :href="site.url(partSearchQuery(part)!)"
-              target="_blank"
-              rel="noopener noreferrer"
               outline
+              @click="openSite(site.url(partSearchQuery(part)))"
             >
               {{ site.label }}
             </ion-chip>
