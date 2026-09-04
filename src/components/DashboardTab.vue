@@ -37,6 +37,7 @@ const props = defineProps<{
   eventsTotal: number
   totalFuelCost: number
   totalServiceCost: number
+  totalExpensesCost: number
   totalCost: number
   hasAnyCost: boolean
   urgentStatuses: MaintenanceStatus[]
@@ -103,6 +104,7 @@ const emit = defineEmits<{
   viewAllEvents: []
   addReminder: []
   deleteReminder: [id: string]
+  viewOtherExpenses: []
 }>()
 
 function stateColor(state: MaintenanceStatus['state']): string {
@@ -252,6 +254,10 @@ function fmtCost(n: number): string {
       <ion-item button detail @click="emit('viewAllFuel')">
         <ion-label>ТО</ion-label>
         <ion-note slot="end">{{ fmtCost(totalServiceCost) }}</ion-note>
+      </ion-item>
+      <ion-item v-if="totalExpensesCost > 0" button detail @click="emit('viewOtherExpenses')">
+        <ion-label>Прочее</ion-label>
+        <ion-note slot="end">{{ fmtCost(totalExpensesCost) }}</ion-note>
       </ion-item>
       <ion-item button detail @click="emit('viewAllFuel')">
         <ion-label><strong>Итого</strong></ion-label>

@@ -40,6 +40,7 @@ const props = defineProps<{
   fuelInsights: FuelInsight[]
   totalFuelCost: number
   totalServiceCost: number
+  totalExpensesCost: number
   totalCost: number
   totalCo2Kg: number
   hasAnyCost: boolean
@@ -53,6 +54,7 @@ const emit = defineEmits<{
   deleteFuel: [id: string]
   editFuel: [id: string]
   exportCsv: []
+  viewOtherExpenses: []
 }>()
 
 const showAll = ref(false)
@@ -123,6 +125,10 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
       <ion-list-header>Расходы</ion-list-header>
       <ion-item><ion-label>Топливо</ion-label><ion-note slot="end">{{ fmtCost(totalFuelCost) }}</ion-note></ion-item>
       <ion-item><ion-label>ТО</ion-label><ion-note slot="end">{{ fmtCost(totalServiceCost) }}</ion-note></ion-item>
+      <ion-item v-if="totalExpensesCost > 0" button detail @click="emit('viewOtherExpenses')">
+        <ion-label>Прочее</ion-label>
+        <ion-note slot="end">{{ fmtCost(totalExpensesCost) }}</ion-note>
+      </ion-item>
       <ion-item>
         <ion-label><strong>Итого</strong></ion-label>
         <ion-note slot="end" color="primary"><strong>{{ fmtCost(totalCost) }}</strong></ion-note>

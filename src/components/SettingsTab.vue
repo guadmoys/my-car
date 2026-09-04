@@ -21,27 +21,37 @@ import {
   type ToggleCustomEvent,
 } from '@ionic/vue'
 import {
+  barcodeOutline,
+  buildOutline,
   calendarOutline,
+  cameraOutline,
   carOutline,
   carSportOutline,
+  cashOutline,
   cloudDownloadOutline,
   cloudUploadOutline,
   closeCircleOutline,
+  documentOutline,
   documentTextOutline,
   downloadOutline,
   eyeOutline,
   fingerPrintOutline,
+  folderOutline,
   keyOutline,
   lockClosedOutline,
+  mapOutline,
   notificationsOutline,
   peopleOutline,
+  pricetagOutline,
   refreshOutline,
+  speedometerOutline,
   syncOutline,
   trashOutline,
   waterOutline,
 } from 'ionicons/icons'
 import type { Car } from '../types'
 import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
+import { fileToDataUrl } from '../utils/photo'
 import PickerSheet from './PickerSheet.vue'
 import SettingsIconBadge from './SettingsIconBadge.vue'
 import HintButton from './HintButton.vue'
@@ -81,16 +91,35 @@ const props = defineProps<{
   car: Car
   carCount: number
   masterCount: number
+  expenseCount: number
+  tripCount: number
   importError: string | null
 }>()
 
 const emit = defineEmits<{
-  save: [payload: { make: string; model: string; year: number; tankCapacity?: number }]
+  save: [
+    payload: {
+      make: string
+      model: string
+      year: number
+      tankCapacity?: number
+      vin?: string
+      licensePlate?: string
+      stsNumber?: string
+      referenceConsumptionL100km?: number
+    },
+  ]
   deleteCar: []
   export: []
+  exportPdf: []
   import: [file: File]
   openCarSwitcher: []
   openMasters: []
+  openExpenses: []
+  openComponents: []
+  openTrips: []
+  addPhoto: [dataUrl: string]
+  removePhoto: [index: number]
   sharePassport: []
   notificationsEnabled: []
 }>()
@@ -99,8 +128,13 @@ const make = ref(props.car.make)
 const model = ref(props.car.model)
 const year = ref(String(props.car.year))
 const tankCapacity = ref(props.car.tankCapacity !== undefined ? String(props.car.tankCapacity) : '')
+const vin = ref(props.car.vin ?? '')
+const licensePlate = ref(props.car.licensePlate ?? '')
+const stsNumber = ref(props.car.stsNumber ?? '')
+const referenceConsumption = ref(props.car.referenceConsumptionL100km !== undefined ? String(props.car.referenceConsumptionL100km) : '')
 const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const photoFileInput = ref<HTMLInputElement | null>(null)
 const activePicker = ref<'make' | 'model' | null>(null)
 const modelOptions = computed(() => modelsForMake(make.value))
 
@@ -111,6 +145,10 @@ watch(
     model.value = props.car.model
     year.value = String(props.car.year)
     tankCapacity.value = props.car.tankCapacity !== undefined ? String(props.car.tankCapacity) : ''
+    vin.value = props.car.vin ?? ''
+    licensePlate.value = props.car.licensePlate ?? ''
+    stsNumber.value = props.car.stsNumber ?? ''
+    referenceConsumption.value = props.car.referenceConsumptionL100km !== undefined ? String(props.car.referenceConsumptionL100km) : ''
     confirmingDelete.value = false
   },
 )
@@ -209,15 +247,52 @@ function commitCarInfo() {
   const capacityNumber = capacityTrimmed === '' ? undefined : Number(capacityTrimmed)
   if (capacityNumber !== undefined && (Number.isNaN(capacityNumber) || capacityNumber < 0)) return
 
+  const referenceTrimmed = referenceConsumption.value.trim().replace(',', '.')
+  const referenceNumber = referenceTrimmed === '' ? undefined : Number(referenceTrimmed)
+  if (referenceNumber !== undefined && (Number.isNaN(referenceNumber) || referenceNumber < 0)) return
+
+  const vinTrimmed = vin.value.trim() || undefined
+  const plateTrimmed = licensePlate.value.trim() || undefined
+  const stsTrimmed = stsNumber.value.trim() || undefined
+
   if (
     make.value.trim() === props.car.make &&
     model.value.trim() === props.car.model &&
     y === props.car.year &&
-    capacityNumber === props.car.tankCapacity
+    capacityNumber === props.car.tankCapacity &&
+    vinTrimmed === props.car.vin &&
+    plateTrimmed === props.car.licensePlate &&
+    stsTrimmed === props.car.stsNumber &&
+    referenceNumber === props.car.referenceConsumptionL100km
   ) {
     return
   }
-  emit('save', { make: make.value.trim(), model: model.value.trim(), year: y, tankCapacity: capacityNumber })
+  emit('save', {
+    make: make.value.trim(),
+    model: model.value.trim(),
+    year: y,
+    tankCapacity: capacityNumber,
+    vin: vinTrimmed,
+    licensePlate: plateTrimmed,
+    stsNumber: stsTrimmed,
+    referenceConsumptionL100km: referenceNumber,
+  })
+}
+
+function triggerAddPhoto() {
+  photoFileInput.value?.click()
+}
+
+async function handlePhotoSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    emit('addPhoto', await fileToDataUrl(file))
+  } catch {
+    toast.show('Не удалось загрузить фото')
+  }
 }
 
 function handleDelete() {
@@ -363,7 +438,7 @@ function handleFileSelected(event: Event) {
           @ion-blur="commitCarInfo"
         />
       </ion-item>
-      <ion-item lines="none">
+      <ion-item>
         <SettingsIconBadge slot="start" :icon="waterOutline" color="secondary" />
         <ion-input
           v-model="tankCapacity"
@@ -374,6 +449,53 @@ function handleFileSelected(event: Event) {
           @ion-blur="commitCarInfo"
         />
       </ion-item>
+      <ion-item>
+        <SettingsIconBadge slot="start" :icon="speedometerOutline" color="secondary" />
+        <ion-input
+          v-model="referenceConsumption"
+          label="Паспортный расход, л/100км (необязательно)"
+          label-placement="stacked"
+          inputmode="decimal"
+          placeholder="—"
+          @ion-blur="commitCarInfo"
+        />
+      </ion-item>
+      <ion-item>
+        <SettingsIconBadge slot="start" :icon="barcodeOutline" color="medium" />
+        <ion-input v-model="vin" label="VIN (необязательно)" label-placement="stacked" placeholder="—" @ion-blur="commitCarInfo" />
+      </ion-item>
+      <ion-item>
+        <SettingsIconBadge slot="start" :icon="pricetagOutline" color="medium" />
+        <ion-input
+          v-model="licensePlate"
+          label="Госномер (необязательно)"
+          label-placement="stacked"
+          placeholder="—"
+          @ion-blur="commitCarInfo"
+        />
+      </ion-item>
+      <ion-item lines="none">
+        <SettingsIconBadge slot="start" :icon="folderOutline" color="medium" />
+        <ion-input v-model="stsNumber" label="СТС (необязательно)" label-placement="stacked" placeholder="—" @ion-blur="commitCarInfo" />
+      </ion-item>
+    </ion-list>
+
+    <ion-list inset>
+      <ion-list-header>
+        <ion-label>Фото машины и документов</ion-label>
+      </ion-list-header>
+      <ion-item lines="none">
+        <div class="photo-row">
+          <div v-for="(photo, index) in car.photos ?? []" :key="index" class="photo-thumb-wrap">
+            <img :src="photo" alt="Фото машины" class="photo-thumb" />
+            <button type="button" class="photo-remove" aria-label="Удалить фото" @click="emit('removePhoto', index)">×</button>
+          </div>
+          <button type="button" class="photo-add" @click="triggerAddPhoto">
+            <ion-icon :icon="cameraOutline" />
+          </button>
+        </div>
+      </ion-item>
+      <input ref="photoFileInput" type="file" accept="image/*" class="sr-only" @change="handlePhotoSelected" />
     </ion-list>
 
     <ion-list inset>
@@ -384,6 +506,18 @@ function handleFileSelected(event: Event) {
       <ion-item button detail @click="emit('openMasters')">
         <SettingsIconBadge slot="start" :icon="peopleOutline" color="tertiary" />
         <ion-label>Проверенные мастера ({{ masterCount }})</ion-label>
+      </ion-item>
+      <ion-item button detail @click="emit('openExpenses')">
+        <SettingsIconBadge slot="start" :icon="cashOutline" color="warning" />
+        <ion-label>Прочие расходы ({{ expenseCount }})</ion-label>
+      </ion-item>
+      <ion-item button detail @click="emit('openComponents')">
+        <SettingsIconBadge slot="start" :icon="buildOutline" color="dark" />
+        <ion-label>Компоненты (шины, АКБ, колодки)</ion-label>
+      </ion-item>
+      <ion-item button detail @click="emit('openTrips')">
+        <SettingsIconBadge slot="start" :icon="mapOutline" color="secondary" />
+        <ion-label>Поездки ({{ tripCount }})</ion-label>
       </ion-item>
       <ion-item button detail lines="none" @click="emit('sharePassport')">
         <SettingsIconBadge slot="start" :icon="documentTextOutline" color="primary" />
@@ -489,6 +623,10 @@ function handleFileSelected(event: Event) {
       <ion-item button :detail="false" @click="emit('export')">
         <SettingsIconBadge slot="start" :icon="downloadOutline" color="success" />
         <ion-label color="primary">Экспортировать данные</ion-label>
+      </ion-item>
+      <ion-item button :detail="false" @click="emit('exportPdf')">
+        <SettingsIconBadge slot="start" :icon="documentOutline" color="danger" />
+        <ion-label color="primary">Экспортировать отчёт (PDF)</ion-label>
       </ion-item>
       <ion-item button :detail="false" lines="none" @click="triggerImport">
         <SettingsIconBadge slot="start" :icon="cloudUploadOutline" color="tertiary" />
@@ -614,6 +752,52 @@ function handleFileSelected(event: Event) {
 
 .hint.error {
   color: var(--ion-color-danger);
+}
+
+.photo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.photo-thumb-wrap {
+  position: relative;
+}
+
+.photo-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}
+
+.photo-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: var(--ion-color-danger);
+  color: #fff;
+  line-height: 1;
+  font-size: 14px;
+}
+
+.photo-add {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  border: 1px dashed var(--ion-color-medium);
+  background: none;
+  color: var(--ion-color-medium);
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cloud-avatar {

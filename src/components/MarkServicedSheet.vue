@@ -13,6 +13,7 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
+import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
   itemName: string
@@ -20,17 +21,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [cost: number | undefined]
+  save: [payload: { cost?: number; receiptPhoto?: string }]
 }>()
 
 const cost = ref('')
+const receiptPhoto = ref<string | undefined>(undefined)
 
 const costNumber = computed(() => Number(cost.value.replace(/\s/g, '').replace(',', '.')))
 const costInvalid = computed(() => cost.value.trim() !== '' && (Number.isNaN(costNumber.value) || costNumber.value < 0))
 
 function handleSave() {
   if (costInvalid.value) return
-  emit('save', cost.value.trim() === '' ? undefined : costNumber.value)
+  emit('save', { cost: cost.value.trim() === '' ? undefined : costNumber.value, receiptPhoto: receiptPhoto.value })
 }
 </script>
 
@@ -62,6 +64,7 @@ function handleSave() {
         </ion-item>
       </ion-list>
       <ion-note v-if="costInvalid" color="danger" class="hint">Стоимость не может быть отрицательной</ion-note>
+      <ReceiptPhotoField v-model="receiptPhoto" />
     </ion-content>
   </ion-modal>
 </template>

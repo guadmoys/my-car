@@ -17,6 +17,7 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import type { HistoryEntry } from '../types'
+import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
   entry: HistoryEntry
@@ -25,12 +26,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { itemName: string; mileage: number; date: number; cost?: number }]
+  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string }]
 }>()
 
 const itemName = ref(props.entry.itemName)
 const mileage = ref(String(props.entry.mileage))
 const cost = ref(props.entry.cost !== undefined ? String(props.entry.cost) : '')
+const receiptPhoto = ref<string | undefined>(props.entry.receiptPhoto)
 const dateIso = ref(new Date(props.entry.date).toISOString())
 const maxDateIso = new Date().toISOString()
 
@@ -58,6 +60,7 @@ function handleSave() {
     mileage: Math.round(mileageNumber.value),
     date: new Date(dateIso.value).getTime(),
     cost: cost.value.trim() === '' ? undefined : costNumber.value,
+    receiptPhoto: receiptPhoto.value,
   })
 }
 </script>
@@ -97,6 +100,7 @@ function handleSave() {
           <ion-input v-model="cost" label="Стоимость, ₽ (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
+      <ReceiptPhotoField v-model="receiptPhoto" />
       <ion-note v-if="mileageNumber > currentMileage" color="danger" class="hint">
         Не может быть больше текущего пробега машины ({{ Math.round(currentMileage).toLocaleString('ru-RU') }} км)
       </ion-note>
