@@ -51,7 +51,6 @@ const hasRenewal = ref(props.expense?.renewalDate !== undefined)
 const renewalIso = ref(new Date(props.expense?.renewalDate ?? Date.now()).toISOString())
 const note = ref(props.expense?.note ?? '')
 const receiptPhoto = ref<string | undefined>(props.expense?.receiptPhoto)
-const maxDateIso = new Date().toISOString()
 
 const amountNumber = computed(() => Number(amount.value.replace(/\s/g, '').replace(',', '.')))
 
@@ -121,7 +120,7 @@ function handleSave() {
         </ion-item>
       </ion-list>
       <ion-modal :keep-contents-mounted="true">
-        <ion-datetime id="expense-date" v-model="dateIso" presentation="date" locale="ru-RU" :max="maxDateIso" />
+        <ion-datetime id="expense-date" v-model="dateIso" presentation="date" locale="ru-RU" />
       </ion-modal>
 
       <ion-list inset>

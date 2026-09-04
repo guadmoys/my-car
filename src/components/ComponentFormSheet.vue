@@ -51,7 +51,6 @@ const pressureRear = ref('')
 const thicknessMm = ref('')
 const installedDateIso = ref(new Date().toISOString())
 const note = ref('')
-const maxDateIso = new Date().toISOString()
 
 function num(v: string): number | undefined {
   if (v.trim() === '') return undefined
@@ -132,7 +131,7 @@ function handleSave() {
           </ion-item>
         </ion-list>
         <ion-modal :keep-contents-mounted="true">
-          <ion-datetime id="battery-installed-date" v-model="installedDateIso" presentation="date" locale="ru-RU" :max="maxDateIso" />
+          <ion-datetime id="battery-installed-date" v-model="installedDateIso" presentation="date" locale="ru-RU" />
         </ion-modal>
       </template>
 

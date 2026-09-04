@@ -79,7 +79,6 @@ const comment = ref(props.entry?.comment ?? '')
 const receiptPhoto = ref<string | undefined>(props.entry?.receiptPhoto)
 const quickEntry = ref('')
 const dateIso = ref(new Date(props.entry?.date ?? Date.now()).toISOString())
-const maxDateIso = new Date().toISOString()
 
 // Parses a free-form line like "40л 3200р 80000км" into individual fields,
 // so a fill-up can be logged in one shot instead of tabbing through inputs.
@@ -321,7 +320,7 @@ function handleSave() {
         </ion-item>
       </ion-list>
       <ion-modal v-if="isEditing" :keep-contents-mounted="true">
-        <ion-datetime id="fuel-entry-date" v-model="dateIso" presentation="date" locale="ru-RU" :max="maxDateIso" />
+        <ion-datetime id="fuel-entry-date" v-model="dateIso" presentation="date" locale="ru-RU" />
       </ion-modal>
 
       <ion-list inset>

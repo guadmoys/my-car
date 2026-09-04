@@ -33,7 +33,6 @@ const endMileage = ref('')
 const purpose = ref<'business' | 'personal'>('business')
 const dateIso = ref(new Date().toISOString())
 const note = ref('')
-const maxDateIso = new Date().toISOString()
 
 const startNumber = computed(() => Number(startMileage.value.replace(/\s/g, '')))
 const endNumber = computed(() => Number(endMileage.value.replace(/\s/g, '')))
@@ -96,7 +95,7 @@ function handleSave() {
         </ion-item>
       </ion-list>
       <ion-modal :keep-contents-mounted="true">
-        <ion-datetime id="trip-date" v-model="dateIso" presentation="date" locale="ru-RU" :max="maxDateIso" />
+        <ion-datetime id="trip-date" v-model="dateIso" presentation="date" locale="ru-RU" />
       </ion-modal>
 
       <ion-list inset>

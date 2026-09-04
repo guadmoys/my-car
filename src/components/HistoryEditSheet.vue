@@ -34,7 +34,6 @@ const mileage = ref(String(props.entry.mileage))
 const cost = ref(props.entry.cost !== undefined ? String(props.entry.cost) : '')
 const receiptPhoto = ref<string | undefined>(props.entry.receiptPhoto)
 const dateIso = ref(new Date(props.entry.date).toISOString())
-const maxDateIso = new Date().toISOString()
 
 const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '').replace(',', '.')))
 const costNumber = computed(() => Number(cost.value.replace(/\s/g, '').replace(',', '.')))
@@ -89,7 +88,7 @@ function handleSave() {
         </ion-item>
       </ion-list>
       <ion-modal :keep-contents-mounted="true">
-        <ion-datetime id="history-entry-date" v-model="dateIso" presentation="date" locale="ru-RU" :max="maxDateIso" />
+        <ion-datetime id="history-entry-date" v-model="dateIso" presentation="date" locale="ru-RU" />
       </ion-modal>
 
       <ion-list inset>

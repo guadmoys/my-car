@@ -37,18 +37,12 @@ const value = ref(mileageInputSeed(props.car.currentMileage))
 // types something.
 const touched = ref(false)
 const dateIso = ref(new Date().toISOString())
-const nowMs = Date.now()
-const minDateIso = new Date(props.car.createdAt).toISOString()
-const maxDateIso = new Date(nowMs).toISOString()
 
 const number = computed(() => Number(value.value.replace(/\s/g, '')))
 const hasNumber = computed(() => value.value.trim().length > 0 && !Number.isNaN(number.value))
 const isNegative = computed(() => hasNumber.value && number.value < 0)
 
 const dateMs = computed(() => new Date(dateIso.value).getTime())
-const dateInFuture = computed(() => dateMs.value > Date.now())
-const dateTooEarly = computed(() => dateMs.value < props.car.createdAt)
-const dateInvalid = computed(() => dateInFuture.value || dateTooEarly.value)
 
 const range = computed(() => {
   const anchors = mileageAnchors(props.car, props.fuelEntries, props.historyEntries, dateMs.value)
@@ -56,11 +50,10 @@ const range = computed(() => {
 })
 
 const isBelowMinReal = computed(
-  () => hasNumber.value && !isNegative.value && !dateInvalid.value && number.value < range.value.min,
+  () => hasNumber.value && !isNegative.value && number.value < range.value.min,
 )
 const isAboveMaxReal = computed(
-  () =>
-    hasNumber.value && !isNegative.value && !dateInvalid.value && range.value.max !== null && number.value > range.value.max,
+  () => hasNumber.value && !isNegative.value && range.value.max !== null && number.value > range.value.max,
 )
 
 // Displayed/gated on `touched`: the pre-filled seed value is deliberately
@@ -76,10 +69,10 @@ const isAboveMax = computed(() => touched.value && isAboveMaxReal.value)
 // exceeding a later fixed record is a hard contradiction this dialog can't
 // resolve (it would mean *that* record's mileage is wrong, not this one).
 const canSaveNormally = computed(
-  () => hasNumber.value && !isNegative.value && !dateInvalid.value && !isAboveMaxReal.value && !isBelowMinReal.value,
+  () => hasNumber.value && !isNegative.value && !isAboveMaxReal.value && !isBelowMinReal.value,
 )
 const canRollback = computed(
-  () => hasNumber.value && !isNegative.value && !dateInvalid.value && !isAboveMaxReal.value && isBelowMinReal.value,
+  () => hasNumber.value && !isNegative.value && !isAboveMaxReal.value && isBelowMinReal.value,
 )
 
 function fmtKm(n: number): string {
@@ -91,8 +84,6 @@ function fmtDate(ts: number): string {
 }
 
 const hint = computed(() => {
-  if (dateInFuture.value) return 'Дата не может быть в будущем'
-  if (dateTooEarly.value) return `Дата не может быть раньше добавления автомобиля (${fmtDate(props.car.createdAt)})`
   if (!touched.value) return null
   if (isNegative.value) return 'Пробег не может быть отрицательным'
   if (isAboveMax.value) {
@@ -154,8 +145,6 @@ function handleSave(rollback: boolean) {
           v-model="dateIso"
           presentation="date-time"
           locale="ru-RU"
-          :min="minDateIso"
-          :max="maxDateIso"
         />
       </ion-modal>
       <ion-note v-if="hint" :color="isBelowMin ? 'danger' : 'medium'" class="hint">
