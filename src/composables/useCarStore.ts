@@ -2,7 +2,12 @@ import { computed, reactive, ref } from 'vue'
 import type {
   BackupData,
   Car,
+  ComponentCheck,
+  ComponentType,
   CostForecast,
+  Expense,
+  ExpenseCategory,
+  ExpenseStatus,
   FuelConsumption,
   FuelEntry,
   FuelInsight,
@@ -10,10 +15,12 @@ import type {
   LegacyBackupData,
   MaintenanceItem,
   MaintenanceStatus,
+  Master,
   Part,
   Reminder,
   ReminderStatus,
   TimelineEvent,
+  Trip,
 } from '../types'
 import { buildDefaultItems } from '../data/defaultMaintenance'
 import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
@@ -27,6 +34,10 @@ const items = reactive<MaintenanceItem[]>([])
 const fuelEntries = reactive<FuelEntry[]>([])
 const historyEntries = reactive<HistoryEntry[]>([])
 const reminders = reactive<Reminder[]>([])
+const masters = reactive<Master[]>([])
+const expenses = reactive<Expense[]>([])
+const componentChecks = reactive<ComponentCheck[]>([])
+const trips = reactive<Trip[]>([])
 const isLoaded = ref(false)
 
 const car = computed(() => cars.find((c) => c.id === activeCarId.value) ?? null)
@@ -48,16 +59,25 @@ function patchCar(carId: string, patch: Partial<Car>): Car | null {
 }
 
 async function loadCarData(carId: string): Promise<void> {
-  const [loadedItems, loadedFuel, loadedHistory, loadedReminders] = await Promise.all([
-    db.getMaintenanceItemsForCar(carId),
-    db.getFuelEntriesForCar(carId),
-    db.getHistoryForCar(carId),
-    db.getRemindersForCar(carId),
-  ])
+  const [loadedItems, loadedFuel, loadedHistory, loadedReminders, loadedMasters, loadedExpenses, loadedComponents, loadedTrips] =
+    await Promise.all([
+      db.getMaintenanceItemsForCar(carId),
+      db.getFuelEntriesForCar(carId),
+      db.getHistoryForCar(carId),
+      db.getRemindersForCar(carId),
+      db.getMastersForCar(carId),
+      db.getExpensesForCar(carId),
+      db.getComponentsForCar(carId),
+      db.getTripsForCar(carId),
+    ])
   items.splice(0, items.length, ...loadedItems.map((item) => ({ ...item, parts: item.parts ?? [] })))
   fuelEntries.splice(0, fuelEntries.length, ...loadedFuel)
   historyEntries.splice(0, historyEntries.length, ...loadedHistory)
   reminders.splice(0, reminders.length, ...loadedReminders)
+  masters.splice(0, masters.length, ...loadedMasters)
+  expenses.splice(0, expenses.length, ...loadedExpenses)
+  componentChecks.splice(0, componentChecks.length, ...loadedComponents)
+  trips.splice(0, trips.length, ...loadedTrips)
 }
 
 async function load(): Promise<void> {
@@ -112,6 +132,10 @@ async function createCar(input: {
   fuelEntries.splice(0, fuelEntries.length)
   historyEntries.splice(0, historyEntries.length)
   reminders.splice(0, reminders.length)
+  masters.splice(0, masters.length)
+  expenses.splice(0, expenses.length)
+  componentChecks.splice(0, componentChecks.length)
+  trips.splice(0, trips.length)
 }
 
 async function deleteCar(carId: string): Promise<void> {
@@ -133,14 +157,36 @@ async function deleteCar(carId: string): Promise<void> {
     fuelEntries.splice(0, fuelEntries.length)
     historyEntries.splice(0, historyEntries.length)
     reminders.splice(0, reminders.length)
+    masters.splice(0, masters.length)
+    expenses.splice(0, expenses.length)
+    componentChecks.splice(0, componentChecks.length)
+    trips.splice(0, trips.length)
   }
 }
 
 async function updateCarInfo(
-  patch: Partial<Pick<Car, 'make' | 'model' | 'year' | 'tankCapacity'>>,
+  patch: Partial<
+    Pick<
+      Car,
+      'make' | 'model' | 'year' | 'tankCapacity' | 'vin' | 'licensePlate' | 'stsNumber' | 'referenceConsumptionL100km'
+    >
+  >,
 ): Promise<void> {
   if (!activeCarId.value) return
   const updated = patchCar(activeCarId.value, patch)
+  if (updated) await db.putCar(updated)
+}
+
+async function addCarPhoto(dataUrl: string): Promise<void> {
+  if (!car.value) return
+  const updated = patchCar(car.value.id, { photos: [...(car.value.photos ?? []), dataUrl] })
+  if (updated) await db.putCar(updated)
+}
+
+async function removeCarPhoto(index: number): Promise<void> {
+  if (!car.value?.photos) return
+  const photos = car.value.photos.filter((_, i) => i !== index)
+  const updated = patchCar(car.value.id, { photos })
   if (updated) await db.putCar(updated)
 }
 
@@ -196,7 +242,12 @@ export interface MarkServicedResult {
   previous: { lastServiceMileage: number; lastServiceDate: number | null }
 }
 
-async function markServiced(id: string, atMileage?: number): Promise<MarkServicedResult | null> {
+async function markServiced(
+  id: string,
+  atMileage?: number,
+  cost?: number,
+  receiptPhoto?: string,
+): Promise<MarkServicedResult | null> {
   const item = items.find((i) => i.id === id)
   if (!item || !car.value) return null
   const previous = { lastServiceMileage: item.lastServiceMileage, lastServiceDate: item.lastServiceDate }
@@ -212,6 +263,8 @@ async function markServiced(id: string, atMileage?: number): Promise<MarkService
     itemName: item.name,
     mileage,
     date: nowTs(),
+    cost,
+    receiptPhoto,
   }
   historyEntries.unshift(entry)
   await db.putHistoryEntry(entry)
@@ -283,6 +336,7 @@ async function addFuelEntry(input: {
   remainingLiters?: number
   station?: string
   comment?: string
+  receiptPhoto?: string
 }): Promise<void> {
   if (!car.value) return
   const entry: FuelEntry = {
@@ -297,6 +351,7 @@ async function addFuelEntry(input: {
     remainingLiters: input.remainingLiters,
     station: input.station,
     comment: input.comment,
+    receiptPhoto: input.receiptPhoto,
   }
   fuelEntries.push(entry)
   await db.putFuelEntry(entry)
@@ -332,6 +387,7 @@ async function updateFuelEntry(
     remainingLiters?: number
     station?: string
     comment?: string
+    receiptPhoto?: string
   },
 ): Promise<void> {
   const entry = fuelEntries.find((e) => e.id === id)
@@ -345,6 +401,7 @@ async function updateFuelEntry(
   entry.remainingLiters = input.remainingLiters
   entry.station = input.station
   entry.comment = input.comment
+  entry.receiptPhoto = input.receiptPhoto
   await db.putFuelEntry({ ...entry })
 
   if (car.value && input.mileage > car.value.currentMileage) {
@@ -354,7 +411,7 @@ async function updateFuelEntry(
 
 async function updateHistoryEntry(
   id: string,
-  input: { itemName: string; mileage: number; date: number; cost?: number },
+  input: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string },
 ): Promise<void> {
   const entry = historyEntries.find((h) => h.id === id)
   if (!entry) return
@@ -362,6 +419,7 @@ async function updateHistoryEntry(
   entry.mileage = input.mileage
   entry.date = input.date
   entry.cost = input.cost ?? undefined
+  entry.receiptPhoto = input.receiptPhoto
   await db.putHistoryEntry({ ...entry })
 }
 
@@ -400,6 +458,216 @@ async function restoreReminder(reminder: Reminder): Promise<void> {
   reminders.push(reminder)
   await db.putReminder(reminder)
 }
+
+async function addMaster(input: {
+  name: string
+  phone?: string
+  cardNumber?: string
+  link?: string
+  specialty?: string
+}): Promise<void> {
+  if (!car.value) return
+  const master: Master = {
+    id: makeId(),
+    carId: car.value.id,
+    name: input.name.trim(),
+    phone: input.phone?.trim() || undefined,
+    cardNumber: input.cardNumber?.trim() || undefined,
+    link: input.link?.trim() || undefined,
+    specialty: input.specialty?.trim() || undefined,
+    createdAt: nowTs(),
+  }
+  masters.push(master)
+  await db.putMaster(master)
+}
+
+async function updateMaster(
+  id: string,
+  patch: { name: string; phone?: string; cardNumber?: string; link?: string; specialty?: string },
+): Promise<void> {
+  const master = masters.find((m) => m.id === id)
+  if (!master) return
+  master.name = patch.name.trim()
+  master.phone = patch.phone?.trim() || undefined
+  master.cardNumber = patch.cardNumber?.trim() || undefined
+  master.link = patch.link?.trim() || undefined
+  master.specialty = patch.specialty?.trim() || undefined
+  await db.putMaster({ ...master })
+}
+
+async function deleteMaster(id: string): Promise<Master | null> {
+  const index = masters.findIndex((m) => m.id === id)
+  if (index === -1) return null
+  const [removed] = masters.splice(index, 1)
+  await db.deleteMaster(id)
+  return removed
+}
+
+async function restoreMaster(master: Master): Promise<void> {
+  if (masters.some((m) => m.id === master.id)) return
+  masters.push(master)
+  await db.putMaster(master)
+}
+
+async function addExpense(input: {
+  category: ExpenseCategory
+  title?: string
+  amount: number
+  date?: number
+  renewalDate?: number
+  note?: string
+  receiptPhoto?: string
+}): Promise<void> {
+  if (!car.value) return
+  const expense: Expense = {
+    id: makeId(),
+    carId: car.value.id,
+    category: input.category,
+    title: input.title?.trim() || undefined,
+    amount: input.amount,
+    date: input.date ?? nowTs(),
+    renewalDate: input.renewalDate,
+    note: input.note?.trim() || undefined,
+    receiptPhoto: input.receiptPhoto,
+  }
+  expenses.unshift(expense)
+  await db.putExpense(expense)
+}
+
+async function updateExpense(
+  id: string,
+  patch: {
+    category: ExpenseCategory
+    title?: string
+    amount: number
+    date: number
+    renewalDate?: number
+    note?: string
+    receiptPhoto?: string
+  },
+): Promise<void> {
+  const expense = expenses.find((e) => e.id === id)
+  if (!expense) return
+  expense.category = patch.category
+  expense.title = patch.title?.trim() || undefined
+  expense.amount = patch.amount
+  expense.date = patch.date
+  expense.renewalDate = patch.renewalDate
+  expense.note = patch.note?.trim() || undefined
+  expense.receiptPhoto = patch.receiptPhoto
+  await db.putExpense({ ...expense })
+}
+
+async function deleteExpense(id: string): Promise<Expense | null> {
+  const index = expenses.findIndex((e) => e.id === id)
+  if (index === -1) return null
+  const [removed] = expenses.splice(index, 1)
+  await db.deleteExpense(id)
+  return removed
+}
+
+async function restoreExpense(expense: Expense): Promise<void> {
+  if (expenses.some((e) => e.id === expense.id)) return
+  expenses.push(expense)
+  await db.putExpense(expense)
+}
+
+async function addComponentCheck(input: {
+  type: ComponentType
+  mileage?: number
+  date?: number
+  season?: 'summer' | 'winter' | 'allseason'
+  treadDepthMm?: number
+  pressureFront?: number
+  pressureRear?: number
+  thicknessMm?: number
+  installedDate?: number
+  note?: string
+}): Promise<void> {
+  if (!car.value) return
+  const check: ComponentCheck = {
+    id: makeId(),
+    carId: car.value.id,
+    type: input.type,
+    mileage: input.mileage ?? car.value.currentMileage,
+    date: input.date ?? nowTs(),
+    season: input.season,
+    treadDepthMm: input.treadDepthMm,
+    pressureFront: input.pressureFront,
+    pressureRear: input.pressureRear,
+    thicknessMm: input.thicknessMm,
+    installedDate: input.installedDate,
+    note: input.note?.trim() || undefined,
+  }
+  componentChecks.unshift(check)
+  await db.putComponentCheck(check)
+}
+
+async function deleteComponentCheck(id: string): Promise<ComponentCheck | null> {
+  const index = componentChecks.findIndex((c) => c.id === id)
+  if (index === -1) return null
+  const [removed] = componentChecks.splice(index, 1)
+  await db.deleteComponentCheck(id)
+  return removed
+}
+
+async function restoreComponentCheck(check: ComponentCheck): Promise<void> {
+  if (componentChecks.some((c) => c.id === check.id)) return
+  componentChecks.push(check)
+  await db.putComponentCheck(check)
+}
+
+/** Latest logged reading per component type, or null when none has ever been logged. */
+const latestComponentByType = computed<Record<ComponentType, ComponentCheck | null>>(() => {
+  const result: Record<ComponentType, ComponentCheck | null> = { tires: null, battery: null, brakePads: null }
+  for (const type of Object.keys(result) as ComponentType[]) {
+    const matching = componentChecks.filter((c) => c.type === type).sort((a, b) => b.date - a.date)
+    result[type] = matching[0] ?? null
+  }
+  return result
+})
+
+async function addTrip(input: {
+  startMileage: number
+  endMileage: number
+  purpose: 'business' | 'personal'
+  date?: number
+  note?: string
+}): Promise<void> {
+  if (!car.value) return
+  const trip: Trip = {
+    id: makeId(),
+    carId: car.value.id,
+    date: input.date ?? nowTs(),
+    startMileage: input.startMileage,
+    endMileage: input.endMileage,
+    purpose: input.purpose,
+    note: input.note?.trim() || undefined,
+  }
+  trips.unshift(trip)
+  await db.putTrip(trip)
+}
+
+async function deleteTrip(id: string): Promise<Trip | null> {
+  const index = trips.findIndex((t) => t.id === id)
+  if (index === -1) return null
+  const [removed] = trips.splice(index, 1)
+  await db.deleteTrip(id)
+  return removed
+}
+
+async function restoreTrip(trip: Trip): Promise<void> {
+  if (trips.some((t) => t.id === trip.id)) return
+  trips.push(trip)
+  await db.putTrip(trip)
+}
+
+const totalBusinessKm = computed(() =>
+  trips.filter((t) => t.purpose === 'business').reduce((sum, t) => sum + Math.max(0, t.endMileage - t.startMileage), 0),
+)
+const totalPersonalKm = computed(() =>
+  trips.filter((t) => t.purpose === 'personal').reduce((sum, t) => sum + Math.max(0, t.endMileage - t.startMileage), 0),
+)
 
 function addMonths(ts: number, months: number): number {
   const d = new Date(ts)
@@ -517,6 +785,20 @@ const reminderStatuses = computed<ReminderStatus[]>(() => {
       if (a.isDue !== b.isDue) return a.isDue ? -1 : 1
       return a.reminder.createdAt - b.reminder.createdAt
     })
+})
+
+const EXPENSE_SOON_DAYS = 14
+
+/** Due/soon status for expenses that carry a renewal date (insurance, tax, tech inspection, etc). */
+const expenseStatuses = computed<ExpenseStatus[]>(() => {
+  const now = Date.now()
+  return expenses
+    .filter((e) => e.renewalDate !== undefined)
+    .map((expense) => {
+      const remainingDays = Math.ceil((expense.renewalDate! - now) / DAY_MS)
+      return { expense, isDue: remainingDays <= 0, isSoon: remainingDays > 0 && remainingDays <= EXPENSE_SOON_DAYS, remainingDays }
+    })
+    .sort((a, b) => (a.remainingDays ?? 0) - (b.remainingDays ?? 0))
 })
 
 /**
@@ -777,6 +1059,26 @@ const fuelInsights = computed<FuelInsight[]>(() => {
     }
   }
 
+  // Comparison against a user-entered reference consumption (e.g. from the
+  // manual) — the closest this offline, backend-less app can get to the
+  // "vs. average for this model" benchmarks crowdsourced apps offer, since
+  // there's no fleet data to compare against here.
+  const reference = car.value.referenceConsumptionL100km
+  if (reference !== undefined && reference > 0 && averageConsumption.value !== null) {
+    const diffPct = ((averageConsumption.value - reference) / reference) * 100
+    if (Math.abs(diffPct) >= 5) {
+      insights.push({
+        id: 'reference',
+        icon: diffPct > 0 ? '📛' : '✅',
+        text:
+          diffPct > 0
+            ? `Средний расход на ${diffPct.toFixed(0)}% выше заданного эталона (${reference.toFixed(1)} л/100км)`
+            : `Средний расход на ${Math.abs(diffPct).toFixed(0)}% ниже заданного эталона (${reference.toFixed(1)} л/100км) — экономичнее ожидаемого`,
+        tone: diffPct > 0 ? 'bad' : 'good',
+      })
+    }
+  }
+
   // Fuel budget forecast: rolling 30-day spend rate, projected forward.
   // Needs a real spread of dates — otherwise a batch of fill-ups entered
   // all at once (e.g. backfilling history) would wildly inflate the rate.
@@ -975,9 +1277,13 @@ const totalFuelCost = computed(() =>
 const totalServiceCost = computed(() =>
   historyEntries.reduce((sum, h) => sum + (h.cost ?? 0), 0),
 )
-const totalCost = computed(() => totalFuelCost.value + totalServiceCost.value)
+const totalExpensesCost = computed(() => expenses.reduce((sum, e) => sum + e.amount, 0))
+const totalCost = computed(() => totalFuelCost.value + totalServiceCost.value + totalExpensesCost.value)
 const hasAnyCost = computed(
-  () => fuelEntries.some((e) => e.cost !== undefined) || historyEntries.some((h) => h.cost !== undefined),
+  () =>
+    fuelEntries.some((e) => e.cost !== undefined) ||
+    historyEntries.some((h) => h.cost !== undefined) ||
+    expenses.length > 0,
 )
 
 const MONTH_DAYS = 30.44
@@ -1050,13 +1356,18 @@ function isLegacyBackup(data: unknown): data is LegacyBackupData {
 }
 
 async function exportData(): Promise<BackupData> {
-  const [allCars, allItems, allFuel, allHistory, allReminders] = await Promise.all([
-    db.getAllCars(),
-    db.getAllMaintenanceItemsRaw(),
-    db.getAllFuelEntriesRaw(),
-    db.getAllHistoryRaw(),
-    db.getAllRemindersRaw(),
-  ])
+  const [allCars, allItems, allFuel, allHistory, allReminders, allMasters, allExpenses, allComponents, allTrips] =
+    await Promise.all([
+      db.getAllCars(),
+      db.getAllMaintenanceItemsRaw(),
+      db.getAllFuelEntriesRaw(),
+      db.getAllHistoryRaw(),
+      db.getAllRemindersRaw(),
+      db.getAllMastersRaw(),
+      db.getAllExpensesRaw(),
+      db.getAllComponentsRaw(),
+      db.getAllTripsRaw(),
+    ])
   return {
     version: 2,
     exportedAt: nowTs(),
@@ -1066,6 +1377,10 @@ async function exportData(): Promise<BackupData> {
     fuelEntries: allFuel,
     historyEntries: allHistory,
     reminders: allReminders,
+    masters: allMasters,
+    expenses: allExpenses,
+    components: allComponents,
+    trips: allTrips,
   }
 }
 
@@ -1075,6 +1390,10 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   let importedFuel: FuelEntry[]
   let importedHistory: HistoryEntry[]
   let importedReminders: Reminder[]
+  let importedMasters: Master[]
+  let importedExpenses: Expense[]
+  let importedComponents: ComponentCheck[]
+  let importedTrips: Trip[]
   let newActiveCarId: string | undefined
 
   if (isMultiCarBackup(data)) {
@@ -1083,6 +1402,10 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     importedFuel = Array.isArray(data.fuelEntries) ? data.fuelEntries : []
     importedHistory = Array.isArray(data.historyEntries) ? data.historyEntries : []
     importedReminders = Array.isArray(data.reminders) ? data.reminders : []
+    importedMasters = Array.isArray(data.masters) ? data.masters : []
+    importedExpenses = Array.isArray(data.expenses) ? data.expenses : []
+    importedComponents = Array.isArray(data.components) ? data.components : []
+    importedTrips = Array.isArray(data.trips) ? data.trips : []
     newActiveCarId =
       data.activeCarId && importedCars.some((c) => c.id === data.activeCarId)
         ? data.activeCarId
@@ -1094,6 +1417,10 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     importedFuel = (data.fuelEntries ?? []).map((f) => ({ ...f, carId }))
     importedHistory = (data.historyEntries ?? []).map((h) => ({ ...h, carId }))
     importedReminders = []
+    importedMasters = []
+    importedExpenses = []
+    importedComponents = []
+    importedTrips = []
     newActiveCarId = carId
   } else {
     return { ok: false, error: 'Файл повреждён или это не резервная копия «Моей машины»' }
@@ -1109,6 +1436,10 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   if (importedFuel.length) await db.putFuelEntries(importedFuel)
   if (importedHistory.length) await db.putHistoryEntries(importedHistory)
   if (importedReminders.length) await db.putReminders(importedReminders)
+  if (importedMasters.length) await db.putMasters(importedMasters)
+  if (importedExpenses.length) await db.putExpenses(importedExpenses)
+  if (importedComponents.length) await db.putComponentChecks(importedComponents)
+  if (importedTrips.length) await db.putTrips(importedTrips)
 
   cars.splice(0, cars.length, ...importedCars)
   activeCarId.value = newActiveCarId
@@ -1122,6 +1453,10 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     ...importedHistory.filter((h) => h.carId === newActiveCarId),
   )
   reminders.splice(0, reminders.length, ...importedReminders.filter((r) => r.carId === newActiveCarId))
+  masters.splice(0, masters.length, ...importedMasters.filter((m) => m.carId === newActiveCarId))
+  expenses.splice(0, expenses.length, ...importedExpenses.filter((e) => e.carId === newActiveCarId))
+  componentChecks.splice(0, componentChecks.length, ...importedComponents.filter((c) => c.carId === newActiveCarId))
+  trips.splice(0, trips.length, ...importedTrips.filter((t) => t.carId === newActiveCarId))
 
   return { ok: true }
 }
@@ -1134,12 +1469,20 @@ export function useCarStore() {
     fuelEntries,
     historyEntries,
     reminders,
+    masters,
+    expenses,
+    componentChecks,
+    trips,
     isLoaded,
     statuses,
     dueCount,
     soonCount,
     okCount,
     reminderStatuses,
+    expenseStatuses,
+    latestComponentByType,
+    totalBusinessKm,
+    totalPersonalKm,
     fuelHistory,
     averageConsumption,
     monthDistanceKm,
@@ -1150,6 +1493,7 @@ export function useCarStore() {
     fuelInsights,
     totalFuelCost,
     totalServiceCost,
+    totalExpensesCost,
     totalCost,
     hasAnyCost,
     costForecast,
@@ -1158,6 +1502,8 @@ export function useCarStore() {
     createCar,
     deleteCar,
     updateCarInfo,
+    addCarPhoto,
+    removeCarPhoto,
     updateMileage,
     updateItem,
     markServiced,
@@ -1168,6 +1514,20 @@ export function useCarStore() {
     addReminder,
     deleteReminder,
     restoreReminder,
+    addMaster,
+    updateMaster,
+    deleteMaster,
+    restoreMaster,
+    addExpense,
+    updateExpense,
+    deleteExpense,
+    restoreExpense,
+    addComponentCheck,
+    deleteComponentCheck,
+    restoreComponentCheck,
+    addTrip,
+    deleteTrip,
+    restoreTrip,
     addFuelEntry,
     deleteFuelEntry,
     restoreFuelEntry,

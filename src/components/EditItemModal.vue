@@ -75,7 +75,10 @@ const emit = defineEmits<{
     },
   ]
   delete: [id: string]
-  updateHistory: [id: string, payload: { itemName: string; mileage: number; date: number; cost?: number }]
+  updateHistory: [
+    id: string,
+    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string },
+  ]
 }>()
 
 const editingHistoryId = ref<string | null>(null)
@@ -83,7 +86,7 @@ const editingHistoryEntry = computed(
   () => props.history.find((h) => h.id === editingHistoryId.value) ?? null,
 )
 
-function handleSaveHistory(payload: { itemName: string; mileage: number; date: number; cost?: number }) {
+function handleSaveHistory(payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string }) {
   if (editingHistoryId.value) emit('updateHistory', editingHistoryId.value, payload)
   editingHistoryId.value = null
 }

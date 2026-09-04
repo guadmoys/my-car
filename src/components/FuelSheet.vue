@@ -26,6 +26,7 @@ import { checkmark } from 'ionicons/icons'
 import { haptic } from '../utils/haptics'
 import { mileageInputSeed } from '../utils/mileage'
 import type { FuelEntry } from '../types'
+import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
   currentMileage: number
@@ -52,6 +53,7 @@ const emit = defineEmits<{
       remainingLiters?: number
       station?: string
       comment?: string
+      receiptPhoto?: string
     },
   ]
 }>()
@@ -74,6 +76,7 @@ const hasRemaining = ref(props.entry?.remainingLiters !== undefined)
 const remainingLiters = ref(props.entry?.remainingLiters !== undefined ? String(props.entry.remainingLiters) : '')
 const station = ref(props.entry?.station ?? '')
 const comment = ref(props.entry?.comment ?? '')
+const receiptPhoto = ref<string | undefined>(props.entry?.receiptPhoto)
 const quickEntry = ref('')
 const dateIso = ref(new Date(props.entry?.date ?? Date.now()).toISOString())
 const maxDateIso = new Date().toISOString()
@@ -269,6 +272,7 @@ function handleSave() {
     remainingLiters: !isFullTank.value && hasRemaining.value ? remainingLitersNumber.value : undefined,
     station: station.value.trim() || undefined,
     comment: comment.value.trim() || undefined,
+    receiptPhoto: receiptPhoto.value,
   })
 }
 </script>
@@ -393,6 +397,7 @@ function handleSave() {
               <ion-input v-model="comment" label="Комментарий (необязательно)" label-placement="stacked" placeholder="—" />
             </ion-item>
           </ion-list>
+          <ReceiptPhotoField slot="content" v-model="receiptPhoto" />
           <ion-note v-if="remainingExceedsTank" slot="content" color="warning" class="hint">
             ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
           </ion-note>

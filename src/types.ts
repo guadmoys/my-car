@@ -9,6 +9,21 @@ export interface Car {
   updatedAt: number
   /** Fuel tank volume, in liters. Optional; when set, enables precise consumption tracking for partial fill-ups via `FuelEntry.remainingLiters`. */
   tankCapacity?: number
+  /** Vehicle identification number. */
+  vin?: string
+  /** Registration plate ("госномер"). */
+  licensePlate?: string
+  /** Registration certificate number ("СТС"). */
+  stsNumber?: string
+  /** Photos of the car itself and its documents (STS, insurance, etc), stored as compressed data URLs. */
+  photos?: string[]
+  /**
+   * Manufacturer-declared or otherwise expected average consumption, l/100km.
+   * User-entered: this app is offline-first with no backend, so there's no
+   * real crowdsourced fleet average to compare against — this is a local
+   * stand-in the user fills in themselves (e.g. from the manual).
+   */
+  referenceConsumptionL100km?: number
 }
 
 export interface Part {
@@ -90,6 +105,25 @@ export interface ReminderStatus {
   remainingDays?: number
 }
 
+/**
+ * A trusted mechanic/service provider ("проверенный мастер") the user has
+ * used before and wants to keep on hand for next time.
+ */
+export interface Master {
+  id: string
+  carId: string
+  name: string
+  /** Phone number to reach them. */
+  phone?: string
+  /** Bank card number for sending payment. */
+  cardNumber?: string
+  /** Link to their profile/chat/listing (Telegram, Avito, VK, etc). */
+  link?: string
+  /** What they do, e.g. "Развал-схождение", "Кузовной ремонт". */
+  specialty?: string
+  createdAt: number
+}
+
 export interface HistoryEntry {
   id: string
   carId: string
@@ -100,6 +134,8 @@ export interface HistoryEntry {
   date: number
   /** Cost of this service (parts + labor), in the user's currency. Optional. */
   cost?: number
+  /** Photo of the receipt/invoice for this service, as a compressed data URL. */
+  receiptPhoto?: string
 }
 
 export interface FuelEntry {
@@ -121,6 +157,94 @@ export interface FuelEntry {
   station?: string
   /** Free-text note. Informational only. */
   comment?: string
+  /** Photo of the receipt for this fill-up, as a compressed data URL. */
+  receiptPhoto?: string
+}
+
+/** Non-fuel, non-service running cost — the categories a car owner pays for besides gas and repairs. */
+export type ExpenseCategory = 'insurance' | 'parking' | 'fine' | 'tax' | 'loan' | 'other'
+
+export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  insurance: 'Страховка',
+  parking: 'Парковка/платная дорога',
+  fine: 'Штраф',
+  tax: 'Налог/ОСАГО/техосмотр',
+  loan: 'Кредит/лизинг',
+  other: 'Другое',
+}
+
+/**
+ * A one-off or recurring non-fuel/non-service expense (insurance, fines,
+ * parking, taxes, loan/lease payments). `renewalDate`, when set, is when
+ * this expense needs renewing/repeating (e.g. a policy's end date) — used
+ * to drive a due/soon reminder the same way MaintenanceItem/Reminder do.
+ */
+export interface Expense {
+  id: string
+  carId: string
+  category: ExpenseCategory
+  /** Free-text label, e.g. "ОСАГО Ингосстрах". Falls back to the category label when absent. */
+  title?: string
+  amount: number
+  date: number
+  renewalDate?: number
+  note?: string
+  /** Photo of the receipt/invoice, as a compressed data URL. */
+  receiptPhoto?: string
+}
+
+export interface ExpenseStatus {
+  expense: Expense
+  isDue: boolean
+  isSoon: boolean
+  remainingDays?: number
+}
+
+/** Which serviceable component a ComponentCheck record is about. */
+export type ComponentType = 'tires' | 'battery' | 'brakePads'
+
+export const COMPONENT_TYPE_LABELS: Record<ComponentType, string> = {
+  tires: 'Шины',
+  battery: 'Аккумулятор',
+  brakePads: 'Тормозные колодки',
+}
+
+/**
+ * A logged reading for one serviceable component. New readings are appended
+ * (like HistoryEntry) rather than overwriting the previous one, so there's a
+ * history of measurements over time; the latest one per (carId, type) is
+ * what's shown as the "current" state.
+ */
+export interface ComponentCheck {
+  id: string
+  carId: string
+  type: ComponentType
+  mileage: number
+  date: number
+  /** tires: which set is currently mounted. */
+  season?: 'summer' | 'winter' | 'allseason'
+  /** tires: tread depth, mm. */
+  treadDepthMm?: number
+  /** tires: pressure, front axle, bar. */
+  pressureFront?: number
+  /** tires: pressure, rear axle, bar. */
+  pressureRear?: number
+  /** brakePads: remaining pad thickness, mm. */
+  thicknessMm?: number
+  /** battery: installation date (may differ from `date`, the date this was logged). */
+  installedDate?: number
+  note?: string
+}
+
+/** A trip logged for personal/business mileage record-keeping (tax purposes). */
+export interface Trip {
+  id: string
+  carId: string
+  date: number
+  startMileage: number
+  endMileage: number
+  purpose: 'business' | 'personal'
+  note?: string
 }
 
 export interface FuelConsumption {
@@ -160,6 +284,14 @@ export interface BackupData {
   historyEntries: HistoryEntry[]
   /** Absent when importing a backup made before reminders existed. */
   reminders?: Reminder[]
+  /** Absent when importing a backup made before trusted masters existed. */
+  masters?: Master[]
+  /** Absent when importing a backup made before other expenses existed. */
+  expenses?: Expense[]
+  /** Absent when importing a backup made before component checks existed. */
+  components?: ComponentCheck[]
+  /** Absent when importing a backup made before trips existed. */
+  trips?: Trip[]
 }
 
 /** Shape of a v1 backup (single car, no carId fields), kept only for import compatibility. */

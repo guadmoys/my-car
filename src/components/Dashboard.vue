@@ -4,8 +4,10 @@ import { IonPage } from '@ionic/vue'
 import { useCarStore } from '../composables/useCarStore'
 import {
   checkAndNotify,
+  checkAndNotifyExpenses,
   checkAndNotifyLowFuel,
   checkAndNotifyReminders,
+  clearNotifiedExpense,
   clearNotifiedItem,
   clearNotifiedReminder,
   updateAppBadge,
@@ -25,8 +27,27 @@ import AddCarSheet from './AddCarSheet.vue'
 import CarPassportSheet from './CarPassportSheet.vue'
 import EventsHistorySheet from './EventsHistorySheet.vue'
 import ReminderSheet from './ReminderSheet.vue'
+import MarkServicedSheet from './MarkServicedSheet.vue'
+import MasterListSheet from './MasterListSheet.vue'
+import MasterFormSheet from './MasterFormSheet.vue'
+import ExpenseListSheet from './ExpenseListSheet.vue'
+import ExpenseFormSheet from './ExpenseFormSheet.vue'
+import ComponentsSheet from './ComponentsSheet.vue'
+import ComponentFormSheet from './ComponentFormSheet.vue'
+import TripListSheet from './TripListSheet.vue'
+import TripFormSheet from './TripFormSheet.vue'
 import type { PassportData } from '../utils/carPassport'
-import type { FuelEntry, MaintenanceItem, MaintenanceStatus, Part } from '../types'
+import { generateReportPdf } from '../utils/pdfReport'
+import type {
+  ComponentType,
+  Expense,
+  ExpenseCategory,
+  FuelEntry,
+  MaintenanceItem,
+  MaintenanceStatus,
+  Master,
+  Part,
+} from '../types'
 
 const store = useCarStore()
 const {
@@ -46,10 +67,15 @@ const {
   fuelInsights,
   totalFuelCost,
   totalServiceCost,
+  totalExpensesCost,
   totalCost,
   hasAnyCost,
   costForecast,
   reminderStatuses,
+  expenseStatuses,
+  latestComponentByType,
+  totalBusinessKm,
+  totalPersonalKm,
 } = store
 
 const toast = useToast()
@@ -63,6 +89,15 @@ const showAddCar = ref(false)
 const showPassportSheet = ref(false)
 const showEventsSheet = ref(false)
 const showReminderSheet = ref(false)
+const showMasterList = ref(false)
+const editingMaster = ref<Master | null | 'new'>(null)
+const showExpenseList = ref(false)
+const editingExpense = ref<Expense | null | 'new'>(null)
+const showComponentsSheet = ref(false)
+const editingComponentType = ref<ComponentType | null>(null)
+const showTripList = ref(false)
+const showTripForm = ref(false)
+const markServicedItem = ref<MaintenanceItem | null>(null)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
 const editingFuelEntryId = ref<string | null>(null)
 const importError = ref<string | null>(null)
@@ -161,6 +196,14 @@ watch(
   { immediate: true },
 )
 
+watch(
+  [car, expenseStatuses],
+  ([carVal, statusesVal]) => {
+    if (carVal) checkAndNotifyExpenses(carVal.id, statusesVal)
+  },
+  { immediate: true },
+)
+
 /** Re-runs the due/soon, low-fuel and reminder checks against the current
  * state, since enabling notifications doesn't itself change `car`/`statuses`
  * and so wouldn't otherwise trigger the watchers below for items already due. */
@@ -169,6 +212,7 @@ function handleNotificationsEnabled() {
   checkAndNotify(car.value.id, statuses.value)
   checkAndNotifyLowFuel(car.value.id, estimatedRangeKm.value)
   checkAndNotifyReminders(car.value.id, reminderStatuses.value.filter((s) => s.isDue))
+  checkAndNotifyExpenses(car.value.id, expenseStatuses.value)
 }
 
 function openEdit(id: string) {
@@ -185,16 +229,139 @@ function closeEdit() {
   editingItem.value = null
 }
 
-async function handleMarkServiced(id: string) {
+function handleMarkServiced(id: string) {
   const item = store.items.find((i) => i.id === id)
-  const result = await store.markServiced(id)
-  if (car.value) clearNotifiedItem(car.value.id, id)
+  if (item) markServicedItem.value = item
+}
+
+async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?: string }) {
+  const item = markServicedItem.value
+  if (!item) return
+  markServicedItem.value = null
+  const result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto)
+  if (car.value) clearNotifiedItem(car.value.id, item.id)
   if (!result) return
   haptic('success')
-  toast.show(item ? `«${item.name}» — выполнено` : 'Отмечено как выполненное', {
+  toast.show(`«${item.name}» — выполнено`, {
     label: 'Отменить',
-    onAction: () => store.undoMarkServiced(id, result),
+    onAction: () => store.undoMarkServiced(item.id, result),
   })
+}
+
+async function handleSaveMaster(payload: {
+  name: string
+  phone?: string
+  cardNumber?: string
+  link?: string
+  specialty?: string
+}) {
+  if (editingMaster.value && editingMaster.value !== 'new') {
+    await store.updateMaster(editingMaster.value.id, payload)
+  } else {
+    await store.addMaster(payload)
+  }
+  editingMaster.value = null
+}
+
+async function handleDeleteMaster(id: string) {
+  const master = store.masters.find((m) => m.id === id)
+  const removed = await store.deleteMaster(id)
+  if (!removed) return
+  haptic('delete')
+  toast.show(master ? `«${master.name}» удалён` : 'Мастер удалён', {
+    label: 'Отменить',
+    onAction: () => store.restoreMaster(removed),
+  })
+}
+
+async function handleSaveExpense(payload: {
+  category: ExpenseCategory
+  title?: string
+  amount: number
+  date: number
+  renewalDate?: number
+  note?: string
+  receiptPhoto?: string
+}) {
+  if (editingExpense.value && editingExpense.value !== 'new') {
+    await store.updateExpense(editingExpense.value.id, payload)
+  } else {
+    await store.addExpense(payload)
+  }
+  editingExpense.value = null
+}
+
+async function handleDeleteExpense(id: string) {
+  const expense = store.expenses.find((e) => e.id === id)
+  const removed = await store.deleteExpense(id)
+  if (!removed) return
+  if (car.value) clearNotifiedExpense(car.value.id, id)
+  haptic('delete')
+  toast.show(expense ? 'Расход удалён' : 'Запись удалена', {
+    label: 'Отменить',
+    onAction: () => store.restoreExpense(removed),
+  })
+}
+
+async function handleSaveComponentCheck(payload: {
+  type: ComponentType
+  season?: 'summer' | 'winter' | 'allseason'
+  treadDepthMm?: number
+  pressureFront?: number
+  pressureRear?: number
+  thicknessMm?: number
+  installedDate?: number
+  note?: string
+}) {
+  await store.addComponentCheck(payload)
+  editingComponentType.value = null
+  haptic('success')
+}
+
+async function handleSaveTrip(payload: {
+  startMileage: number
+  endMileage: number
+  purpose: 'business' | 'personal'
+  date?: number
+  note?: string
+}) {
+  await store.addTrip(payload)
+  showTripForm.value = false
+}
+
+async function handleDeleteTrip(id: string) {
+  const removed = await store.deleteTrip(id)
+  if (!removed) return
+  haptic('delete')
+  toast.show('Поездка удалена', {
+    label: 'Отменить',
+    onAction: () => store.restoreTrip(removed),
+  })
+}
+
+function handleExportPdf() {
+  if (!car.value) return
+  generateReportPdf({
+    car: car.value,
+    statuses: statuses.value,
+    totalFuelCost: totalFuelCost.value,
+    totalServiceCost: totalServiceCost.value,
+    totalExpensesCost: totalExpensesCost.value,
+    totalCost: totalCost.value,
+    expenses: store.expenses,
+    trips: store.trips,
+    totalBusinessKm: totalBusinessKm.value,
+    totalPersonalKm: totalPersonalKm.value,
+    recentHistory: store.historyEntries.slice().sort((a, b) => b.date - a.date),
+  })
+}
+
+async function handleAddCarPhoto(dataUrl: string) {
+  await store.addCarPhoto(dataUrl)
+}
+
+async function handleRemoveCarPhoto(index: number) {
+  await store.removeCarPhoto(index)
 }
 
 async function handleSaveItem(payload: {
@@ -265,6 +432,7 @@ async function handleSaveFuel(payload: {
   remainingLiters?: number
   station?: string
   comment?: string
+  receiptPhoto?: string
 }) {
   await store.addFuelEntry(payload)
   showFuelSheet.value = false
@@ -311,6 +479,7 @@ async function handleSaveFuelEntry(payload: {
   remainingLiters?: number
   station?: string
   comment?: string
+  receiptPhoto?: string
 }) {
   if (!editingFuelEntryId.value) return
   const entry = editingFuelEntry.value
@@ -323,7 +492,7 @@ async function handleSaveFuelEntry(payload: {
 
 async function handleUpdateHistory(
   id: string,
-  payload: { itemName: string; mileage: number; date: number; cost?: number },
+  payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string },
 ) {
   await store.updateHistoryEntry(id, payload)
 }
@@ -333,6 +502,10 @@ async function handleSaveCarInfo(payload: {
   model: string
   year: number
   tankCapacity?: number
+  vin?: string
+  licensePlate?: string
+  stsNumber?: string
+  referenceConsumptionL100km?: number
 }) {
   await store.updateCarInfo(payload)
 }
@@ -451,6 +624,7 @@ async function handleImportFile(file: File) {
         :events-total="timelineEvents.length"
         :total-fuel-cost="totalFuelCost"
         :total-service-cost="totalServiceCost"
+        :total-expenses-cost="totalExpensesCost"
         :total-cost="totalCost"
         :has-any-cost="hasAnyCost"
         :urgent-statuses="urgentPreview"
@@ -466,6 +640,7 @@ async function handleImportFile(file: File) {
         @view-all-events="showEventsSheet = true"
         @add-reminder="showReminderSheet = true"
         @delete-reminder="handleDeleteReminder"
+        @view-other-expenses="showExpenseList = true"
       />
 
       <MaintenanceTab
@@ -487,6 +662,7 @@ async function handleImportFile(file: File) {
         :total-co2-kg="totalCo2Kg"
         :total-fuel-cost="totalFuelCost"
         :total-service-cost="totalServiceCost"
+        :total-expenses-cost="totalExpensesCost"
         :total-cost="totalCost"
         :has-any-cost="hasAnyCost"
         :cost-forecast="costForecast"
@@ -494,18 +670,29 @@ async function handleImportFile(file: File) {
         @delete-fuel="handleDeleteFuel"
         @edit-fuel="editingFuelEntryId = $event"
         @export-csv="handleExportFuelCsv"
+        @view-other-expenses="showExpenseList = true"
       />
 
       <SettingsTab
         v-if="activeTab === 'settings'"
         :car="car"
         :car-count="cars.length"
+        :master-count="store.masters.length"
+        :expense-count="store.expenses.length"
+        :trip-count="store.trips.length"
         :import-error="importError"
         @save="handleSaveCarInfo"
         @delete-car="handleDeleteCar"
         @export="handleExport"
+        @export-pdf="handleExportPdf"
         @import="handleImportFile"
         @open-car-switcher="showCarSwitcher = true"
+        @open-masters="showMasterList = true"
+        @open-expenses="showExpenseList = true"
+        @open-components="showComponentsSheet = true"
+        @open-trips="showTripList = true"
+        @add-photo="handleAddCarPhoto"
+        @remove-photo="handleRemoveCarPhoto"
         @share-passport="showPassportSheet = true"
         @notifications-enabled="handleNotificationsEnabled"
       />
@@ -596,6 +783,78 @@ async function handleImportFile(file: File) {
       v-if="showEventsSheet"
       :events="timelineEvents"
       @close="showEventsSheet = false"
+    />
+
+    <MarkServicedSheet
+      v-if="markServicedItem"
+      :item-name="markServicedItem.name"
+      @close="markServicedItem = null"
+      @save="handleConfirmMarkServiced"
+    />
+
+    <MasterListSheet
+      v-if="showMasterList"
+      :masters="store.masters"
+      @close="showMasterList = false"
+      @edit="editingMaster = $event"
+      @delete="handleDeleteMaster"
+      @add-master="editingMaster = 'new'"
+    />
+
+    <MasterFormSheet
+      v-if="editingMaster !== null"
+      :master="editingMaster !== 'new' ? editingMaster : null"
+      @close="editingMaster = null"
+      @save="handleSaveMaster"
+    />
+
+    <ExpenseListSheet
+      v-if="showExpenseList"
+      :expenses="store.expenses"
+      :expense-statuses="expenseStatuses"
+      :total="totalExpensesCost"
+      @close="showExpenseList = false"
+      @edit="editingExpense = $event"
+      @delete="handleDeleteExpense"
+      @add-expense="editingExpense = 'new'"
+    />
+
+    <ExpenseFormSheet
+      v-if="editingExpense !== null"
+      :expense="editingExpense !== 'new' ? editingExpense : null"
+      @close="editingExpense = null"
+      @save="handleSaveExpense"
+    />
+
+    <ComponentsSheet
+      v-if="showComponentsSheet"
+      :latest-by-type="latestComponentByType"
+      @close="showComponentsSheet = false"
+      @update="editingComponentType = $event"
+    />
+
+    <ComponentFormSheet
+      v-if="editingComponentType !== null"
+      :type="editingComponentType"
+      @close="editingComponentType = null"
+      @save="handleSaveComponentCheck"
+    />
+
+    <TripListSheet
+      v-if="showTripList"
+      :trips="store.trips"
+      :total-business-km="totalBusinessKm"
+      :total-personal-km="totalPersonalKm"
+      @close="showTripList = false"
+      @delete="handleDeleteTrip"
+      @add-trip="showTripForm = true"
+    />
+
+    <TripFormSheet
+      v-if="showTripForm"
+      :current-mileage="car.currentMileage"
+      @close="showTripForm = false"
+      @save="handleSaveTrip"
     />
   </ion-page>
 </template>
