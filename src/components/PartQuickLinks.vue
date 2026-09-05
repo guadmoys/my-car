@@ -9,6 +9,10 @@ const props = defineProps<{
 }>()
 
 const query = computed(() => partSearchQuery(props.part))
+
+function openSite(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <template>
@@ -16,11 +20,9 @@ const query = computed(() => partSearchQuery(props.part))
     <ion-chip
       v-for="site in PART_LINK_SITES"
       :key="site.key"
-      :href="site.url(query)"
-      target="_blank"
-      rel="noopener noreferrer"
       outline
       color="primary"
+      @click="openSite(site.url(query))"
     >
       {{ site.label }}
     </ion-chip>
