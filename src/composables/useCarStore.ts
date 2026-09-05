@@ -330,6 +330,7 @@ async function restoreItem(item: MaintenanceItem): Promise<void> {
 async function addFuelEntry(input: {
   mileage: number
   liters: number
+  date?: number
   cost?: number
   fuelType?: string
   isFullTank?: boolean
@@ -344,7 +345,7 @@ async function addFuelEntry(input: {
     carId: car.value.id,
     mileage: input.mileage,
     liters: input.liters,
-    date: nowTs(),
+    date: input.date ?? nowTs(),
     cost: input.cost,
     fuelType: input.fuelType,
     isFullTank: input.isFullTank,

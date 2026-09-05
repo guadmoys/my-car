@@ -426,6 +426,7 @@ async function handleSaveMileage(mileage: number, date: number, isRollback: bool
 async function handleSaveFuel(payload: {
   mileage: number
   liters: number
+  date?: number
   cost?: number
   fuelType?: string
   isFullTank?: boolean

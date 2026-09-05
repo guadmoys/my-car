@@ -79,7 +79,6 @@ const comment = ref(props.entry?.comment ?? '')
 const receiptPhoto = ref<string | undefined>(props.entry?.receiptPhoto)
 const quickEntry = ref('')
 const dateIso = ref(new Date(props.entry?.date ?? Date.now()).toISOString())
-const maxDateIso = new Date().toISOString()
 
 // Parses a free-form line like "40л 3200р 80000км" into individual fields,
 // so a fill-up can be logged in one shot instead of tabbing through inputs.
@@ -148,7 +147,7 @@ const isValid = computed(() => {
   if (
     mileage.value.trim().length === 0 ||
     Number.isNaN(mileageNumber.value) ||
-    (isEditing.value ? mileageNumber.value <= 0 : mileageNumber.value < props.currentMileage) ||
+    mileageNumber.value <= 0 ||
     liters.value.trim().length === 0 ||
     Number.isNaN(litersNumber.value) ||
     litersNumber.value <= 0
@@ -265,7 +264,7 @@ function handleSave() {
   emit('save', {
     mileage: Math.round(mileageNumber.value),
     liters: litersNumber.value,
-    date: isEditing.value ? new Date(dateIso.value).getTime() : undefined,
+    date: new Date(dateIso.value).getTime(),
     cost: finalCost,
     fuelType: fuelType.value || undefined,
     isFullTank: isFullTank.value,
@@ -314,14 +313,14 @@ function handleSave() {
         </ion-chip>
       </div>
 
-      <ion-list v-if="isEditing" inset>
+      <ion-list inset>
         <ion-item lines="none">
           <ion-label>Дата</ion-label>
           <ion-datetime-button slot="end" datetime="fuel-entry-date" />
         </ion-item>
       </ion-list>
-      <ion-modal v-if="isEditing" :keep-contents-mounted="true">
-        <ion-datetime id="fuel-entry-date" v-model="dateIso" presentation="date" locale="ru-RU" :max="maxDateIso" />
+      <ion-modal :keep-contents-mounted="true">
+        <ion-datetime id="fuel-entry-date" v-model="dateIso" presentation="date" locale="ru-RU" />
       </ion-modal>
 
       <ion-list inset>
@@ -341,8 +340,8 @@ function handleSave() {
           <ion-input v-model="cost" label="Стоимость, ₽ (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
-      <ion-note v-if="!isEditing && mileageTouched && mileage.trim() && mileageNumber < currentMileage" color="danger" class="hint">
-        Пробег не может быть меньше текущего ({{ currentMileage.toLocaleString('ru-RU') }} км)
+      <ion-note v-if="!isEditing && mileageTouched && mileage.trim() && mileageNumber < currentMileage" color="warning" class="hint">
+        ⚠ Меньше текущего пробега ({{ currentMileage.toLocaleString('ru-RU') }} км) — подходит для записи за прошлый период
       </ion-note>
       <ion-note v-if="mileageTouched && looksLikeDuplicate" color="warning" class="hint">
         ⚠ Такой же пробег, как в прошлой заправке — не дубль ли это?
