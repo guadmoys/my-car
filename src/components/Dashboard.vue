@@ -419,8 +419,11 @@ async function handleBulkDelete(ids: string[]) {
 }
 
 async function handleSaveMileage(mileage: number, date: number, isRollback: boolean) {
-  await store.updateMileage(mileage, date, { allowDecrease: isRollback })
+  const applied = await store.updateMileage(mileage, date, { allowDecrease: isRollback })
   showMileageSheet.value = false
+  if (!applied) {
+    toast.show('Уже есть более поздняя запись пробега — текущий пробег не изменён')
+  }
 }
 
 async function handleSaveFuel(payload: {
