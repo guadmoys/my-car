@@ -199,19 +199,31 @@ async function removeCarPhoto(index: number): Promise<void> {
  * caller has explicitly confirmed a genuine odometer rollback (a replaced
  * cluster, a corrected earlier mistake). Without it, a lower reading is
  * clamped up to `initialMileage` as a last-resort safety net.
+ *
+ * A `date` older than the car's current `updatedAt` can never be the newest
+ * mileage fact on record — `mileageAnchors` already excludes `currentMileage`
+ * from validation in exactly this case, treating it as the value being
+ * corrected rather than a fact to check against. Applying such a backdated
+ * entry here anyway would move `currentMileage`/`updatedAt` backwards and
+ * corrupt every status computed from them (maintenance items look "undone",
+ * consumption looks negative, etc.), so it's a no-op instead. Returns
+ * whether the entry was actually applied, so the caller can tell the user
+ * why nothing changed.
  */
 async function updateMileage(
   newMileage: number,
   date?: number,
   options?: { allowDecrease?: boolean },
-): Promise<void> {
-  if (!car.value) return
+): Promise<boolean> {
+  if (!car.value) return false
+  if (date !== undefined && date < car.value.updatedAt) return false
   const clamped = options?.allowDecrease ? newMileage : Math.max(newMileage, car.value.initialMileage)
   const updated = patchCar(car.value.id, {
     currentMileage: clamped,
     ...(date !== undefined ? { updatedAt: date } : {}),
   })
   if (updated) await db.putCar(updated)
+  return true
 }
 
 async function updateItem(
