@@ -13,6 +13,7 @@ import {
   IonList,
   IonModal,
   IonNote,
+  IonTextarea,
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
@@ -26,12 +27,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string }]
+  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string }]
 }>()
 
 const itemName = ref(props.entry.itemName)
 const mileage = ref(String(props.entry.mileage))
 const cost = ref(props.entry.cost !== undefined ? String(props.entry.cost) : '')
+const note = ref(props.entry.note ?? '')
 const receiptPhoto = ref<string | undefined>(props.entry.receiptPhoto)
 const dateIso = ref(new Date(props.entry.date).toISOString())
 
@@ -60,6 +62,7 @@ function handleSave() {
     date: new Date(dateIso.value).getTime(),
     cost: cost.value.trim() === '' ? undefined : costNumber.value,
     receiptPhoto: receiptPhoto.value,
+    note: note.value.trim() || undefined,
   })
 }
 </script>
@@ -97,6 +100,11 @@ function handleSave() {
         </ion-item>
         <ion-item lines="none">
           <ion-input v-model="cost" label="Стоимость, ₽ (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
+        </ion-item>
+      </ion-list>
+      <ion-list inset>
+        <ion-item lines="none">
+          <ion-textarea v-model="note" label="Заметка (необязательно)" label-placement="stacked" placeholder="—" :auto-grow="true" />
         </ion-item>
       </ion-list>
       <ReceiptPhotoField v-model="receiptPhoto" />

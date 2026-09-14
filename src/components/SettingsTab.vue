@@ -31,6 +31,7 @@ import {
   cloudDownloadOutline,
   cloudUploadOutline,
   closeCircleOutline,
+  documentAttachOutline,
   documentOutline,
   documentTextOutline,
   downloadOutline,
@@ -94,6 +95,7 @@ const props = defineProps<{
   expenseCount: number
   tripCount: number
   importError: string | null
+  importCsvError: string | null
 }>()
 
 const emit = defineEmits<{
@@ -113,6 +115,8 @@ const emit = defineEmits<{
   export: []
   exportPdf: []
   import: [file: File]
+  exportCsv: []
+  importCsv: [file: File]
   openCarSwitcher: []
   openMasters: []
   openExpenses: []
@@ -134,6 +138,7 @@ const stsNumber = ref(props.car.stsNumber ?? '')
 const referenceConsumption = ref(props.car.referenceConsumptionL100km !== undefined ? String(props.car.referenceConsumptionL100km) : '')
 const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const csvFileInput = ref<HTMLInputElement | null>(null)
 const photoFileInput = ref<HTMLInputElement | null>(null)
 const activePicker = ref<'make' | 'model' | null>(null)
 const modelOptions = computed(() => modelsForMake(make.value))
@@ -391,6 +396,17 @@ function handleFileSelected(event: Event) {
   if (file) emit('import', file)
   input.value = ''
 }
+
+function triggerImportCsv() {
+  csvFileInput.value?.click()
+}
+
+function handleCsvFileSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (file) emit('importCsv', file)
+  input.value = ''
+}
 </script>
 
 <template>
@@ -617,7 +633,7 @@ function handleFileSelected(event: Event) {
       <ion-list-header>
         <ion-label>Резервная копия</ion-label>
         <HintButton
-          text="Экспорт сохраняет все машины, параметры ТО, заправки и историю в файл. Импорт полностью заменит текущие данные содержимым файла"
+          text="Экспорт сохраняет все машины, параметры ТО, заправки и историю в файл. Импорт полностью заменит текущие данные содержимым файла. CSV-пункты — для обмена данными с приложением «Моя машина» (сторонним, не путать с этим): импорт добавляет заправки и записи ТО к текущим, не удаляя ничего"
         />
       </ion-list-header>
       <ion-item button :detail="false" @click="emit('export')">
@@ -628,7 +644,7 @@ function handleFileSelected(event: Event) {
         <SettingsIconBadge slot="start" :icon="documentOutline" color="danger" />
         <ion-label color="primary">Экспортировать отчёт (PDF)</ion-label>
       </ion-item>
-      <ion-item button :detail="false" lines="none" @click="triggerImport">
+      <ion-item button :detail="false" @click="triggerImport">
         <SettingsIconBadge slot="start" :icon="cloudUploadOutline" color="tertiary" />
         <ion-label color="primary">Импортировать резервную копию</ion-label>
       </ion-item>
@@ -639,8 +655,24 @@ function handleFileSelected(event: Event) {
         class="sr-only"
         @change="handleFileSelected"
       />
+      <ion-item button :detail="false" @click="emit('exportCsv')">
+        <SettingsIconBadge slot="start" :icon="cloudDownloadOutline" color="success" />
+        <ion-label color="primary">Экспортировать в CSV («Моя машина»)</ion-label>
+      </ion-item>
+      <ion-item button :detail="false" lines="none" @click="triggerImportCsv">
+        <SettingsIconBadge slot="start" :icon="documentAttachOutline" color="tertiary" />
+        <ion-label color="primary">Импортировать CSV («Моя машина»)</ion-label>
+      </ion-item>
+      <input
+        ref="csvFileInput"
+        type="file"
+        accept=".csv,text/csv"
+        class="sr-only"
+        @change="handleCsvFileSelected"
+      />
     </ion-list>
     <p v-if="importError" class="hint error">{{ importError }}</p>
+    <p v-if="importCsvError" class="hint error">{{ importCsvError }}</p>
 
     <ion-list inset>
       <ion-list-header>

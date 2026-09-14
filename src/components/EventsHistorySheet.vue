@@ -119,6 +119,7 @@ function fmtDate(ts: number): string {
           <ion-label>
             <h2>{{ eventTitle(event) }}</h2>
             <p>{{ eventMeta(event) }}</p>
+            <p v-if="event.kind === 'service' && event.entry.note" class="event-note">{{ event.entry.note }}</p>
           </ion-label>
         </ion-item>
       </ion-list>
@@ -130,3 +131,9 @@ function fmtDate(ts: number): string {
     </ion-content>
   </ion-modal>
 </template>
+
+<style scoped>
+.event-note {
+  white-space: pre-line;
+}
+</style>
