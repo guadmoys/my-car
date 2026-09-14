@@ -25,6 +25,7 @@ import type {
 import { buildDefaultItems } from '../data/defaultMaintenance'
 import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
 import * as db from '../db/database'
+import { composePartNote, composeServiceNote, type ParsedCarCsv } from '../utils/carCsvFormat'
 
 const ACTIVE_CAR_KEY = 'my-car-active-car-id'
 
@@ -424,7 +425,7 @@ async function updateFuelEntry(
 
 async function updateHistoryEntry(
   id: string,
-  input: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string },
+  input: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
 ): Promise<void> {
   const entry = historyEntries.find((h) => h.id === id)
   if (!entry) return
@@ -433,6 +434,7 @@ async function updateHistoryEntry(
   entry.date = input.date
   entry.cost = input.cost ?? undefined
   entry.receiptPhoto = input.receiptPhoto
+  entry.note = input.note?.trim() || undefined
   await db.putHistoryEntry({ ...entry })
 }
 
@@ -1474,6 +1476,110 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   return { ok: true }
 }
 
+export interface CsvImportSummary {
+  fuelAdded: number
+  fuelSkipped: number
+  serviceAdded: number
+  serviceSkipped: number
+  partsAdded: number
+  partsSkippedNoDate: number
+}
+
+/**
+ * Additive import from the «Моя машина» (third-party app) CSV export: fuel
+ * fill-ups are added as-is, while service/parts rows are matched to an
+ * existing MaintenanceItem by name (or a new default one is created) so each
+ * row can become a HistoryEntry the same way a normal "mark serviced" does.
+ * Rows already present (same item + date + mileage, or same date + mileage
+ * for fuel) are skipped so re-importing the same file is a no-op.
+ */
+async function importCarCsv(parsed: ParsedCarCsv): Promise<CsvImportSummary> {
+  const summary: CsvImportSummary = {
+    fuelAdded: 0,
+    fuelSkipped: 0,
+    serviceAdded: 0,
+    serviceSkipped: 0,
+    partsAdded: 0,
+    partsSkippedNoDate: parsed.skippedPartsCount,
+  }
+  if (!car.value) return summary
+
+  const fuelSorted = parsed.fuel.slice().sort((a, b) => a.mileage - b.mileage)
+  for (const row of fuelSorted) {
+    if (fuelEntries.some((e) => e.date === row.date && e.mileage === row.mileage)) {
+      summary.fuelSkipped++
+      continue
+    }
+    await addFuelEntry({
+      mileage: row.mileage,
+      liters: row.liters,
+      date: row.date,
+      cost: row.cost,
+      fuelType: row.fuelType,
+      isFullTank: row.isFullTank,
+      station: row.station,
+      comment: row.comment,
+    })
+    summary.fuelAdded++
+  }
+
+  async function importServiceEvent(
+    name: string,
+    date: number,
+    mileage: number,
+    cost: number | undefined,
+    note: string | undefined,
+  ): Promise<boolean> {
+    const normalized = name.trim().toLowerCase()
+    let item = items.find((i) => i.name.trim().toLowerCase() === normalized)
+    if (!item) {
+      await addCustomItem({ name, intervalKm: 10000, intervalMonths: 12 })
+      item = items.find((i) => i.name.trim().toLowerCase() === normalized)
+    }
+    if (!item || !car.value) return false
+
+    if (historyEntries.some((h) => h.itemId === item!.id && h.date === date && h.mileage === mileage)) return false
+
+    const entry: HistoryEntry = {
+      id: makeId(),
+      carId: car.value.id,
+      itemId: item.id,
+      itemName: item.name,
+      mileage,
+      date,
+      cost,
+      note,
+    }
+    historyEntries.push(entry)
+    await db.putHistoryEntry(entry)
+
+    if (mileage >= item.lastServiceMileage) {
+      item.lastServiceMileage = mileage
+      item.lastServiceDate = date
+      await db.putMaintenanceItem({ ...item })
+    }
+    if (mileage > car.value.currentMileage) {
+      await updateMileage(mileage)
+    }
+    return true
+  }
+
+  const serviceSorted = parsed.service.slice().sort((a, b) => a.mileage - b.mileage)
+  for (const row of serviceSorted) {
+    const added = await importServiceEvent(row.name, row.date, row.mileage, row.cost, composeServiceNote(row))
+    if (added) summary.serviceAdded++
+    else summary.serviceSkipped++
+  }
+
+  const partsSorted = parsed.parts.slice().sort((a, b) => a.mileage - b.mileage)
+  for (const row of partsSorted) {
+    const added = await importServiceEvent(row.name, row.date, row.mileage, row.cost, composePartNote(row))
+    if (added) summary.partsAdded++
+  }
+
+  return summary
+}
+
 export function useCarStore() {
   return {
     cars,
@@ -1549,5 +1655,6 @@ export function useCarStore() {
     getItemHistory,
     exportData,
     importData,
+    importCarCsv,
   }
 }

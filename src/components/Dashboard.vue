@@ -38,6 +38,7 @@ import TripListSheet from './TripListSheet.vue'
 import TripFormSheet from './TripFormSheet.vue'
 import type { PassportData } from '../utils/carPassport'
 import { generateReportPdf } from '../utils/pdfReport'
+import { buildMoyaMashinaCsv, parseMoyaMashinaCsv } from '../utils/carCsvFormat'
 import type {
   ComponentType,
   Expense,
@@ -101,6 +102,7 @@ const markServicedItem = ref<MaintenanceItem | null>(null)
 const editingItem = ref<MaintenanceItem | null | 'new'>(null)
 const editingFuelEntryId = ref<string | null>(null)
 const importError = ref<string | null>(null)
+const importCsvError = ref<string | null>(null)
 
 const editingFuelEntry = computed<FuelEntry | null>(
   () => store.fuelEntries.find((e) => e.id === editingFuelEntryId.value) ?? null,
@@ -496,7 +498,7 @@ async function handleSaveFuelEntry(payload: {
 
 async function handleUpdateHistory(
   id: string,
-  payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string },
+  payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
 ) {
   await store.updateHistoryEntry(id, payload)
 }
@@ -611,6 +613,53 @@ async function handleImportFile(file: File) {
   const result = await store.importData(parsed)
   if (!result.ok) importError.value = result.error
 }
+
+function handleExportCarCsv() {
+  if (!car.value) return
+  const csv = buildMoyaMashinaCsv({ fuel: store.fuelEntries, history: store.historyEntries })
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const dateStr = new Date().toISOString().slice(0, 10)
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `moya-mashina-${dateStr}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+async function handleImportCarCsv(file: File) {
+  importCsvError.value = null
+  if (!car.value) return
+
+  let text: string
+  try {
+    text = await file.text()
+  } catch {
+    importCsvError.value = 'Не удалось прочитать файл'
+    return
+  }
+
+  const parsed = parseMoyaMashinaCsv(text)
+  if (parsed.fuel.length === 0 && parsed.service.length === 0 && parsed.parts.length === 0) {
+    importCsvError.value = 'В файле не нашлось ни одной записи в формате «Моя машина» (Заправки/Сервис/Детали)'
+    return
+  }
+
+  const summary = await store.importCarCsv(parsed)
+  haptic('success')
+  const added = summary.fuelAdded + summary.serviceAdded + summary.partsAdded
+  const skipped = summary.fuelSkipped + summary.serviceSkipped
+  const parts = [
+    `Заправок добавлено: ${summary.fuelAdded}`,
+    `Записей ТО добавлено: ${summary.serviceAdded + summary.partsAdded}`,
+  ]
+  if (skipped > 0) parts.push(`уже было: ${skipped}`)
+  if (summary.partsSkippedNoDate > 0) parts.push(`деталей без даты установки пропущено: ${summary.partsSkippedNoDate}`)
+  toast.show(added > 0 ? parts.join(', ') : 'Новых записей не найдено — похоже, файл уже импортирован')
+}
 </script>
 
 <template>
@@ -685,11 +734,14 @@ async function handleImportFile(file: File) {
         :expense-count="store.expenses.length"
         :trip-count="store.trips.length"
         :import-error="importError"
+        :import-csv-error="importCsvError"
         @save="handleSaveCarInfo"
         @delete-car="handleDeleteCar"
         @export="handleExport"
         @export-pdf="handleExportPdf"
         @import="handleImportFile"
+        @export-csv="handleExportCarCsv"
+        @import-csv="handleImportCarCsv"
         @open-car-switcher="showCarSwitcher = true"
         @open-masters="showMasterList = true"
         @open-expenses="showExpenseList = true"

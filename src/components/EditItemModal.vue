@@ -77,7 +77,7 @@ const emit = defineEmits<{
   delete: [id: string]
   updateHistory: [
     id: string,
-    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string },
+    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
   ]
 }>()
 
@@ -86,7 +86,14 @@ const editingHistoryEntry = computed(
   () => props.history.find((h) => h.id === editingHistoryId.value) ?? null,
 )
 
-function handleSaveHistory(payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string }) {
+function handleSaveHistory(payload: {
+  itemName: string
+  mileage: number
+  date: number
+  cost?: number
+  receiptPhoto?: string
+  note?: string
+}) {
   if (editingHistoryId.value) emit('updateHistory', editingHistoryId.value, payload)
   editingHistoryId.value = null
 }
@@ -335,7 +342,10 @@ function handleAddToCalendar() {
       <ion-list v-if="!isCreate && history.length > 0" inset>
         <ion-list-header>История ТО</ion-list-header>
         <ion-item v-for="entry in history" :key="entry.id" button :detail="false" @click="editingHistoryId = entry.id">
-          <ion-label>{{ fmtHistoryDate(entry.date) }}</ion-label>
+          <ion-label>
+            <h3>{{ fmtHistoryDate(entry.date) }}</h3>
+            <p v-if="entry.note" class="history-note">{{ entry.note }}</p>
+          </ion-label>
           <ion-note v-if="entry.cost !== undefined" slot="end" color="primary">{{ fmtCost(entry.cost) }}</ion-note>
           <ion-note slot="end">{{ fmtMileage(entry.mileage) }} км</ion-note>
         </ion-item>
@@ -390,5 +400,9 @@ function handleAddToCalendar() {
   display: block;
   font-size: 12px;
   margin: 6px 32px;
+}
+
+.history-note {
+  white-space: pre-line;
 }
 </style>
