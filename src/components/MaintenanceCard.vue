@@ -80,7 +80,10 @@ function openSite(url: string) {
 
 <template>
   <ion-item v-if="selectable" button :detail="false" class="compact-item" @click="emit('select', status.item.id)">
-    <ion-checkbox slot="start" :checked="selected" @ion-change="emit('select', status.item.id)" />
+    <!-- No handler here: a tap on the checkbox already bubbles up as a click
+         on this ion-item (that's what actually toggles it) — an ion-change
+         handler here too would double-fire and cancel itself out. -->
+    <ion-checkbox slot="start" :checked="selected" />
     <ion-icon slot="start" :icon="ellipse" :color="stateColor" />
     <ion-label>
       <h2>{{ status.item.name }}</h2>
