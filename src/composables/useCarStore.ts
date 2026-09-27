@@ -40,6 +40,8 @@ const expenses = reactive<Expense[]>([])
 const componentChecks = reactive<ComponentCheck[]>([])
 const trips = reactive<Trip[]>([])
 const isLoaded = ref(false)
+/** True while importData/restoreFromCloud is replacing the whole database — lets useCloudSync suppress auto-sync so it can't export a partially-imported state over the cloud backup. */
+const isImporting = ref(false)
 
 const car = computed(() => cars.find((c) => c.id === activeCarId.value) ?? null)
 
@@ -59,7 +61,16 @@ function patchCar(carId: string, patch: Partial<Car>): Car | null {
   return updated
 }
 
+// Guards against out-of-order resolution when loadCarData is kicked off more
+// than once in quick succession (rapid car switches, or a switch racing a
+// direct state replacement like createCar/deleteCar/importData): only the
+// call that's still the most recently requested one is allowed to apply its
+// results, so a slow, stale fetch can never clobber a newer state with the
+// wrong car's data.
+let loadCarDataToken = 0
+
 async function loadCarData(carId: string): Promise<void> {
+  const token = ++loadCarDataToken
   const [loadedItems, loadedFuel, loadedHistory, loadedReminders, loadedMasters, loadedExpenses, loadedComponents, loadedTrips] =
     await Promise.all([
       db.getMaintenanceItemsForCar(carId),
@@ -71,6 +82,7 @@ async function loadCarData(carId: string): Promise<void> {
       db.getComponentsForCar(carId),
       db.getTripsForCar(carId),
     ])
+  if (token !== loadCarDataToken) return
   items.splice(0, items.length, ...loadedItems.map((item) => ({ ...item, parts: item.parts ?? [] })))
   fuelEntries.splice(0, fuelEntries.length, ...loadedFuel)
   historyEntries.splice(0, historyEntries.length, ...loadedHistory)
@@ -126,6 +138,11 @@ async function createCar(input: {
   await db.putCar(newCar)
   await db.putMaintenanceItems(defaults)
 
+  // Cancel any in-flight loadCarData (e.g. a switchCar the user triggered
+  // just before creating this car) so it can't resolve afterwards and
+  // overwrite the new car's freshly-set state with a different car's data.
+  loadCarDataToken++
+
   cars.push(newCar)
   activeCarId.value = newCar.id
   localStorage.setItem(ACTIVE_CAR_KEY, newCar.id)
@@ -152,6 +169,7 @@ async function deleteCar(carId: string): Promise<void> {
     localStorage.setItem(ACTIVE_CAR_KEY, next.id)
     await loadCarData(next.id)
   } else {
+    loadCarDataToken++
     activeCarId.value = null
     localStorage.removeItem(ACTIVE_CAR_KEY)
     items.splice(0, items.length)
@@ -260,14 +278,13 @@ async function markServiced(
   atMileage?: number,
   cost?: number,
   receiptPhoto?: string,
+  date?: number,
 ): Promise<MarkServicedResult | null> {
   const item = items.find((i) => i.id === id)
   if (!item || !car.value) return null
   const previous = { lastServiceMileage: item.lastServiceMileage, lastServiceDate: item.lastServiceDate }
   const mileage = atMileage ?? car.value.currentMileage
-  item.lastServiceMileage = mileage
-  item.lastServiceDate = nowTs()
-  await db.putMaintenanceItem({ ...item })
+  const serviceDate = date ?? nowTs()
 
   const entry: HistoryEntry = {
     id: makeId(),
@@ -275,12 +292,27 @@ async function markServiced(
     itemId: item.id,
     itemName: item.name,
     mileage,
-    date: nowTs(),
+    date: serviceDate,
     cost,
     receiptPhoto,
   }
+
+  item.lastServiceMileage = mileage
+  item.lastServiceDate = serviceDate
   historyEntries.unshift(entry)
-  await db.putHistoryEntry(entry)
+
+  try {
+    await db.putMaintenanceItem({ ...item })
+    await db.putHistoryEntry(entry)
+  } catch (e) {
+    // Roll back the optimistic in-memory changes so a failed write can't
+    // leave the item looking "serviced" with no matching history record.
+    item.lastServiceMileage = previous.lastServiceMileage
+    item.lastServiceDate = previous.lastServiceDate
+    const idx = historyEntries.findIndex((h) => h.id === entry.id)
+    if (idx !== -1) historyEntries.splice(idx, 1)
+    throw e
+  }
 
   return { historyEntryId: entry.id, previous }
 }
@@ -353,9 +385,10 @@ async function addFuelEntry(input: {
   receiptPhoto?: string
 }): Promise<void> {
   if (!car.value) return
+  const carId = car.value.id
   const entry: FuelEntry = {
     id: makeId(),
-    carId: car.value.id,
+    carId,
     mileage: input.mileage,
     liters: input.liters,
     date: input.date ?? nowTs(),
@@ -370,8 +403,11 @@ async function addFuelEntry(input: {
   fuelEntries.push(entry)
   await db.putFuelEntry(entry)
 
-  if (input.mileage > car.value.currentMileage) {
-    await updateMileage(input.mileage)
+  // Re-check the active car survived the await (the user may have switched
+  // cars while this write was in flight) and pass the entry's own date so a
+  // backdated fill-up can't masquerade as a live "now" mileage reading.
+  if (car.value?.id === carId && input.mileage > car.value.currentMileage) {
+    await updateMileage(input.mileage, entry.date)
   }
 }
 
@@ -406,6 +442,7 @@ async function updateFuelEntry(
 ): Promise<void> {
   const entry = fuelEntries.find((e) => e.id === id)
   if (!entry) return
+  const carId = entry.carId
   entry.mileage = input.mileage
   entry.liters = input.liters
   entry.date = input.date
@@ -418,8 +455,8 @@ async function updateFuelEntry(
   entry.receiptPhoto = input.receiptPhoto
   await db.putFuelEntry({ ...entry })
 
-  if (car.value && input.mileage > car.value.currentMileage) {
-    await updateMileage(input.mileage)
+  if (car.value?.id === carId && input.mileage > car.value.currentMileage) {
+    await updateMileage(input.mileage, input.date)
   }
 }
 
@@ -881,10 +918,19 @@ const consumptionAnalysis = computed<{
         litersPer100km = (burned / distance) * 100
         totalBurned += burned
         totalDistance += distance
+        anchorAfter = levels.after
+        anchorMileage = entry.mileage
+        interimLiters = 0
+      } else {
+        // A bad/out-of-order mileage (or fuel math that doesn't add up) for
+        // this entry must not become the new reference point — every later
+        // entry's distance/burned would then be measured from a corrupted
+        // anchor. Fold its liters into the running interim total instead
+        // (same as an unresolved fill-up below), so the fuel still counts
+        // once a later, trustworthy entry closes the loop, while the last
+        // good anchor stays in place.
+        interimLiters += entry.liters
       }
-      anchorAfter = levels.after
-      anchorMileage = entry.mileage
-      interimLiters = 0
     } else {
       interimLiters += entry.liters
     }
@@ -1445,33 +1491,45 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     return { ok: false, error: 'В файле нет ни одной машины' }
   }
 
-  await db.clearAll()
-  await db.putCars(importedCars)
-  await db.putMaintenanceItems(importedItems)
-  if (importedFuel.length) await db.putFuelEntries(importedFuel)
-  if (importedHistory.length) await db.putHistoryEntries(importedHistory)
-  if (importedReminders.length) await db.putReminders(importedReminders)
-  if (importedMasters.length) await db.putMasters(importedMasters)
-  if (importedExpenses.length) await db.putExpenses(importedExpenses)
-  if (importedComponents.length) await db.putComponentChecks(importedComponents)
-  if (importedTrips.length) await db.putTrips(importedTrips)
+  // Set before the write so a watcher-driven auto-sync can't export a
+  // half-replaced database over the cloud backup while this is in flight.
+  isImporting.value = true
+  try {
+    await db.replaceAll({
+      cars: importedCars,
+      items: importedItems,
+      fuel: importedFuel,
+      history: importedHistory,
+      reminders: importedReminders,
+      masters: importedMasters,
+      expenses: importedExpenses,
+      components: importedComponents,
+      trips: importedTrips,
+    })
 
-  cars.splice(0, cars.length, ...importedCars)
-  activeCarId.value = newActiveCarId
-  localStorage.setItem(ACTIVE_CAR_KEY, newActiveCarId)
+    // The whole DB was just replaced wholesale — any loadCarData still in
+    // flight for the previous state must not be allowed to apply afterwards.
+    loadCarDataToken++
 
-  items.splice(0, items.length, ...importedItems.filter((i) => i.carId === newActiveCarId))
-  fuelEntries.splice(0, fuelEntries.length, ...importedFuel.filter((f) => f.carId === newActiveCarId))
-  historyEntries.splice(
-    0,
-    historyEntries.length,
-    ...importedHistory.filter((h) => h.carId === newActiveCarId),
-  )
-  reminders.splice(0, reminders.length, ...importedReminders.filter((r) => r.carId === newActiveCarId))
-  masters.splice(0, masters.length, ...importedMasters.filter((m) => m.carId === newActiveCarId))
-  expenses.splice(0, expenses.length, ...importedExpenses.filter((e) => e.carId === newActiveCarId))
-  componentChecks.splice(0, componentChecks.length, ...importedComponents.filter((c) => c.carId === newActiveCarId))
-  trips.splice(0, trips.length, ...importedTrips.filter((t) => t.carId === newActiveCarId))
+    cars.splice(0, cars.length, ...importedCars)
+    activeCarId.value = newActiveCarId
+    localStorage.setItem(ACTIVE_CAR_KEY, newActiveCarId)
+
+    items.splice(0, items.length, ...importedItems.filter((i) => i.carId === newActiveCarId))
+    fuelEntries.splice(0, fuelEntries.length, ...importedFuel.filter((f) => f.carId === newActiveCarId))
+    historyEntries.splice(
+      0,
+      historyEntries.length,
+      ...importedHistory.filter((h) => h.carId === newActiveCarId),
+    )
+    reminders.splice(0, reminders.length, ...importedReminders.filter((r) => r.carId === newActiveCarId))
+    masters.splice(0, masters.length, ...importedMasters.filter((m) => m.carId === newActiveCarId))
+    expenses.splice(0, expenses.length, ...importedExpenses.filter((e) => e.carId === newActiveCarId))
+    componentChecks.splice(0, componentChecks.length, ...importedComponents.filter((c) => c.carId === newActiveCarId))
+    trips.splice(0, trips.length, ...importedTrips.filter((t) => t.carId === newActiveCarId))
+  } finally {
+    isImporting.value = false
+  }
 
   return { ok: true }
 }
@@ -1537,12 +1595,13 @@ async function importCarCsv(parsed: ParsedCarCsv): Promise<CsvImportSummary> {
       item = items.find((i) => i.name.trim().toLowerCase() === normalized)
     }
     if (!item || !car.value) return false
+    const carId = car.value.id
 
     if (historyEntries.some((h) => h.itemId === item!.id && h.date === date && h.mileage === mileage)) return false
 
     const entry: HistoryEntry = {
       id: makeId(),
-      carId: car.value.id,
+      carId,
       itemId: item.id,
       itemName: item.name,
       mileage,
@@ -1558,8 +1617,8 @@ async function importCarCsv(parsed: ParsedCarCsv): Promise<CsvImportSummary> {
       item.lastServiceDate = date
       await db.putMaintenanceItem({ ...item })
     }
-    if (mileage > car.value.currentMileage) {
-      await updateMileage(mileage)
+    if (car.value?.id === carId && mileage > car.value.currentMileage) {
+      await updateMileage(mileage, date)
     }
     return true
   }
@@ -1593,6 +1652,7 @@ export function useCarStore() {
     componentChecks,
     trips,
     isLoaded,
+    isImporting,
     statuses,
     dueCount,
     soonCount,

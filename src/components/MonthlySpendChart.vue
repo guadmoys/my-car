@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { IonCard, IonCardContent } from '@ionic/vue'
-import type { FuelEntry, HistoryEntry } from '../types'
+import type { Expense, FuelEntry, HistoryEntry } from '../types'
 
 const props = defineProps<{
   fuelEntries: FuelEntry[]
   historyEntries: HistoryEntry[]
+  expenses: Expense[]
 }>()
 
 const activeKey = ref<string | null>(null)
@@ -40,6 +41,9 @@ const totals = computed(() => {
   for (const h of props.historyEntries) {
     if (h.cost === undefined) continue
     map.set(monthKey(h.date), (map.get(monthKey(h.date)) ?? 0) + h.cost)
+  }
+  for (const e of props.expenses) {
+    map.set(monthKey(e.date), (map.get(monthKey(e.date)) ?? 0) + e.amount)
   }
   return months.value.map((m) => ({ ...m, total: map.get(m.key) ?? 0 }))
 })

@@ -240,7 +240,13 @@ async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?
   const item = markServicedItem.value
   if (!item) return
   markServicedItem.value = null
-  const result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto)
+  let result: Awaited<ReturnType<typeof store.markServiced>>
+  try {
+    result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto)
+  } catch {
+    toast.show('Не удалось сохранить — попробуйте ещё раз')
+    return
+  }
   if (car.value) clearNotifiedItem(car.value.id, item.id)
   if (!result) return
   haptic('success')
@@ -285,12 +291,17 @@ async function handleSaveExpense(payload: {
   note?: string
   receiptPhoto?: string
 }) {
+  const isNew = !editingExpense.value || editingExpense.value === 'new'
   if (editingExpense.value && editingExpense.value !== 'new') {
     await store.updateExpense(editingExpense.value.id, payload)
   } else {
     await store.addExpense(payload)
   }
   editingExpense.value = null
+  if (isNew) {
+    haptic('success')
+    toast.show('Расход добавлен')
+  }
 }
 
 async function handleDeleteExpense(id: string) {
@@ -318,6 +329,7 @@ async function handleSaveComponentCheck(payload: {
   await store.addComponentCheck(payload)
   editingComponentType.value = null
   haptic('success')
+  toast.show('Запись добавлена')
 }
 
 async function handleSaveTrip(payload: {
@@ -329,6 +341,8 @@ async function handleSaveTrip(payload: {
 }) {
   await store.addTrip(payload)
   showTripForm.value = false
+  haptic('success')
+  toast.show('Поездка добавлена')
 }
 
 async function handleDeleteTrip(id: string) {
@@ -425,7 +439,10 @@ async function handleSaveMileage(mileage: number, date: number, isRollback: bool
   showMileageSheet.value = false
   if (!applied) {
     toast.show('Уже есть более поздняя запись пробега — текущий пробег не изменён')
+    return
   }
+  haptic('success')
+  toast.show('Пробег обновлён')
 }
 
 async function handleSaveFuel(payload: {
@@ -442,6 +459,8 @@ async function handleSaveFuel(payload: {
 }) {
   await store.addFuelEntry(payload)
   showFuelSheet.value = false
+  haptic('success')
+  toast.show('Заправка добавлена')
 }
 
 async function handleSaveReminder(payload: {
@@ -452,6 +471,8 @@ async function handleSaveReminder(payload: {
 }) {
   await store.addReminder(payload)
   showReminderSheet.value = false
+  haptic('success')
+  toast.show('Напоминание добавлено')
 }
 
 async function handleDeleteReminder(id: string) {
@@ -688,6 +709,7 @@ async function handleImportCarCsv(file: File) {
         @switch-car="showCarSwitcher = true"
         @quick-fuel="showFuelSheet = true"
         @open-item="openEditFromDashboard"
+        @mark-serviced="handleMarkServiced"
         @view-all-maintenance="activeTab = 'maintenance'"
         @view-all-fuel="activeTab = 'fuel'"
         @view-all-events="showEventsSheet = true"
@@ -710,6 +732,7 @@ async function handleImportCarCsv(file: File) {
         v-if="activeTab === 'fuel'"
         :fuel-history="fuelHistory"
         :history-entries="store.historyEntries"
+        :expenses="store.expenses"
         :average-consumption="averageConsumption"
         :fuel-insights="fuelInsights"
         :total-co2-kg="totalCo2Kg"
@@ -760,6 +783,7 @@ async function handleImportCarCsv(file: File) {
       @quick-mileage="showMileageSheet = true"
       @quick-fuel="showFuelSheet = true"
       @quick-reminder="showReminderSheet = true"
+      @quick-expense="editingExpense = 'new'"
     />
 
     <EditItemModal

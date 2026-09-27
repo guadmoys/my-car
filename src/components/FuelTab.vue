@@ -25,7 +25,7 @@ import {
   type SegmentCustomEvent,
 } from '@ionic/vue'
 import { add, downloadOutline, ellipse, trash } from 'ionicons/icons'
-import type { CostForecast, FuelConsumption, FuelInsight, HistoryEntry } from '../types'
+import type { CostForecast, Expense, FuelConsumption, FuelInsight, HistoryEntry } from '../types'
 import { haptic } from '../utils/haptics'
 import ConsumptionChart from './ConsumptionChart.vue'
 import MonthlySpendChart from './MonthlySpendChart.vue'
@@ -36,6 +36,7 @@ import { handlePullToRefresh } from '../utils/pullToRefresh'
 const props = defineProps<{
   fuelHistory: FuelConsumption[]
   historyEntries: HistoryEntry[]
+  expenses: Expense[]
   averageConsumption: number | null
   fuelInsights: FuelInsight[]
   totalFuelCost: number
@@ -166,7 +167,7 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
 
     <div v-if="fuelHistory.length > 1 || hasAnyCost" class="charts-section">
       <ConsumptionChart :history="fuelHistory" :average="averageConsumption" />
-      <MonthlySpendChart :fuel-entries="fuelEntriesRaw" :history-entries="historyEntries" />
+      <MonthlySpendChart :fuel-entries="fuelEntriesRaw" :history-entries="historyEntries" :expenses="expenses" />
     </div>
 
     <ion-list v-if="fuelInsights.length > 0" inset>

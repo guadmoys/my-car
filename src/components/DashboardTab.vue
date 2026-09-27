@@ -99,6 +99,7 @@ const emit = defineEmits<{
   switchCar: []
   quickFuel: []
   openItem: [id: string]
+  markServiced: [id: string]
   viewAllMaintenance: []
   viewAllFuel: []
   viewAllEvents: []
@@ -206,7 +207,7 @@ function fmtCost(n: number): string {
       <ion-list-header>Сделать сейчас</ion-list-header>
       <ion-item
         button
-        detail
+        :detail="priorityAction.kind === 'fuel'"
         :color="priorityAction.kind === 'fuel' ? 'danger' : priorityAction.status.state"
         @click="
           priorityAction.kind === 'fuel' ? emit('quickFuel') : emit('openItem', priorityAction.status.item.id)
@@ -223,6 +224,15 @@ function fmtCost(n: number): string {
             }}
           </p>
         </ion-label>
+        <ion-button
+          v-if="priorityAction.kind === 'maintenance'"
+          slot="end"
+          size="small"
+          fill="outline"
+          @click.stop="emit('markServiced', priorityAction.status.item.id)"
+        >
+          Готово
+        </ion-button>
       </ion-item>
     </ion-list>
 

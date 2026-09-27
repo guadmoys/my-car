@@ -60,6 +60,11 @@ async function syncNow(showToast = true): Promise<void> {
 }
 
 function scheduleAutoSync(): void {
+  const store = useCarStore()
+  // Never schedule (or let a stale timer fire) while importData/restore is
+  // mid-flight — it would export a partially-replaced database over the
+  // cloud backup.
+  if (store.isImporting.value) return
   if (!state.activeProvider || !state.autoSync) return
   if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => void syncNow(false), SYNC_DEBOUNCE_MS)
@@ -69,7 +74,29 @@ function ensureWatcher(): void {
   if (watcherStarted) return
   watcherStarted = true
   const store = useCarStore()
-  watch([store.cars, store.items, store.fuelEntries, store.historyEntries], scheduleAutoSync, { deep: true })
+  watch(
+    [
+      store.cars,
+      store.items,
+      store.fuelEntries,
+      store.historyEntries,
+      store.reminders,
+      store.masters,
+      store.expenses,
+      store.componentChecks,
+      store.trips,
+    ],
+    scheduleAutoSync,
+    { deep: true },
+  )
+  // A restore/import starting mid-debounce must cancel the pending timer,
+  // not just block new ones — otherwise it can still fire during the import.
+  watch(store.isImporting, (importing) => {
+    if (importing && debounceTimer) {
+      clearTimeout(debounceTimer)
+      debounceTimer = null
+    }
+  })
 }
 
 async function connect(provider: CloudProvider): Promise<void> {
