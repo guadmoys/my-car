@@ -165,6 +165,11 @@ const isValid = computed(() => {
   ) {
     return false
   }
+  // A hard contradiction (a later-dated record already has a lower mileage)
+  // can't be resolved from this dialog — same as the odometer-reading flow's
+  // isAboveMax block. Everything else (typos, plain backdating) stays a
+  // non-blocking warning so it can't slow down normal fast entry.
+  if (isAboveMaxReal.value) return false
   return true
 })
 
