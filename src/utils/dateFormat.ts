@@ -56,11 +56,22 @@ export function formatDate(ts: number): string {
   const d = new Date(ts)
 
   if (dateFormat.value === 'auto') {
-    return new Intl.DateTimeFormat(navigator.language, {
+    const options: Intl.DateTimeFormatOptions = {
       day: 'numeric',
       month: 'numeric',
       year: showYear.value ? 'numeric' : undefined,
-    }).format(d)
+    }
+    // navigator.language isn't guaranteed to be a well-formed BCP-47 tag on
+    // every platform (some Linux/embedded WebViews report POSIX-style locale
+    // variants like "en-US@posix") — Intl.DateTimeFormat throws a RangeError
+    // on those instead of just ignoring them, and letting that escape here
+    // takes down the whole render tree, not just this date. Fall back to the
+    // app's own default locale rather than trusting the platform blindly.
+    try {
+      return new Intl.DateTimeFormat(navigator.language, options).format(d)
+    } catch {
+      return new Intl.DateTimeFormat('ru-RU', options).format(d)
+    }
   }
 
   const day = pad(d.getDate())

@@ -169,6 +169,11 @@ function toggle(key: string) {
 .hit {
   flex: 1;
   height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  appearance: none;
 }
 
 .month-labels {
