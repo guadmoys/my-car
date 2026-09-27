@@ -21,9 +21,11 @@ import {
 } from '@ionic/vue'
 import { EXPENSE_CATEGORY_LABELS, type Expense, type ExpenseCategory } from '../types'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
+import { haptic } from '../utils/haptics'
 
 const props = defineProps<{
   expense: Expense | null
+  lastCategory?: ExpenseCategory
 }>()
 
 const emit = defineEmits<{
@@ -43,7 +45,7 @@ const emit = defineEmits<{
 
 const CATEGORIES = Object.keys(EXPENSE_CATEGORY_LABELS) as ExpenseCategory[]
 
-const category = ref<ExpenseCategory>(props.expense?.category ?? 'insurance')
+const category = ref<ExpenseCategory>(props.expense?.category ?? props.lastCategory ?? 'insurance')
 const title = ref(props.expense?.title ?? '')
 const amount = ref(props.expense ? String(props.expense.amount) : '')
 const dateIso = ref(new Date(props.expense?.date ?? Date.now()).toISOString())
@@ -59,6 +61,11 @@ const isValid = computed(() => amount.value.trim() !== '' && !Number.isNaN(amoun
 
 function toggleRenewal(checked: boolean) {
   hasRenewal.value = checked
+}
+
+function selectCategory(c: ExpenseCategory) {
+  haptic('tap')
+  category.value = c
 }
 
 function handleSave() {
@@ -99,7 +106,7 @@ function handleSave() {
                 :key="c"
                 :color="category === c ? 'primary' : undefined"
                 :outline="category !== c"
-                @click="category = c"
+                @click="selectCategory(c)"
               >
                 {{ EXPENSE_CATEGORY_LABELS[c] }}
               </ion-chip>

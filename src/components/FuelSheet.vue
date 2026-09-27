@@ -24,11 +24,14 @@ import {
 } from '@ionic/vue'
 import { checkmark } from 'ionicons/icons'
 import { haptic } from '../utils/haptics'
-import { mileageInputSeed } from '../utils/mileage'
-import type { FuelEntry } from '../types'
+import { mileageInputSeed, mileageAnchors, plausibleMileageRange } from '../utils/mileage'
+import type { Car, FuelEntry, HistoryEntry } from '../types'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
+  car: Car
+  fuelEntries: FuelEntry[]
+  historyEntries: HistoryEntry[]
   currentMileage: number
   tankCapacity?: number
   averagePrice: number | null
@@ -217,6 +220,41 @@ const looksLikeDuplicate = computed(() => {
   return mileageNumber.value === props.lastMileage
 })
 
+// Only meaningful for a new entry — an existing entry's own mileage/date is
+// itself one of the anchors, so checking it against "everything else known"
+// would trivially flag itself once edited.
+const dateMs = computed(() => new Date(dateIso.value).getTime())
+const mileageRange = computed(() => {
+  const anchors = mileageAnchors(props.car, props.fuelEntries, props.historyEntries, dateMs.value)
+  return plausibleMileageRange(anchors, dateMs.value)
+})
+
+// Contradicts a fixed, earlier-or-same-date record (another fill-up or a
+// completed service) — a stronger, more specific signal than just "lower
+// than today's mileage", since it names exactly which record it conflicts
+// with. Warning only (not blocking): unlike the odometer-reading flow, a bad
+// value here just won't produce a consumption figure for itself.
+const isBelowMinReal = computed(
+  () => !isEditing.value && mileageTouched.value && mileage.value.trim() !== '' && !Number.isNaN(mileageNumber.value) && mileageNumber.value < mileageRange.value.min,
+)
+const isAboveMaxReal = computed(
+  () =>
+    !isEditing.value &&
+    mileageTouched.value &&
+    mileage.value.trim() !== '' &&
+    !Number.isNaN(mileageNumber.value) &&
+    mileageRange.value.max !== null &&
+    mileageNumber.value > mileageRange.value.max,
+)
+
+function fmtKm(n: number): string {
+  return Math.round(n).toLocaleString('ru-RU')
+}
+
+function fmtDate(ts: number): string {
+  return new Date(ts).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 function selectFuelType(value: string) {
   haptic('tap')
   fuelType.value = fuelType.value === value ? '' : value
@@ -340,7 +378,13 @@ function handleSave() {
           <ion-input v-model="cost" label="Стоимость, ₽ (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
-      <ion-note v-if="!isEditing && mileageTouched && mileage.trim() && mileageNumber < currentMileage" color="warning" class="hint">
+      <ion-note v-if="isBelowMinReal" color="danger" class="hint">
+        ⚠ На {{ fmtDate(mileageRange.minAt as number) }} уже зафиксирован пробег {{ fmtKm(mileageRange.min) }} км — на эту дату пробег не может быть меньше
+      </ion-note>
+      <ion-note v-else-if="isAboveMaxReal" color="danger" class="hint">
+        ⚠ На {{ fmtDate(mileageRange.maxAt as number) }} уже зафиксирован пробег {{ fmtKm(mileageRange.max as number) }} км — на более раннюю дату пробег не может быть больше
+      </ion-note>
+      <ion-note v-else-if="!isEditing && mileageTouched && mileage.trim() && mileageNumber < currentMileage" color="warning" class="hint">
         ⚠ Меньше текущего пробега ({{ currentMileage.toLocaleString('ru-RU') }} км) — подходит для записи за прошлый период
       </ion-note>
       <ion-note v-if="mileageTouched && looksLikeDuplicate" color="warning" class="hint">

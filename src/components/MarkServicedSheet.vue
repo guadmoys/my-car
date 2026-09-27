@@ -34,10 +34,26 @@ function handleSave() {
   if (costInvalid.value) return
   emit('save', { cost: cost.value.trim() === '' ? undefined : costNumber.value, receiptPhoto: receiptPhoto.value })
 }
+
+// Guards only the accidental paths (swipe-down, backdrop tap) — the explicit
+// Отмена button still closes immediately, same as every other sheet. Note
+// that dismissing here only discards the cost/receipt being attached — the
+// "done" action itself hasn't happened yet, so there's no undo needed, just
+// a heads-up before the entered cost is lost.
+async function canDismiss(): Promise<boolean> {
+  if (cost.value.trim() === '' && !receiptPhoto.value) return true
+  return window.confirm('Введённые данные не будут сохранены. Закрыть?')
+}
 </script>
 
 <template>
-  <ion-modal :is-open="true" :breakpoints="[0, 1]" :initial-breakpoint="1" @did-dismiss="emit('close')">
+  <ion-modal
+    :is-open="true"
+    :breakpoints="[0, 1]"
+    :initial-breakpoint="1"
+    :can-dismiss="canDismiss"
+    @did-dismiss="emit('close')"
+  >
     <ion-header>
       <ion-toolbar>
         <ion-buttons slot="start">

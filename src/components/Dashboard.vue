@@ -137,6 +137,8 @@ const lastPrice = computed<number | null>(() => {
   if (!e || e.cost === undefined || e.liters <= 0) return null
   return e.cost / e.liters
 })
+// store.expenses is already newest-first (addExpense unshifts), so [0] is the latest.
+const lastExpenseCategory = computed(() => store.expenses[0]?.category)
 
 const STATE_RANK: Record<string, number> = { due: 2, soon: 1, ok: 0 }
 
@@ -816,6 +818,9 @@ async function handleImportCarCsv(file: File) {
 
     <FuelSheet
       v-if="showFuelSheet"
+      :car="car"
+      :fuel-entries="store.fuelEntries"
+      :history-entries="store.historyEntries"
       :current-mileage="car.currentMileage"
       :tank-capacity="car.tankCapacity"
       :average-price="averageFuelPrice"
@@ -830,6 +835,9 @@ async function handleImportCarCsv(file: File) {
     <FuelSheet
       v-if="editingFuelEntry"
       :entry="editingFuelEntry"
+      :car="car"
+      :fuel-entries="store.fuelEntries"
+      :history-entries="store.historyEntries"
       :current-mileage="car.currentMileage"
       :tank-capacity="car.tankCapacity"
       :average-price="averageFuelPrice"
@@ -902,6 +910,7 @@ async function handleImportCarCsv(file: File) {
     <ExpenseFormSheet
       v-if="editingExpense !== null"
       :expense="editingExpense !== 'new' ? editingExpense : null"
+      :last-category="lastExpenseCategory"
       @close="editingExpense = null"
       @save="handleSaveExpense"
     />

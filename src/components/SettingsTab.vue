@@ -502,7 +502,7 @@ function handleCsvFileSelected(event: Event) {
       </ion-list-header>
       <ion-item lines="none">
         <div class="photo-row">
-          <div v-for="(photo, index) in car.photos ?? []" :key="index" class="photo-thumb-wrap">
+          <div v-for="(photo, index) in car.photos ?? []" :key="photo" class="photo-thumb-wrap">
             <img :src="photo" alt="Фото машины" class="photo-thumb" />
             <button type="button" class="photo-remove" aria-label="Удалить фото" @click="emit('removePhoto', index)">×</button>
           </div>

@@ -896,6 +896,12 @@ const consumptionAnalysis = computed<{
   let anchorMileage = car.value.initialMileage
   let interimLiters = 0
   let previousMileage = car.value.initialMileage
+  // The very first anchor assumes a full tank at initialMileage, which is
+  // just a guess (the car could've been added mid-tank) — not confirmed by
+  // any real entry yet. So the very first resolved fill-up's segment is
+  // skipped rather than counted on a guessed starting level; that fill-up's
+  // own observed level then becomes a real, trustworthy anchor from then on.
+  let anchorConfirmed = false
 
   let totalBurned = 0
   let totalDistance = 0
@@ -908,28 +914,35 @@ const consumptionAnalysis = computed<{
     let litersPer100km: number | null = null
 
     if (levels) {
-      const combined: TankLevel = {
-        c: anchorAfter.c + interimLiters - levels.before.c,
-        k: anchorAfter.k - levels.before.k,
-      }
-      const burned = resolveLevel(combined, capacity)
-      const distance = entry.mileage - anchorMileage
-      if (burned !== null && burned >= 0 && distance > 0) {
-        litersPer100km = (burned / distance) * 100
-        totalBurned += burned
-        totalDistance += distance
+      if (!anchorConfirmed) {
         anchorAfter = levels.after
         anchorMileage = entry.mileage
         interimLiters = 0
+        anchorConfirmed = true
       } else {
-        // A bad/out-of-order mileage (or fuel math that doesn't add up) for
-        // this entry must not become the new reference point — every later
-        // entry's distance/burned would then be measured from a corrupted
-        // anchor. Fold its liters into the running interim total instead
-        // (same as an unresolved fill-up below), so the fuel still counts
-        // once a later, trustworthy entry closes the loop, while the last
-        // good anchor stays in place.
-        interimLiters += entry.liters
+        const combined: TankLevel = {
+          c: anchorAfter.c + interimLiters - levels.before.c,
+          k: anchorAfter.k - levels.before.k,
+        }
+        const burned = resolveLevel(combined, capacity)
+        const distance = entry.mileage - anchorMileage
+        if (burned !== null && burned >= 0 && distance > 0) {
+          litersPer100km = (burned / distance) * 100
+          totalBurned += burned
+          totalDistance += distance
+          anchorAfter = levels.after
+          anchorMileage = entry.mileage
+          interimLiters = 0
+        } else {
+          // A bad/out-of-order mileage (or fuel math that doesn't add up) for
+          // this entry must not become the new reference point — every later
+          // entry's distance/burned would then be measured from a corrupted
+          // anchor. Fold its liters into the running interim total instead
+          // (same as an unresolved fill-up below), so the fuel still counts
+          // once a later, trustworthy entry closes the loop, while the last
+          // good anchor stays in place.
+          interimLiters += entry.liters
+        }
       }
     } else {
       interimLiters += entry.liters
