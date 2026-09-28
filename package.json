@@ -1,7 +1,7 @@
 {
   "name": "my-car",
   "private": true,
-  "version": "1.25.0",
+  "version": "1.27.5",
   "type": "module",
   "scripts": {
     "dev": "vite",

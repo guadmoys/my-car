@@ -158,13 +158,6 @@ export async function putCar(car: Car): Promise<void> {
   await db.put('cars', toPlain(car))
 }
 
-export async function putCars(carsList: Car[]): Promise<void> {
-  const db = await getDB()
-  const tx = db.transaction('cars', 'readwrite')
-  await Promise.all(carsList.map((c) => tx.store.put(toPlain(c))))
-  await tx.done
-}
-
 export async function deleteCarCascade(carId: string): Promise<void> {
   const db = await getDB()
   const tx = db.transaction(
@@ -238,13 +231,6 @@ export async function putFuelEntry(entry: FuelEntry): Promise<void> {
   await db.put('fuelEntries', toPlain(entry))
 }
 
-export async function putFuelEntries(entries: FuelEntry[]): Promise<void> {
-  const db = await getDB()
-  const tx = db.transaction('fuelEntries', 'readwrite')
-  await Promise.all(entries.map((entry) => tx.store.put(toPlain(entry))))
-  await tx.done
-}
-
 export async function deleteFuelEntry(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('fuelEntries', id)
@@ -266,34 +252,53 @@ export async function putHistoryEntry(entry: HistoryEntry): Promise<void> {
   await db.put('history', toPlain(entry))
 }
 
-export async function putHistoryEntries(entries: HistoryEntry[]): Promise<void> {
-  const db = await getDB()
-  const tx = db.transaction('history', 'readwrite')
-  await Promise.all(entries.map((entry) => tx.store.put(toPlain(entry))))
-  await tx.done
-}
-
 export async function deleteHistoryEntry(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('history', id)
 }
 
-export async function clearAll(): Promise<void> {
+/**
+ * Replaces the entire database (every store) in one all-or-nothing
+ * transaction. Used by backup restore/import, where a partial failure
+ * halfway through a sequence of separate clear+put calls would otherwise
+ * leave IndexedDB emptied but not repopulated — invisible until the next
+ * reload, when the app finds no cars and drops the user into onboarding.
+ */
+export async function replaceAll(data: {
+  cars: Car[]
+  items: MaintenanceItem[]
+  fuel: FuelEntry[]
+  history: HistoryEntry[]
+  reminders: Reminder[]
+  masters: Master[]
+  expenses: Expense[]
+  components: ComponentCheck[]
+  trips: Trip[]
+}): Promise<void> {
   const db = await getDB()
-  const tx = db.transaction(
-    ['cars', 'maintenanceItems', 'fuelEntries', 'history', 'reminders', 'masters', 'expenses', 'components', 'trips'],
-    'readwrite',
-  )
+  const storeNames = [
+    'cars',
+    'maintenanceItems',
+    'fuelEntries',
+    'history',
+    'reminders',
+    'masters',
+    'expenses',
+    'components',
+    'trips',
+  ] as const
+  const tx = db.transaction(storeNames, 'readwrite')
+  await Promise.all(storeNames.map((name) => tx.objectStore(name).clear()))
   await Promise.all([
-    tx.objectStore('cars').clear(),
-    tx.objectStore('maintenanceItems').clear(),
-    tx.objectStore('fuelEntries').clear(),
-    tx.objectStore('history').clear(),
-    tx.objectStore('reminders').clear(),
-    tx.objectStore('masters').clear(),
-    tx.objectStore('expenses').clear(),
-    tx.objectStore('components').clear(),
-    tx.objectStore('trips').clear(),
+    ...data.cars.map((c) => tx.objectStore('cars').put(toPlain(c))),
+    ...data.items.map((i) => tx.objectStore('maintenanceItems').put(toPlain(i))),
+    ...data.fuel.map((f) => tx.objectStore('fuelEntries').put(toPlain(f))),
+    ...data.history.map((h) => tx.objectStore('history').put(toPlain(h))),
+    ...data.reminders.map((r) => tx.objectStore('reminders').put(toPlain(r))),
+    ...data.masters.map((m) => tx.objectStore('masters').put(toPlain(m))),
+    ...data.expenses.map((e) => tx.objectStore('expenses').put(toPlain(e))),
+    ...data.components.map((c) => tx.objectStore('components').put(toPlain(c))),
+    ...data.trips.map((t) => tx.objectStore('trips').put(toPlain(t))),
   ])
   await tx.done
 }
@@ -312,13 +317,6 @@ export async function getAllRemindersRaw(): Promise<Reminder[]> {
 export async function putReminder(reminder: Reminder): Promise<void> {
   const db = await getDB()
   await db.put('reminders', toPlain(reminder))
-}
-
-export async function putReminders(reminders: Reminder[]): Promise<void> {
-  const db = await getDB()
-  const tx = db.transaction('reminders', 'readwrite')
-  await Promise.all(reminders.map((reminder) => tx.store.put(toPlain(reminder))))
-  await tx.done
 }
 
 export async function deleteReminder(id: string): Promise<void> {
@@ -342,13 +340,6 @@ export async function putMaster(master: Master): Promise<void> {
   await db.put('masters', toPlain(master))
 }
 
-export async function putMasters(masters: Master[]): Promise<void> {
-  const db = await getDB()
-  const tx = db.transaction('masters', 'readwrite')
-  await Promise.all(masters.map((master) => tx.store.put(toPlain(master))))
-  await tx.done
-}
-
 export async function deleteMaster(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('masters', id)
@@ -368,13 +359,6 @@ export async function getAllExpensesRaw(): Promise<Expense[]> {
 export async function putExpense(expense: Expense): Promise<void> {
   const db = await getDB()
   await db.put('expenses', toPlain(expense))
-}
-
-export async function putExpenses(expenses: Expense[]): Promise<void> {
-  const db = await getDB()
-  const tx = db.transaction('expenses', 'readwrite')
-  await Promise.all(expenses.map((expense) => tx.store.put(toPlain(expense))))
-  await tx.done
 }
 
 export async function deleteExpense(id: string): Promise<void> {
@@ -398,13 +382,6 @@ export async function putComponentCheck(component: ComponentCheck): Promise<void
   await db.put('components', toPlain(component))
 }
 
-export async function putComponentChecks(components: ComponentCheck[]): Promise<void> {
-  const db = await getDB()
-  const tx = db.transaction('components', 'readwrite')
-  await Promise.all(components.map((component) => tx.store.put(toPlain(component))))
-  await tx.done
-}
-
 export async function deleteComponentCheck(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('components', id)
@@ -424,13 +401,6 @@ export async function getAllTripsRaw(): Promise<Trip[]> {
 export async function putTrip(trip: Trip): Promise<void> {
   const db = await getDB()
   await db.put('trips', toPlain(trip))
-}
-
-export async function putTrips(trips: Trip[]): Promise<void> {
-  const db = await getDB()
-  const tx = db.transaction('trips', 'readwrite')
-  await Promise.all(trips.map((trip) => tx.store.put(toPlain(trip))))
-  await tx.done
 }
 
 export async function deleteTrip(id: string): Promise<void> {

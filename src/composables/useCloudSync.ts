@@ -25,6 +25,7 @@ const state = reactive({
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let watcherStarted = false
 let bootPromise: Promise<void> | null = null
+let stopDataWatcher: (() => void) | null = null
 
 function refreshFromStorage(): void {
   state.activeProvider = cloud.getActiveProvider()
@@ -60,16 +61,71 @@ async function syncNow(showToast = true): Promise<void> {
 }
 
 function scheduleAutoSync(): void {
+  const store = useCarStore()
+  // Never schedule (or let a stale timer fire) while importData/restore is
+  // mid-flight — it would export a partially-replaced database over the
+  // cloud backup.
+  if (store.isImporting.value) return
   if (!state.activeProvider || !state.autoSync) return
   if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => void syncNow(false), SYNC_DEBOUNCE_MS)
 }
 
+/**
+ * The deep watch below is the only thing that needs to see every nested
+ * field of every record (an edit to an existing entry's cost, not just
+ * adds/deletes, should still schedule a sync) — so `deep: true` itself
+ * isn't optional. What's avoidable is running that traversal for accounts
+ * that have never connected a cloud provider at all, which is most of them:
+ * only start it once state.activeProvider is set, and tear it down if the
+ * user disconnects, instead of paying the cost for every session regardless.
+ */
+function startDataWatcher(): void {
+  if (stopDataWatcher) return
+  const store = useCarStore()
+  stopDataWatcher = watch(
+    [
+      store.cars,
+      store.items,
+      store.fuelEntries,
+      store.historyEntries,
+      store.reminders,
+      store.masters,
+      store.expenses,
+      store.componentChecks,
+      store.trips,
+    ],
+    scheduleAutoSync,
+    { deep: true },
+  )
+}
+
+function stopDataWatcherIfRunning(): void {
+  if (!stopDataWatcher) return
+  stopDataWatcher()
+  stopDataWatcher = null
+}
+
 function ensureWatcher(): void {
   if (watcherStarted) return
   watcherStarted = true
+  watch(
+    () => state.activeProvider,
+    (provider) => {
+      if (provider) startDataWatcher()
+      else stopDataWatcherIfRunning()
+    },
+    { immediate: true },
+  )
+  // A restore/import starting mid-debounce must cancel the pending timer,
+  // not just block new ones — otherwise it can still fire during the import.
   const store = useCarStore()
-  watch([store.cars, store.items, store.fuelEntries, store.historyEntries], scheduleAutoSync, { deep: true })
+  watch(store.isImporting, (importing) => {
+    if (importing && debounceTimer) {
+      clearTimeout(debounceTimer)
+      debounceTimer = null
+    }
+  })
 }
 
 async function connect(provider: CloudProvider): Promise<void> {

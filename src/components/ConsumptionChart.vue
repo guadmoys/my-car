@@ -215,6 +215,11 @@ function dotColor(quality: FuelConsumption['quality']): string {
 .hit {
   flex: 1;
   height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  appearance: none;
 }
 
 .chart-footer {

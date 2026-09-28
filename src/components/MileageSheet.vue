@@ -103,10 +103,23 @@ function handleSave(rollback: boolean) {
   if (rollback) haptic('warning')
   emit('save', Math.round(number.value), dateMs.value, rollback)
 }
+
+// Guards only the accidental paths (swipe-down, backdrop tap) — the explicit
+// Отмена button still closes immediately, same as every other sheet.
+async function canDismiss(): Promise<boolean> {
+  if (!touched.value || value.value.trim() === '') return true
+  return window.confirm('Введённый пробег не будет сохранён. Закрыть?')
+}
 </script>
 
 <template>
-  <ion-modal :is-open="true" :breakpoints="[0, 1]" :initial-breakpoint="1" @did-dismiss="emit('close')">
+  <ion-modal
+    :is-open="true"
+    :breakpoints="[0, 1]"
+    :initial-breakpoint="1"
+    :can-dismiss="canDismiss"
+    @did-dismiss="emit('close')"
+  >
     <ion-header>
       <ion-toolbar>
         <ion-buttons slot="start">

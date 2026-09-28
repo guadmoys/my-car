@@ -18,6 +18,7 @@ import {
   IonToolbar,
   type SegmentCustomEvent,
 } from '@ionic/vue'
+import { haptic } from '../utils/haptics'
 
 const props = defineProps<{
   currentMileage: number
@@ -45,6 +46,7 @@ const isValid = computed(() => {
 })
 
 function selectPurpose(e: SegmentCustomEvent) {
+  haptic('tap')
   purpose.value = e.detail.value as 'business' | 'personal'
 }
 

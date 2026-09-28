@@ -17,6 +17,7 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { COMPONENT_TYPE_LABELS, type ComponentType } from '../types'
+import { haptic } from '../utils/haptics'
 
 const props = defineProps<{
   type: ComponentType
@@ -51,6 +52,11 @@ const pressureRear = ref('')
 const thicknessMm = ref('')
 const installedDateIso = ref(new Date().toISOString())
 const note = ref('')
+
+function selectSeason(key: 'summer' | 'winter' | 'allseason') {
+  haptic('tap')
+  season.value = key
+}
 
 function num(v: string): number | undefined {
   if (v.trim() === '') return undefined
@@ -104,7 +110,7 @@ function handleSave() {
                   :key="s.key"
                   :color="season === s.key ? 'primary' : undefined"
                   :outline="season !== s.key"
-                  @click="season = s.key"
+                  @click="selectSeason(s.key)"
                 >
                   {{ s.label }}
                 </ion-chip>
