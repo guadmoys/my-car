@@ -25,6 +25,7 @@ const state = reactive({
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let watcherStarted = false
 let bootPromise: Promise<void> | null = null
+let stopDataWatcher: (() => void) | null = null
 
 function refreshFromStorage(): void {
   state.activeProvider = cloud.getActiveProvider()
@@ -70,11 +71,19 @@ function scheduleAutoSync(): void {
   debounceTimer = setTimeout(() => void syncNow(false), SYNC_DEBOUNCE_MS)
 }
 
-function ensureWatcher(): void {
-  if (watcherStarted) return
-  watcherStarted = true
+/**
+ * The deep watch below is the only thing that needs to see every nested
+ * field of every record (an edit to an existing entry's cost, not just
+ * adds/deletes, should still schedule a sync) — so `deep: true` itself
+ * isn't optional. What's avoidable is running that traversal for accounts
+ * that have never connected a cloud provider at all, which is most of them:
+ * only start it once state.activeProvider is set, and tear it down if the
+ * user disconnects, instead of paying the cost for every session regardless.
+ */
+function startDataWatcher(): void {
+  if (stopDataWatcher) return
   const store = useCarStore()
-  watch(
+  stopDataWatcher = watch(
     [
       store.cars,
       store.items,
@@ -89,8 +98,28 @@ function ensureWatcher(): void {
     scheduleAutoSync,
     { deep: true },
   )
+}
+
+function stopDataWatcherIfRunning(): void {
+  if (!stopDataWatcher) return
+  stopDataWatcher()
+  stopDataWatcher = null
+}
+
+function ensureWatcher(): void {
+  if (watcherStarted) return
+  watcherStarted = true
+  watch(
+    () => state.activeProvider,
+    (provider) => {
+      if (provider) startDataWatcher()
+      else stopDataWatcherIfRunning()
+    },
+    { immediate: true },
+  )
   // A restore/import starting mid-debounce must cancel the pending timer,
   // not just block new ones — otherwise it can still fire during the import.
+  const store = useCarStore()
   watch(store.isImporting, (importing) => {
     if (importing && debounceTimer) {
       clearTimeout(debounceTimer)
