@@ -81,6 +81,24 @@ const {
 
 const toast = useToast()
 
+// A rapid double-tap on a sheet's "Готово" fires its click handler twice
+// before the first async store write resolves and the sheet closes — there's
+// no per-sheet "already submitting" state, so both taps go through and
+// create two records from one intended save. This is the single shared lock
+// every create/update handler below goes through: the second tap is simply
+// ignored rather than producing a visible duplicate (or, for edits, a
+// harmless redundant write).
+const isSubmitting = ref(false)
+async function submitOnce(fn: () => Promise<void>): Promise<void> {
+  if (isSubmitting.value) return
+  isSubmitting.value = true
+  try {
+    await fn()
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
 const activeTab = ref<TabKey>('dashboard')
 
 const showMileageSheet = ref(false)
@@ -242,19 +260,21 @@ async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?
   const item = markServicedItem.value
   if (!item) return
   markServicedItem.value = null
-  let result: Awaited<ReturnType<typeof store.markServiced>>
-  try {
-    result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto)
-  } catch {
-    toast.show('Не удалось сохранить — попробуйте ещё раз')
-    return
-  }
-  if (car.value) clearNotifiedItem(car.value.id, item.id)
-  if (!result) return
-  haptic('success')
-  toast.show(`«${item.name}» — выполнено`, {
-    label: 'Отменить',
-    onAction: () => store.undoMarkServiced(item.id, result),
+  await submitOnce(async () => {
+    let result: Awaited<ReturnType<typeof store.markServiced>>
+    try {
+      result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto)
+    } catch {
+      toast.show('Не удалось сохранить — попробуйте ещё раз')
+      return
+    }
+    if (car.value) clearNotifiedItem(car.value.id, item.id)
+    if (!result) return
+    haptic('success')
+    toast.show(`«${item.name}» — выполнено`, {
+      label: 'Отменить',
+      onAction: () => store.undoMarkServiced(item.id, result),
+    })
   })
 }
 
@@ -265,12 +285,14 @@ async function handleSaveMaster(payload: {
   link?: string
   specialty?: string
 }) {
-  if (editingMaster.value && editingMaster.value !== 'new') {
-    await store.updateMaster(editingMaster.value.id, payload)
-  } else {
-    await store.addMaster(payload)
-  }
-  editingMaster.value = null
+  await submitOnce(async () => {
+    if (editingMaster.value && editingMaster.value !== 'new') {
+      await store.updateMaster(editingMaster.value.id, payload)
+    } else {
+      await store.addMaster(payload)
+    }
+    editingMaster.value = null
+  })
 }
 
 async function handleDeleteMaster(id: string) {
@@ -293,17 +315,19 @@ async function handleSaveExpense(payload: {
   note?: string
   receiptPhoto?: string
 }) {
-  const isNew = !editingExpense.value || editingExpense.value === 'new'
-  if (editingExpense.value && editingExpense.value !== 'new') {
-    await store.updateExpense(editingExpense.value.id, payload)
-  } else {
-    await store.addExpense(payload)
-  }
-  editingExpense.value = null
-  if (isNew) {
-    haptic('success')
-    toast.show('Расход добавлен')
-  }
+  await submitOnce(async () => {
+    const isNew = !editingExpense.value || editingExpense.value === 'new'
+    if (editingExpense.value && editingExpense.value !== 'new') {
+      await store.updateExpense(editingExpense.value.id, payload)
+    } else {
+      await store.addExpense(payload)
+    }
+    editingExpense.value = null
+    if (isNew) {
+      haptic('success')
+      toast.show('Расход добавлен')
+    }
+  })
 }
 
 async function handleDeleteExpense(id: string) {
@@ -328,10 +352,12 @@ async function handleSaveComponentCheck(payload: {
   installedDate?: number
   note?: string
 }) {
-  await store.addComponentCheck(payload)
-  editingComponentType.value = null
-  haptic('success')
-  toast.show('Запись добавлена')
+  await submitOnce(async () => {
+    await store.addComponentCheck(payload)
+    editingComponentType.value = null
+    haptic('success')
+    toast.show('Запись добавлена')
+  })
 }
 
 async function handleSaveTrip(payload: {
@@ -341,10 +367,12 @@ async function handleSaveTrip(payload: {
   date?: number
   note?: string
 }) {
-  await store.addTrip(payload)
-  showTripForm.value = false
-  haptic('success')
-  toast.show('Поездка добавлена')
+  await submitOnce(async () => {
+    await store.addTrip(payload)
+    showTripForm.value = false
+    haptic('success')
+    toast.show('Поездка добавлена')
+  })
 }
 
 async function handleDeleteTrip(id: string) {
@@ -392,10 +420,12 @@ async function handleSaveItem(payload: {
   notifyBeforeKm?: number
   notifyBeforeDays?: number
 }) {
-  if (editModalItem.value) {
-    await store.updateItem(editModalItem.value.id, payload)
-  }
-  closeEdit()
+  await submitOnce(async () => {
+    if (editModalItem.value) {
+      await store.updateItem(editModalItem.value.id, payload)
+    }
+    closeEdit()
+  })
 }
 
 async function handleCreateItem(payload: {
@@ -407,8 +437,10 @@ async function handleCreateItem(payload: {
   notifyBeforeKm?: number
   notifyBeforeDays?: number
 }) {
-  await store.addCustomItem(payload)
-  closeEdit()
+  await submitOnce(async () => {
+    await store.addCustomItem(payload)
+    closeEdit()
+  })
 }
 
 async function handleDeleteItem(id: string) {
@@ -437,14 +469,16 @@ async function handleBulkDelete(ids: string[]) {
 }
 
 async function handleSaveMileage(mileage: number, date: number, isRollback: boolean) {
-  const applied = await store.updateMileage(mileage, date, { allowDecrease: isRollback })
-  showMileageSheet.value = false
-  if (!applied) {
-    toast.show('Уже есть более поздняя запись пробега — текущий пробег не изменён')
-    return
-  }
-  haptic('success')
-  toast.show('Пробег обновлён')
+  await submitOnce(async () => {
+    const applied = await store.updateMileage(mileage, date, { allowDecrease: isRollback })
+    showMileageSheet.value = false
+    if (!applied) {
+      toast.show('Уже есть более поздняя запись пробега — текущий пробег не изменён')
+      return
+    }
+    haptic('success')
+    toast.show('Пробег обновлён')
+  })
 }
 
 async function handleSaveFuel(payload: {
@@ -459,10 +493,12 @@ async function handleSaveFuel(payload: {
   comment?: string
   receiptPhoto?: string
 }) {
-  await store.addFuelEntry(payload)
-  showFuelSheet.value = false
-  haptic('success')
-  toast.show('Заправка добавлена')
+  await submitOnce(async () => {
+    await store.addFuelEntry(payload)
+    showFuelSheet.value = false
+    haptic('success')
+    toast.show('Заправка добавлена')
+  })
 }
 
 async function handleSaveReminder(payload: {
@@ -471,10 +507,12 @@ async function handleSaveReminder(payload: {
   dueDate?: number
   hasTime?: boolean
 }) {
-  await store.addReminder(payload)
-  showReminderSheet.value = false
-  haptic('success')
-  toast.show('Напоминание добавлено')
+  await submitOnce(async () => {
+    await store.addReminder(payload)
+    showReminderSheet.value = false
+    haptic('success')
+    toast.show('Напоминание добавлено')
+  })
 }
 
 async function handleDeleteReminder(id: string) {
@@ -512,18 +550,20 @@ async function handleSaveFuelEntry(payload: {
 }) {
   if (!editingFuelEntryId.value) return
   const entry = editingFuelEntry.value
-  await store.updateFuelEntry(editingFuelEntryId.value, {
-    ...payload,
-    date: payload.date ?? entry?.date ?? Date.now(),
+  await submitOnce(async () => {
+    await store.updateFuelEntry(editingFuelEntryId.value!, {
+      ...payload,
+      date: payload.date ?? entry?.date ?? Date.now(),
+    })
+    editingFuelEntryId.value = null
   })
-  editingFuelEntryId.value = null
 }
 
 async function handleUpdateHistory(
   id: string,
   payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
 ) {
-  await store.updateHistoryEntry(id, payload)
+  await submitOnce(() => store.updateHistoryEntry(id, payload))
 }
 
 async function handleSaveCarInfo(payload: {
@@ -536,7 +576,7 @@ async function handleSaveCarInfo(payload: {
   stsNumber?: string
   referenceConsumptionL100km?: number
 }) {
-  await store.updateCarInfo(payload)
+  await submitOnce(() => store.updateCarInfo(payload))
 }
 
 async function handleDeleteCar() {
@@ -558,9 +598,11 @@ async function handleCreateCar(payload: {
   year: number
   initialMileage: number
 }) {
-  await store.createCar(payload)
-  showAddCar.value = false
-  showCarSwitcher.value = false
+  await submitOnce(async () => {
+    await store.createCar(payload)
+    showAddCar.value = false
+    showCarSwitcher.value = false
+  })
 }
 
 async function handleExport() {
