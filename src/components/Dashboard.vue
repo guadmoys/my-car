@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { IonPage } from '@ionic/vue'
+import { IonPage, IonTab, IonTabs } from '@ionic/vue'
 import { useCarStore } from '../composables/useCarStore'
 import {
   checkAndNotify,
@@ -729,6 +729,8 @@ async function handleImportCarCsv(file: File) {
 
 <template>
   <ion-page v-if="car">
+    <ion-tabs>
+      <ion-tab tab="dashboard">
     <DashboardTab
         v-if="activeTab === 'dashboard'"
         :car="car"
@@ -761,7 +763,9 @@ async function handleImportCarCsv(file: File) {
         @delete-reminder="handleDeleteReminder"
         @view-other-expenses="showExpenseList = true"
       />
+      </ion-tab>
 
+      <ion-tab tab="maintenance">
       <MaintenanceTab
         v-if="activeTab === 'maintenance'"
         :sorted-statuses="sortedStatuses"
@@ -771,7 +775,9 @@ async function handleImportCarCsv(file: File) {
         @bulk-delete="handleBulkDelete"
         @add-item="editingItem = 'new'"
       />
+      </ion-tab>
 
+      <ion-tab tab="fuel">
       <FuelTab
         v-if="activeTab === 'fuel'"
         :fuel-history="fuelHistory"
@@ -792,7 +798,9 @@ async function handleImportCarCsv(file: File) {
         @export-csv="handleExportFuelCsv"
         @view-other-expenses="showExpenseList = true"
       />
+      </ion-tab>
 
+      <ion-tab tab="settings">
       <SettingsTab
         v-if="activeTab === 'settings'"
         :car="car"
@@ -819,6 +827,7 @@ async function handleImportCarCsv(file: File) {
         @share-passport="showPassportSheet = true"
         @notifications-enabled="handleNotificationsEnabled"
       />
+      </ion-tab>
 
     <TabBar
       :active-tab="activeTab"
@@ -829,6 +838,7 @@ async function handleImportCarCsv(file: File) {
       @quick-reminder="showReminderSheet = true"
       @quick-expense="editingExpense = 'new'"
     />
+    </ion-tabs>
 
     <EditItemModal
       v-if="editingItem !== null"

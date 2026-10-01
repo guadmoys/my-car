@@ -2,8 +2,10 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import {
   IonAvatar,
+  IonButton,
   IonContent,
   IonHeader,
+  IonIcon,
   IonInput,
   IonItem,
   IonLabel,
@@ -14,6 +16,7 @@ import {
   IonRefresherContent,
   IonSegment,
   IonSegmentButton,
+  IonThumbnail,
   IonTitle,
   IonToggle,
   IonToolbar,
@@ -30,6 +33,7 @@ import {
   cashOutline,
   cloudDownloadOutline,
   cloudUploadOutline,
+  closeCircle,
   closeCircleOutline,
   documentAttachOutline,
   documentOutline,
@@ -503,12 +507,23 @@ function handleCsvFileSelected(event: Event) {
       <ion-item lines="none">
         <div class="photo-row">
           <div v-for="(photo, index) in car.photos ?? []" :key="photo" class="photo-thumb-wrap">
-            <img :src="photo" alt="Фото машины" class="photo-thumb" />
-            <button type="button" class="photo-remove" aria-label="Удалить фото" @click="emit('removePhoto', index)">×</button>
+            <ion-thumbnail class="photo-thumb">
+              <img :src="photo" alt="Фото машины" />
+            </ion-thumbnail>
+            <ion-button
+              class="photo-remove"
+              fill="clear"
+              color="danger"
+              size="small"
+              aria-label="Удалить фото"
+              @click="emit('removePhoto', index)"
+            >
+              <ion-icon slot="icon-only" :icon="closeCircle" />
+            </ion-button>
           </div>
-          <button type="button" class="photo-add" @click="triggerAddPhoto">
-            <ion-icon :icon="cameraOutline" />
-          </button>
+          <ion-button fill="outline" color="medium" class="photo-add" aria-label="Добавить фото" @click="triggerAddPhoto">
+            <ion-icon slot="icon-only" :icon="cameraOutline" />
+          </ion-button>
         </div>
       </ion-item>
       <input ref="photoFileInput" type="file" accept="image/*" class="sr-only" @change="handlePhotoSelected" />
@@ -798,38 +813,24 @@ function handleCsvFileSelected(event: Event) {
 }
 
 .photo-thumb {
-  width: 64px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 10px;
-  display: block;
+  --size: 64px;
+  --border-radius: 10px;
 }
 
 .photo-remove {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: none;
-  background: var(--ion-color-danger);
-  color: #fff;
-  line-height: 1;
-  font-size: 14px;
+  top: -12px;
+  right: -12px;
+  --padding-start: 0;
+  --padding-end: 0;
+  margin: 0;
 }
 
 .photo-add {
   width: 64px;
   height: 64px;
-  border-radius: 10px;
-  border: 1px dashed var(--ion-color-medium);
-  background: none;
-  color: var(--ion-color-medium);
-  font-size: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  margin: 0;
+  --border-style: dashed;
 }
 
 .cloud-avatar {
