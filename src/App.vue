@@ -8,7 +8,9 @@ import Dashboard from './components/Dashboard.vue'
 import ToastHost from './components/ToastHost.vue'
 import SplashSkeleton from './components/SplashSkeleton.vue'
 import LockScreen from './components/LockScreen.vue'
+import UpdateScreen from './components/UpdateScreen.vue'
 import { isLockEnabled } from './utils/appLock'
+import { isUpdating } from './utils/appUpdate'
 
 const store = useCarStore()
 const { cars, isLoaded } = store
@@ -43,7 +45,8 @@ async function handleOnboardingSubmit(payload: {
 
 <template>
   <ion-app>
-    <LockScreen v-if="locked" @unlock="locked = false" />
+    <UpdateScreen v-if="isUpdating" />
+    <LockScreen v-else-if="locked" @unlock="locked = false" />
     <template v-else>
       <SplashSkeleton v-if="!isLoaded" />
       <OnboardingView v-else-if="cars.length === 0" @submit="handleOnboardingSubmit" />
