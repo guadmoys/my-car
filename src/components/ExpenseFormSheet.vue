@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { currency } from '../utils/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -117,7 +118,7 @@ function handleSave() {
           <ion-input v-model="title" label="Название (необязательно)" label-placement="stacked" :placeholder="EXPENSE_CATEGORY_LABELS[category]" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="amount" label="Сумма, ₽" label-placement="stacked" inputmode="decimal" placeholder="0" />
+          <ion-input v-model="amount" :label="`Сумма, ${currency}`" label-placement="stacked" inputmode="decimal" placeholder="0" />
         </ion-item>
       </ion-list>
 

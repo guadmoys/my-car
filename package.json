@@ -1,13 +1,14 @@
 {
   "name": "my-car",
   "private": true,
-  "version": "1.28.1",
+  "version": "1.29.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc -b --noEmit"
+    "typecheck": "vue-tsc -b --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ionic/vue": "^8.8.19",
@@ -21,6 +22,7 @@
     "typescript": "^5.5.3",
     "vite": "^5.4.1",
     "vite-plugin-pwa": "^0.20.5",
+    "vitest": "^2.1.9",
     "vue-tsc": "^2.0.29"
   }
 }

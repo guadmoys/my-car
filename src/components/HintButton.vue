@@ -19,7 +19,7 @@ function present(e: Event) {
 </script>
 
 <template>
-  <ion-button fill="clear" size="small" class="hint-button" @click="present">
+  <ion-button fill="clear" size="small" class="hint-button" aria-label="Подсказка" @click="present">
     <ion-icon slot="icon-only" :icon="helpCircleOutline" color="medium" />
   </ion-button>
   <ion-popover :is-open="isOpen" :event="triggerEvent" :show-backdrop="false" @did-dismiss="isOpen = false">

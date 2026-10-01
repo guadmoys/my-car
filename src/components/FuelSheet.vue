@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { currency, formatPricePerLiter } from '../utils/currency'
 import { computed, ref } from 'vue'
 import {
   IonAccordion,
@@ -281,7 +282,7 @@ const suggestionLabel = computed(() => {
   const parts: string[] = []
   if (props.lastFuelType) parts.push(props.lastFuelType)
   if (props.lastStation) parts.push(props.lastStation)
-  if (props.lastPrice !== null) parts.push(`${props.lastPrice.toFixed(1)} ₽/л`)
+  if (props.lastPrice !== null) parts.push(formatPricePerLiter(props.lastPrice))
   return parts.join(' · ')
 })
 
@@ -380,7 +381,7 @@ function handleSave() {
           <ion-input v-model="liters" label="Литры" label-placement="stacked" inputmode="decimal" placeholder="35.5" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="cost" label="Стоимость, ₽ (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
+          <ion-input v-model="cost" :label="`Стоимость, ${currency} (необязательно)`" label-placement="stacked" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
       <ion-note v-if="isBelowMinReal" color="danger" class="hint">
@@ -399,7 +400,7 @@ function handleSave() {
         ⚠ Больше, чем вмещает бак ({{ tankCapacity }} л) — проверьте значение
       </ion-note>
       <ion-note v-if="priceLooksOff" color="warning" class="hint">
-        ⚠ Цена сильно отличается от обычной (~{{ averagePrice?.toFixed(1) }} ₽/л) — проверьте значение
+        ⚠ Цена сильно отличается от обычной (~{{ averagePrice?.toFixed(1) }} {{ currency }}/л) — проверьте значение
       </ion-note>
 
       <ion-accordion-group v-model="accordionValue">
@@ -425,7 +426,7 @@ function handleSave() {
               </ion-label>
             </ion-item>
             <ion-item>
-              <ion-input v-model="pricePerLiter" label="Цена, ₽/л (необязательно)" label-placement="stacked" inputmode="decimal" placeholder="—" />
+              <ion-input v-model="pricePerLiter" :label="`Цена, ${currency}/л (необязательно)`" label-placement="stacked" inputmode="decimal" placeholder="—" />
             </ion-item>
             <ion-item>
               <ion-toggle :checked="isFullTank" @ion-change="(e: ToggleCustomEvent) => toggleFullTank(e.detail.checked)">Полный бак</ion-toggle>

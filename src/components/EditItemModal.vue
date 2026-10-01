@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatMoney } from '../utils/currency'
 import { computed, ref, watch } from 'vue'
 import {
   IonAccordion,
@@ -46,7 +47,7 @@ function fmtMileage(n: number): string {
 }
 
 function fmtCost(n: number): string {
-  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+  return formatMoney(n)
 }
 
 const emit = defineEmits<{

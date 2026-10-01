@@ -20,11 +20,14 @@ import '@ionic/vue/css/display.css'
 
 /* Ionic theme variables — palette mapping for this app */
 import './theme/variables.css'
-/* Automatic dark mode, following the OS/browser color-scheme preference */
-import '@ionic/vue/css/palettes/dark.system.css'
+/* Dark mode via the `ion-palette-dark` class, toggled by utils/theme.ts (follows the OS unless overridden in Settings) */
+import '@ionic/vue/css/palettes/dark.class.css'
 import './style.css'
 
 import { initAppUpdate } from './utils/appUpdate'
+import { initTheme } from './utils/theme'
+
+initTheme()
 
 const app = createApp(App).use(IonicVue)
 

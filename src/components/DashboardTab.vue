@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatMoney } from '../utils/currency'
 import { computed } from 'vue'
 import {
   IonButton,
@@ -131,7 +132,7 @@ function fmt(n: number): string {
 }
 
 function fmtCost(n: number): string {
-  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+  return formatMoney(n)
 }
 </script>
 

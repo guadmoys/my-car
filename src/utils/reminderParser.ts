@@ -17,6 +17,7 @@ const DEFAULT_HOUR = 9
 
 const KM_RE = /^через\s+(\d+)\s*км\.?\s+(.+)$/i
 const DATE_TIME_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})\s+(.+)$/
+const TIME_PREFIX_RE = /^\d{1,2}:\d{2}(\s|$)/
 const DATE_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(.+)$/
 
 function isValidCalendarDate(day: number, month: number, year: number): boolean {
@@ -65,7 +66,9 @@ export function parseReminderInput(raw: string): ParsedReminder | null {
     const day = Number(d)
     const month = Number(mo)
     const year = Number(y)
-    if (isValidCalendarDate(day, month, year) && text.trim()) {
+    // A leading "HH:MM" that failed the date+time form above is an invalid time
+    // (e.g. 25:00), not part of the reminder text.
+    if (isValidCalendarDate(day, month, year) && text.trim() && !TIME_PREFIX_RE.test(text.trim())) {
       return {
         text: text.trim(),
         dueDate: new Date(year, month - 1, day, DEFAULT_HOUR, 0).getTime(),

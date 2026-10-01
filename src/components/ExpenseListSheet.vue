@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { formatMoney } from '../utils/currency'
+import { computed, ref } from 'vue'
 import {
   IonButton,
   IonButtons,
@@ -12,6 +13,9 @@ import {
   IonListHeader,
   IonModal,
   IonNote,
+  IonSearchbar,
+  IonSelect,
+  IonSelectOption,
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
@@ -30,6 +34,23 @@ const emit = defineEmits<{
   delete: [id: string]
   addExpense: []
 }>()
+
+const query = ref('')
+const category = ref<ExpenseCategory | 'all'>('all')
+
+const filteredExpenses = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  return props.expenses.filter((e) => {
+    if (category.value !== 'all' && e.category !== category.value) return false
+    if (!q) return true
+    const text = [e.title, EXPENSE_CATEGORY_LABELS[e.category], e.note, e.amount].filter((p) => p !== undefined).join(' ').toLowerCase()
+    return text.includes(q)
+  })
+})
+
+const isFiltered = computed(() => query.value.trim() !== '' || category.value !== 'all')
+const filteredTotal = computed(() => filteredExpenses.value.reduce((sum, e) => sum + e.amount, 0))
+const categoryOptions = Object.entries(EXPENSE_CATEGORY_LABELS) as [ExpenseCategory, string][]
 
 const confirmingDeleteId = ref<string | null>(null)
 
@@ -63,7 +84,7 @@ function renewalLabel(status: ExpenseStatus | undefined): string | null {
 }
 
 function fmt(n: number): string {
-  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+  return formatMoney(n)
 }
 
 function fmtDate(ts: number): string {
@@ -80,18 +101,27 @@ function fmtDate(ts: number): string {
         </ion-buttons>
         <ion-title>Прочие расходы</ion-title>
       </ion-toolbar>
+      <ion-toolbar v-if="expenses.length > 0">
+        <ion-searchbar v-model="query" placeholder="Поиск по названию и заметке" :debounce="200" />
+      </ion-toolbar>
     </ion-header>
     <ion-content>
       <ion-list v-if="expenses.length > 0" inset>
         <ion-item lines="none">
-          <ion-label><strong>Итого</strong></ion-label>
-          <ion-note slot="end" color="primary"><strong>{{ fmt(total) }}</strong></ion-note>
+          <ion-label><strong>{{ isFiltered ? 'Итого по фильтру' : 'Итого' }}</strong></ion-label>
+          <ion-note slot="end" color="primary"><strong>{{ fmt(isFiltered ? filteredTotal : total) }}</strong></ion-note>
+        </ion-item>
+        <ion-item lines="none">
+          <ion-select v-model="category" label="Категория" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }">
+            <ion-select-option value="all">Все</ion-select-option>
+            <ion-select-option v-for="[key, label] in categoryOptions" :key="key" :value="key">{{ label }}</ion-select-option>
+          </ion-select>
         </ion-item>
       </ion-list>
 
       <ion-list inset>
-        <ion-list-header v-if="expenses.length > 0">Записи</ion-list-header>
-        <ion-item v-for="e in expenses" :key="e.id" button :detail="false" @click="emit('edit', e)">
+        <ion-list-header v-if="filteredExpenses.length > 0">Записи</ion-list-header>
+        <ion-item v-for="e in filteredExpenses" :key="e.id" button :detail="false" @click="emit('edit', e)">
           <ion-icon slot="start" :icon="CATEGORY_ICONS[e.category]" color="medium" />
           <ion-label>
             <h2>{{ e.title || EXPENSE_CATEGORY_LABELS[e.category] }}</h2>
@@ -110,8 +140,8 @@ function fmtDate(ts: number): string {
             {{ confirmingDeleteId === e.id ? 'Точно?' : 'Удалить' }}
           </ion-button>
         </ion-item>
-        <ion-item v-if="expenses.length === 0" lines="none">
-          <ion-label color="medium">Записей пока нет</ion-label>
+        <ion-item v-if="filteredExpenses.length === 0" lines="none">
+          <ion-label color="medium">{{ expenses.length === 0 ? 'Записей пока нет' : 'Ничего не найдено — измените запрос или категорию' }}</ion-label>
         </ion-item>
       </ion-list>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  IonAlert,
   IonAvatar,
   IonButton,
   IonContent,
@@ -14,6 +15,8 @@ import {
   IonNote,
   IonRefresher,
   IonRefresherContent,
+  IonSelect,
+  IonSelectOption,
   IonSegment,
   IonSegmentButton,
   IonThumbnail,
@@ -21,6 +24,7 @@ import {
   IonToggle,
   IonToolbar,
   type SegmentCustomEvent,
+  type SelectCustomEvent,
   type ToggleCustomEvent,
 } from '@ionic/vue'
 import {
@@ -34,6 +38,7 @@ import {
   cloudDownloadOutline,
   cloudUploadOutline,
   closeCircle,
+  timeOutline,
   closeCircleOutline,
   documentAttachOutline,
   documentOutline,
@@ -85,9 +90,13 @@ import {
   setShowYearEnabled,
 } from '../utils/dateFormat'
 import type { DateFormatId } from '../utils/dateFormat'
+import { CURRENCY_OPTIONS, currency, setCurrency } from '../utils/currency'
+import { THEME_OPTIONS, getThemeMode, setThemeMode, type ThemeMode } from '../utils/theme'
 import { checkForUpdate } from '../utils/appUpdate'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
 import { useToast } from '../composables/useToast'
+import { useCarStore } from '../composables/useCarStore'
+import { listSnapshots, type Snapshot } from '../utils/autoBackup'
 import { haptic } from '../utils/haptics'
 import { useCloudSync } from '../composables/useCloudSync'
 import type { CloudProvider } from '../utils/cloudSync'
@@ -232,6 +241,18 @@ function selectDateFormat(event: SegmentCustomEvent) {
   setDateFormat(value)
 }
 
+const themeMode = ref<ThemeMode>(getThemeMode())
+
+function selectTheme(event: SegmentCustomEvent) {
+  const value = event.detail.value as ThemeMode
+  themeMode.value = value
+  setThemeMode(value)
+}
+
+function selectCurrency(event: SelectCustomEvent) {
+  setCurrency(event.detail.value as string)
+}
+
 function handleToggleShowYear(checked: boolean) {
   showYear.value = checked
   setShowYearEnabled(checked)
@@ -313,6 +334,50 @@ function handleDelete() {
 }
 
 const toast = useToast()
+const store = useCarStore()
+
+const snapshots = ref<Snapshot[]>([])
+const snapshotToRestore = ref<Snapshot | null>(null)
+
+async function refreshSnapshots() {
+  try {
+    snapshots.value = await listSnapshots()
+  } catch {
+    snapshots.value = []
+  }
+}
+
+function snapshotLabel(s: Snapshot): string {
+  const when = new Date(s.savedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+  return s.reason === 'daily' ? `Ежедневная · ${when}` : `Перед импортом · ${when}`
+}
+
+function snapshotSummary(s: Snapshot): string {
+  const b = s.backup
+  return `${b.cars.length} авто · ${b.fuelEntries.length} заправок · ${b.historyEntries.length} работ`
+}
+
+const restoreAlertButtons = [
+  { text: 'Отмена', role: 'cancel' },
+  {
+    text: 'Восстановить',
+    role: 'destructive',
+    handler: async () => {
+      const snap = snapshotToRestore.value
+      if (!snap) return
+      const result = await store.importData(snap.backup)
+      if (result.ok) {
+        haptic('success')
+        toast.show('Данные восстановлены из копии')
+      } else {
+        toast.show(result.error)
+      }
+      await refreshSnapshots()
+    },
+  },
+]
+
+onMounted(refreshSnapshots)
 const checkingUpdate = ref(false)
 const appVersion = __APP_VERSION__
 
@@ -612,6 +677,24 @@ function handleCsvFileSelected(event: Event) {
 
     <ion-list inset>
       <ion-list-header>
+        <ion-label>Оформление</ion-label>
+      </ion-list-header>
+      <ion-item>
+        <ion-segment :value="themeMode" aria-label="Тема оформления" @ionChange="selectTheme">
+          <ion-segment-button v-for="opt in THEME_OPTIONS" :key="opt.value" :value="opt.value">
+            <ion-label>{{ opt.label }}</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-select label="Валюта" :value="currency" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }" @ionChange="selectCurrency">
+          <ion-select-option v-for="c in CURRENCY_OPTIONS" :key="c.value" :value="c.value">{{ c.label }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+    </ion-list>
+
+    <ion-list inset>
+      <ion-list-header>
         <ion-label>Формат даты</ion-label>
         <HintButton :text="dateFormatHint" />
       </ion-list-header>
@@ -629,6 +712,36 @@ function handleCsvFileSelected(event: Event) {
         </ion-toggle>
       </ion-item>
     </ion-list>
+
+    <ion-list v-if="snapshots.length > 0" inset>
+      <ion-list-header>
+        <ion-label>Автокопии на этом устройстве</ion-label>
+        <HintButton
+          text="Приложение само хранит несколько последних копий данных на этом устройстве, а также копию перед каждым импортом или восстановлением из облака. Нажмите на копию, чтобы вернуть данные"
+        />
+      </ion-list-header>
+      <ion-item
+        v-for="(snap, index) in snapshots"
+        :key="snap.savedAt"
+        button
+        :detail="false"
+        :lines="index === snapshots.length - 1 ? 'none' : undefined"
+        @click="snapshotToRestore = snap"
+      >
+        <SettingsIconBadge slot="start" :icon="timeOutline" color="medium" />
+        <ion-label>
+          <h3>{{ snapshotLabel(snap) }}</h3>
+          <p>{{ snapshotSummary(snap) }}</p>
+        </ion-label>
+      </ion-item>
+    </ion-list>
+    <ion-alert
+      :is-open="snapshotToRestore !== null"
+      header="Восстановить данные?"
+      message="Текущие данные будут заменены этой копией. Перед заменой сохранится ещё одна копия, так что действие можно отменить."
+      :buttons="restoreAlertButtons"
+      @did-dismiss="snapshotToRestore = null"
+    />
 
     <ion-list inset>
       <ion-list-header>

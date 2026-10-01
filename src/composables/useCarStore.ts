@@ -1,4 +1,6 @@
 import { computed, reactive, ref } from 'vue'
+import { currency } from '../utils/currency'
+import { dailySnapshotDue, saveSnapshot } from '../utils/autoBackup'
 import type {
   BackupData,
   Car,
@@ -107,6 +109,15 @@ async function load(): Promise<void> {
   }
 
   isLoaded.value = true
+
+  // Rolling local safety copy (at most one per day), taken off the critical path.
+  if (cars.length > 0) {
+    void dailySnapshotDue()
+      .then(async (due) => {
+        if (due) await saveSnapshot(await exportData(), 'daily')
+      })
+      .catch(() => {})
+  }
 }
 
 async function switchCar(carId: string): Promise<void> {
@@ -1168,7 +1179,7 @@ const fuelInsights = computed<FuelInsight[]>(() => {
       insights.push({
         id: 'budget',
         icon: '📊',
-        text: `За последние ${Math.round(daysSpan)} дн. на топливо потрачено ${Math.round(totalSpent).toLocaleString('ru-RU')} ₽ — при таком темпе выйдет ~${Math.round(projected).toLocaleString('ru-RU')} ₽ за 30 дней`,
+        text: `За последние ${Math.round(daysSpan)} дн. на топливо потрачено ${Math.round(totalSpent).toLocaleString('ru-RU')} ${currency.value} — при таком темпе выйдет ~${Math.round(projected).toLocaleString('ru-RU')} ${currency.value} за 30 дней`,
         tone: 'neutral',
       })
     }
@@ -1207,14 +1218,14 @@ const fuelInsights = computed<FuelInsight[]>(() => {
       insights.push({
         id: 'price',
         icon: '💸',
-        text: `Последняя заправка дороже обычного на ${diffPct.toFixed(0)}% (${last.price.toFixed(1)} ₽/л против ${prevAvg.toFixed(1)} ₽/л в среднем)`,
+        text: `Последняя заправка дороже обычного на ${diffPct.toFixed(0)}% (${last.price.toFixed(1)} ${currency.value}/л против ${prevAvg.toFixed(1)} ${currency.value}/л в среднем)`,
         tone: 'bad',
       })
     } else if (diffPct <= -7) {
       insights.push({
         id: 'price',
         icon: '💰',
-        text: `Последняя заправка дешевле обычного на ${Math.abs(diffPct).toFixed(0)}% (${last.price.toFixed(1)} ₽/л против ${prevAvg.toFixed(1)} ₽/л в среднем)`,
+        text: `Последняя заправка дешевле обычного на ${Math.abs(diffPct).toFixed(0)}% (${last.price.toFixed(1)} ${currency.value}/л против ${prevAvg.toFixed(1)} ${currency.value}/л в среднем)`,
         tone: 'good',
       })
     }
@@ -1239,7 +1250,7 @@ const fuelInsights = computed<FuelInsight[]>(() => {
       insights.push({
         id: 'station',
         icon: '📍',
-        text: `Самая выгодная АЗС — «${best.station}»: в среднем ${best.avgPrice.toFixed(1)} ₽/л`,
+        text: `Самая выгодная АЗС — «${best.station}»: в среднем ${best.avgPrice.toFixed(1)} ${currency.value}/л`,
         tone: 'good',
       })
     }
@@ -1296,7 +1307,7 @@ const fuelInsights = computed<FuelInsight[]>(() => {
       insights.push({
         id: 'cost-per-km',
         icon: '🧮',
-        text: `Топливо обходится примерно в ${(totalSpent / distance).toFixed(2)} ₽/км пробега`,
+        text: `Топливо обходится примерно в ${(totalSpent / distance).toFixed(2)} ${currency.value}/км пробега`,
         tone: 'neutral',
       })
     }
@@ -1502,6 +1513,14 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
 
   if (!newActiveCarId || importedCars.length === 0) {
     return { ok: false, error: 'В файле нет ни одной машины' }
+  }
+
+  // Keep a copy of what's about to be overwritten so a bad file or cloud
+  // restore can be undone from Settings → «Автокопии».
+  try {
+    await saveSnapshot(await exportData(), 'before-import')
+  } catch {
+    /* a failed safety copy must not block the import itself */
   }
 
   // Set before the write so a watcher-driven auto-sync can't export a

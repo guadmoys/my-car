@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf'
+import { formatMoney } from './currency'
 import { EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Car, Expense, HistoryEntry, MaintenanceStatus, Trip } from '../types'
 
@@ -43,7 +44,7 @@ const ROW_H = 30
 const SECTION_GAP = 22
 
 function fmtCost(n: number): string {
-  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+  return formatMoney(n)
 }
 
 function fmtKm(n: number): string {

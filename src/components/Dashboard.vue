@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { IonPage, IonTab, IonTabs } from '@ionic/vue'
+import { currency } from '../utils/currency'
 import { useCarStore } from '../composables/useCarStore'
 import {
   checkAndNotify,
@@ -627,7 +628,7 @@ function csvEscape(value: string): string {
 
 function handleExportFuelCsv() {
   const rows = store.fuelEntries.slice().sort((a, b) => a.date - b.date)
-  const header = ['Дата', 'Пробег, км', 'Литры', 'Стоимость, ₽', 'Цена, ₽/л', 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
+  const header = ['Дата', 'Пробег, км', 'Литры', `Стоимость, ${currency.value}`, `Цена, ${currency.value}/л`, 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
   const lines = [header.join(',')]
   for (const e of rows) {
     const price = e.cost !== undefined && e.liters > 0 ? (e.cost / e.liters).toFixed(2) : ''
