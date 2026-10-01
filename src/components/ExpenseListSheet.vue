@@ -20,11 +20,10 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { add, alertCircleOutline, carSportOutline, cardOutline, receiptOutline, shieldCheckmarkOutline, walletOutline } from 'ionicons/icons'
-import { EXPENSE_CATEGORY_LABELS, type Expense, type ExpenseCategory, type ExpenseStatus } from '../types'
+import { EXPENSE_CATEGORY_LABELS, type Expense, type ExpenseCategory } from '../types'
 
 const props = defineProps<{
   expenses: Expense[]
-  expenseStatuses: ExpenseStatus[]
   total: number
 }>()
 
@@ -72,17 +71,6 @@ function handleDeleteClick(id: string) {
   confirmingDeleteId.value = null
 }
 
-function statusFor(expense: Expense): ExpenseStatus | undefined {
-  return props.expenseStatuses.find((s) => s.expense.id === expense.id)
-}
-
-function renewalLabel(status: ExpenseStatus | undefined): string | null {
-  if (!status) return null
-  if (status.isDue) return `Продление просрочено`
-  if (status.isSoon) return `Продлить через ${status.remainingDays} дн.`
-  return null
-}
-
 function fmt(n: number): string {
   return formatMoney(n)
 }
@@ -126,9 +114,6 @@ function fmtDate(ts: number): string {
           <ion-label>
             <h2>{{ e.title || EXPENSE_CATEGORY_LABELS[e.category] }}</h2>
             <p>{{ fmtDate(e.date) }}</p>
-            <p v-if="renewalLabel(statusFor(e))" :class="statusFor(e)?.isDue ? 'due-text' : 'soon-text'">
-              {{ renewalLabel(statusFor(e)) }}
-            </p>
           </ion-label>
           <ion-note slot="end">{{ fmt(e.amount) }}</ion-note>
           <ion-button
@@ -152,13 +137,3 @@ function fmtDate(ts: number): string {
     </ion-content>
   </ion-modal>
 </template>
-
-<style scoped>
-.due-text {
-  color: var(--ion-color-danger);
-}
-
-.soon-text {
-  color: var(--ion-color-tertiary);
-}
-</style>

@@ -59,6 +59,17 @@ mode.
   `.card` containers everywhere (`SettingsTab.vue`, `DashboardTab.vue`,
   `SettingsTab.vue`'s forms, etc).
 
+## Documents
+
+Everything that is a paper — СТС/ПТС, driver's licence, insurance, tech inspection, tax,
+plus the old car photo gallery — lives in the `documents` store (`CarDocument` in
+`types.ts`, UI in `DocumentsSheet.vue`/`DocumentFormSheet.vue`, opened from Settings →
+«Документы» and the dashboard card). A document with an `expiryDate` gets a due/soon status
+(30 days) and a notification via `checkAndNotifyDocuments`. Expenses are costs only: they no
+longer carry renewal dates. `migrateLegacyToDocuments` (`utils/documents.ts`) is idempotent
+and moves the legacy `Car.stsNumber`/`Car.photos`/`Expense.renewalDate` on startup and on
+import of old backups — don't reintroduce those fields in the UI.
+
 ## Feedback & state
 
 - Every meaningful state-changing tap still gets a haptic via `src/utils/haptics.ts`

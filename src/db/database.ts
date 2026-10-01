@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Car, ComponentCheck, Expense, FuelEntry, HistoryEntry, MaintenanceItem, Master, Reminder, Trip } from '../types'
+import type { Car, CarDocument, ComponentCheck, Expense, FuelEntry, HistoryEntry, MaintenanceItem, Master, Reminder, Trip } from '../types'
 
 interface MyCarDB extends DBSchema {
   cars: {
@@ -46,10 +46,15 @@ interface MyCarDB extends DBSchema {
     value: Trip
     indexes: { 'by-car': string }
   }
+  documents: {
+    key: string
+    value: CarDocument
+    indexes: { 'by-car': string }
+  }
 }
 
 const DB_NAME = 'my-car-db'
-const DB_VERSION = 7
+const DB_VERSION = 8
 
 /**
  * IndexedDB's structured clone can choke on Vue reactive proxies (nested
@@ -95,6 +100,10 @@ function getDB(): Promise<IDBPDatabase<MyCarDB>> {
         }
         if (!db.objectStoreNames.contains('trips')) {
           const store = db.createObjectStore('trips', { keyPath: 'id' })
+          store.createIndex('by-car', 'carId')
+        }
+        if (!db.objectStoreNames.contains('documents')) {
+          const store = db.createObjectStore('documents', { keyPath: 'id' })
           store.createIndex('by-car', 'carId')
         }
 
@@ -161,7 +170,7 @@ export async function putCar(car: Car): Promise<void> {
 export async function deleteCarCascade(carId: string): Promise<void> {
   const db = await getDB()
   const tx = db.transaction(
-    ['cars', 'maintenanceItems', 'fuelEntries', 'history', 'reminders', 'masters', 'expenses', 'components', 'trips'],
+    ['cars', 'maintenanceItems', 'fuelEntries', 'history', 'reminders', 'masters', 'expenses', 'components', 'trips', 'documents'],
     'readwrite',
   )
   await tx.objectStore('cars').delete(carId)
@@ -175,6 +184,7 @@ export async function deleteCarCascade(carId: string): Promise<void> {
     'expenses',
     'components',
     'trips',
+    'documents',
   ] as const) {
     const store = tx.objectStore(storeName)
     const index = store.index('by-car')
@@ -274,6 +284,7 @@ export async function replaceAll(data: {
   expenses: Expense[]
   components: ComponentCheck[]
   trips: Trip[]
+  documents: CarDocument[]
 }): Promise<void> {
   const db = await getDB()
   const storeNames = [
@@ -286,6 +297,7 @@ export async function replaceAll(data: {
     'expenses',
     'components',
     'trips',
+    'documents',
   ] as const
   const tx = db.transaction(storeNames, 'readwrite')
   await Promise.all(storeNames.map((name) => tx.objectStore(name).clear()))
@@ -299,6 +311,7 @@ export async function replaceAll(data: {
     ...data.expenses.map((e) => tx.objectStore('expenses').put(toPlain(e))),
     ...data.components.map((c) => tx.objectStore('components').put(toPlain(c))),
     ...data.trips.map((t) => tx.objectStore('trips').put(toPlain(t))),
+    ...data.documents.map((d) => tx.objectStore('documents').put(toPlain(d))),
   ])
   await tx.done
 }
@@ -406,4 +419,32 @@ export async function putTrip(trip: Trip): Promise<void> {
 export async function deleteTrip(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('trips', id)
+}
+
+export async function getDocumentsForCar(carId: string): Promise<CarDocument[]> {
+  const db = await getDB()
+  const documents = await db.getAllFromIndex('documents', 'by-car', carId)
+  return documents.sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export async function getAllDocumentsRaw(): Promise<CarDocument[]> {
+  const db = await getDB()
+  return db.getAll('documents')
+}
+
+export async function putDocument(document: CarDocument): Promise<void> {
+  const db = await getDB()
+  await db.put('documents', toPlain(document))
+}
+
+export async function putDocuments(documents: CarDocument[]): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction('documents', 'readwrite')
+  await Promise.all(documents.map((d) => tx.store.put(toPlain(d))))
+  await tx.done
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('documents', id)
 }

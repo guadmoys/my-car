@@ -3,10 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import {
   IonAlert,
   IonAvatar,
-  IonButton,
   IonContent,
   IonHeader,
-  IonIcon,
   IonInput,
   IonItem,
   IonLabel,
@@ -19,7 +17,6 @@ import {
   IonSelectOption,
   IonSegment,
   IonSegmentButton,
-  IonThumbnail,
   IonTitle,
   IonToggle,
   IonToolbar,
@@ -31,13 +28,11 @@ import {
   barcodeOutline,
   buildOutline,
   calendarOutline,
-  cameraOutline,
   carOutline,
   carSportOutline,
   cashOutline,
   cloudDownloadOutline,
   cloudUploadOutline,
-  closeCircle,
   timeOutline,
   closeCircleOutline,
   documentAttachOutline,
@@ -61,7 +56,6 @@ import {
 } from 'ionicons/icons'
 import type { Car } from '../types'
 import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
-import { fileToDataUrl } from '../utils/photo'
 import PickerSheet from './PickerSheet.vue'
 import SettingsIconBadge from './SettingsIconBadge.vue'
 import HintButton from './HintButton.vue'
@@ -106,6 +100,7 @@ const props = defineProps<{
   carCount: number
   masterCount: number
   expenseCount: number
+  documentCount: number
   tripCount: number
   importError: string | null
   importCsvError: string | null
@@ -120,7 +115,6 @@ const emit = defineEmits<{
       tankCapacity?: number
       vin?: string
       licensePlate?: string
-      stsNumber?: string
       referenceConsumptionL100km?: number
     },
   ]
@@ -135,8 +129,7 @@ const emit = defineEmits<{
   openExpenses: []
   openComponents: []
   openTrips: []
-  addPhoto: [dataUrl: string]
-  removePhoto: [index: number]
+  openDocuments: []
   sharePassport: []
   notificationsEnabled: []
 }>()
@@ -147,12 +140,10 @@ const year = ref(String(props.car.year))
 const tankCapacity = ref(props.car.tankCapacity !== undefined ? String(props.car.tankCapacity) : '')
 const vin = ref(props.car.vin ?? '')
 const licensePlate = ref(props.car.licensePlate ?? '')
-const stsNumber = ref(props.car.stsNumber ?? '')
 const referenceConsumption = ref(props.car.referenceConsumptionL100km !== undefined ? String(props.car.referenceConsumptionL100km) : '')
 const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const csvFileInput = ref<HTMLInputElement | null>(null)
-const photoFileInput = ref<HTMLInputElement | null>(null)
 const activePicker = ref<'make' | 'model' | null>(null)
 const modelOptions = computed(() => modelsForMake(make.value))
 
@@ -165,7 +156,6 @@ watch(
     tankCapacity.value = props.car.tankCapacity !== undefined ? String(props.car.tankCapacity) : ''
     vin.value = props.car.vin ?? ''
     licensePlate.value = props.car.licensePlate ?? ''
-    stsNumber.value = props.car.stsNumber ?? ''
     referenceConsumption.value = props.car.referenceConsumptionL100km !== undefined ? String(props.car.referenceConsumptionL100km) : ''
     confirmingDelete.value = false
   },
@@ -283,7 +273,6 @@ function commitCarInfo() {
 
   const vinTrimmed = vin.value.trim() || undefined
   const plateTrimmed = licensePlate.value.trim() || undefined
-  const stsTrimmed = stsNumber.value.trim() || undefined
 
   if (
     make.value.trim() === props.car.make &&
@@ -292,7 +281,6 @@ function commitCarInfo() {
     capacityNumber === props.car.tankCapacity &&
     vinTrimmed === props.car.vin &&
     plateTrimmed === props.car.licensePlate &&
-    stsTrimmed === props.car.stsNumber &&
     referenceNumber === props.car.referenceConsumptionL100km
   ) {
     return
@@ -304,25 +292,8 @@ function commitCarInfo() {
     tankCapacity: capacityNumber,
     vin: vinTrimmed,
     licensePlate: plateTrimmed,
-    stsNumber: stsTrimmed,
     referenceConsumptionL100km: referenceNumber,
   })
-}
-
-function triggerAddPhoto() {
-  photoFileInput.value?.click()
-}
-
-async function handlePhotoSelected(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-  try {
-    emit('addPhoto', await fileToDataUrl(file))
-  } catch {
-    toast.show('Не удалось загрузить фото')
-  }
 }
 
 function handleDelete() {
@@ -349,7 +320,8 @@ async function refreshSnapshots() {
 
 function snapshotLabel(s: Snapshot): string {
   const when = new Date(s.savedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
-  return s.reason === 'daily' ? `Ежедневная · ${when}` : `Перед импортом · ${when}`
+  const kind = s.reason === 'daily' ? 'Ежедневная' : s.reason === 'before-migration' ? 'Перед обновлением данных' : 'Перед импортом'
+  return `${kind} · ${when}`
 }
 
 function snapshotSummary(s: Snapshot): string {
@@ -549,7 +521,7 @@ function handleCsvFileSelected(event: Event) {
         <SettingsIconBadge slot="start" :icon="barcodeOutline" color="medium" />
         <ion-input v-model="vin" label="VIN (необязательно)" label-placement="stacked" placeholder="—" @ion-blur="commitCarInfo" />
       </ion-item>
-      <ion-item>
+      <ion-item lines="none">
         <SettingsIconBadge slot="start" :icon="pricetagOutline" color="medium" />
         <ion-input
           v-model="licensePlate"
@@ -559,45 +531,16 @@ function handleCsvFileSelected(event: Event) {
           @ion-blur="commitCarInfo"
         />
       </ion-item>
-      <ion-item lines="none">
-        <SettingsIconBadge slot="start" :icon="folderOutline" color="medium" />
-        <ion-input v-model="stsNumber" label="СТС (необязательно)" label-placement="stacked" placeholder="—" @ion-blur="commitCarInfo" />
-      </ion-item>
-    </ion-list>
-
-    <ion-list inset>
-      <ion-list-header>
-        <ion-label>Фото машины и документов</ion-label>
-      </ion-list-header>
-      <ion-item lines="none">
-        <div class="photo-row">
-          <div v-for="(photo, index) in car.photos ?? []" :key="photo" class="photo-thumb-wrap">
-            <ion-thumbnail class="photo-thumb">
-              <img :src="photo" alt="Фото машины" />
-            </ion-thumbnail>
-            <ion-button
-              class="photo-remove"
-              fill="clear"
-              color="danger"
-              size="small"
-              aria-label="Удалить фото"
-              @click="emit('removePhoto', index)"
-            >
-              <ion-icon slot="icon-only" :icon="closeCircle" />
-            </ion-button>
-          </div>
-          <ion-button fill="outline" color="medium" class="photo-add" aria-label="Добавить фото" @click="triggerAddPhoto">
-            <ion-icon slot="icon-only" :icon="cameraOutline" />
-          </ion-button>
-        </div>
-      </ion-item>
-      <input ref="photoFileInput" type="file" accept="image/*" class="sr-only" @change="handlePhotoSelected" />
     </ion-list>
 
     <ion-list inset>
       <ion-item button detail @click="emit('openCarSwitcher')">
         <SettingsIconBadge slot="start" :icon="carOutline" color="success" />
         <ion-label>Мои машины ({{ carCount }})</ion-label>
+      </ion-item>
+      <ion-item button detail @click="emit('openDocuments')">
+        <SettingsIconBadge slot="start" :icon="folderOutline" color="primary" />
+        <ion-label>Документы ({{ documentCount }})</ion-label>
       </ion-item>
       <ion-item button detail @click="emit('openMasters')">
         <SettingsIconBadge slot="start" :icon="peopleOutline" color="tertiary" />
@@ -912,38 +855,6 @@ function handleCsvFileSelected(event: Event) {
 
 .hint.error {
   color: var(--ion-color-danger);
-}
-
-.photo-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px 0;
-}
-
-.photo-thumb-wrap {
-  position: relative;
-}
-
-.photo-thumb {
-  --size: 64px;
-  --border-radius: 10px;
-}
-
-.photo-remove {
-  position: absolute;
-  top: -12px;
-  right: -12px;
-  --padding-start: 0;
-  --padding-end: 0;
-  margin: 0;
-}
-
-.photo-add {
-  width: 64px;
-  height: 64px;
-  margin: 0;
-  --border-style: dashed;
 }
 
 .cloud-avatar {

@@ -20,8 +20,10 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { add, alarmOutline, checkmarkCircleOutline, construct, ellipse, speedometerOutline, water } from 'ionicons/icons'
-import type { Car, MaintenanceStatus, ReminderStatus, TimelineEvent } from '../types'
+import { add, alarmOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, water } from 'ionicons/icons'
+import { DOCUMENT_TYPE_LABELS } from '../types'
+import type { Car, DocumentStatus, MaintenanceStatus, ReminderStatus, TimelineEvent } from '../types'
+import { expiryLabel, statusColor } from '../utils/documents'
 import SummaryCard from './SummaryCard.vue'
 import ReminderCard from './ReminderCard.vue'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
@@ -45,7 +47,12 @@ const props = defineProps<{
   urgentTotal: number
   estimatedRangeKm: number | null
   reminderStatuses: ReminderStatus[]
+  documentStatuses: DocumentStatus[]
+  documentCount: number
 }>()
+
+// The three most urgent dated documents; the full list lives in the Documents sheet.
+const documentPreview = computed(() => props.documentStatuses.slice(0, 3))
 
 const monthName = computed(() =>
   new Date().toLocaleDateString('ru-RU', { month: 'long' }),
@@ -107,6 +114,7 @@ const emit = defineEmits<{
   addReminder: []
   deleteReminder: [id: string]
   viewOtherExpenses: []
+  openDocuments: []
 }>()
 
 function stateColor(state: MaintenanceStatus['state']): string {
@@ -256,6 +264,34 @@ function fmtCost(n: number): string {
       </ion-item>
     </ion-list>
 
+    <ion-list inset>
+      <ion-list-header>
+        <ion-label>Документы</ion-label>
+        <ion-button fill="clear" size="small" @click="emit('openDocuments')">
+          {{ documentCount > 0 ? 'Все' : 'Добавить' }}
+        </ion-button>
+      </ion-list-header>
+      <ion-item
+        v-for="s in documentPreview"
+        :key="s.document.id"
+        button
+        detail
+        @click="emit('openDocuments')"
+      >
+        <ion-icon slot="start" :icon="shieldCheckmarkOutline" :color="statusColor(s) ?? 'medium'" />
+        <ion-label>
+          <h2>{{ s.document.title || DOCUMENT_TYPE_LABELS[s.document.type] }}</h2>
+          <p :class="{ 'due-text': s.isDue, 'soon-text': s.isSoon }">{{ expiryLabel(s) }}</p>
+        </ion-label>
+      </ion-item>
+      <ion-item v-if="documentPreview.length === 0" button :detail="false" lines="none" @click="emit('openDocuments')">
+        <ion-icon slot="start" :icon="folderOutline" color="medium" />
+        <ion-label color="medium" class="ion-text-wrap">
+          {{ documentCount > 0 ? `Документов: ${documentCount}, сроков действия нет` : 'СТС, страховка, техосмотр — с фото и напоминаниями' }}
+        </ion-label>
+      </ion-item>
+    </ion-list>
+
     <ion-list v-if="hasAnyCost" inset>
       <ion-list-header>Расходы</ion-list-header>
       <ion-item button detail @click="emit('viewAllFuel')">
@@ -317,6 +353,14 @@ function fmtCost(n: number): string {
 </template>
 
 <style scoped>
+.due-text {
+  color: var(--ion-color-danger);
+}
+
+.soon-text {
+  color: var(--ion-color-tertiary);
+}
+
 .stat-card {
   padding: 14px 16px;
   margin: 0;

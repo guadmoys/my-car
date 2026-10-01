@@ -31,6 +31,7 @@ pull request; the Pages deploy also runs the tests before building.
 - The app keeps a rolling set of local snapshots in a separate IndexedDB
   database (one per day, last 3) plus a copy taken right before every import
   or cloud restore (last 2). Restore any of them from Settings → «Автокопии».
+- Documents (СТС, страховка, техосмотр, …) are stored locally with their photos and are part of every backup; startup moves any legacy data into them after taking a safety snapshot.
 - Cloud backup is optional (see above), and JSON/CSV/PDF export is always
   available from Settings.
 

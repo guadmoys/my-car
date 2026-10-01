@@ -6,7 +6,7 @@ import type { BackupData } from '../types'
  * IndexedDB database so a failed schema upgrade, a bad import or a bad cloud
  * restore in the main one can't take the copies down with it.
  */
-export type SnapshotReason = 'daily' | 'before-import'
+export type SnapshotReason = 'daily' | 'before-import' | 'before-migration'
 
 export interface Snapshot {
   savedAt: number
@@ -21,6 +21,7 @@ interface SnapshotDB extends DBSchema {
 const DAY_MS = 24 * 60 * 60 * 1000
 const KEEP_DAILY = 3
 const KEEP_BEFORE_IMPORT = 2
+const KEEP_BEFORE_MIGRATION = 2
 
 const dbPromise = () =>
   openDB<SnapshotDB>('my-car-snapshots', 1, {
@@ -31,7 +32,11 @@ const dbPromise = () =>
 
 /** Returns the `savedAt` keys that should be deleted so each reason keeps only its newest few copies. */
 export function snapshotsToPrune(list: Pick<Snapshot, 'savedAt' | 'reason'>[]): number[] {
-  const limits: Record<SnapshotReason, number> = { daily: KEEP_DAILY, 'before-import': KEEP_BEFORE_IMPORT }
+  const limits: Record<SnapshotReason, number> = {
+    daily: KEEP_DAILY,
+    'before-import': KEEP_BEFORE_IMPORT,
+    'before-migration': KEEP_BEFORE_MIGRATION,
+  }
   const doomed: number[] = []
   for (const reason of Object.keys(limits) as SnapshotReason[]) {
     list
