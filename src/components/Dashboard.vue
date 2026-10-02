@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { IonPage } from '@ionic/vue'
+import { IonPage, IonTab, IonTabs } from '@ionic/vue'
+import { currency } from '../utils/currency'
 import { useCarStore } from '../composables/useCarStore'
 import {
   checkAndNotify,
-  checkAndNotifyExpenses,
+  checkAndNotifyDocuments,
   checkAndNotifyLowFuel,
   checkAndNotifyReminders,
-  clearNotifiedExpense,
+  clearNotifiedDocument,
   clearNotifiedItem,
   clearNotifiedReminder,
   updateAppBadge,
@@ -31,6 +32,8 @@ import MarkServicedSheet from './MarkServicedSheet.vue'
 import MasterListSheet from './MasterListSheet.vue'
 import MasterFormSheet from './MasterFormSheet.vue'
 import ExpenseListSheet from './ExpenseListSheet.vue'
+import DocumentsSheet from './DocumentsSheet.vue'
+import DocumentFormSheet from './DocumentFormSheet.vue'
 import ExpenseFormSheet from './ExpenseFormSheet.vue'
 import ComponentsSheet from './ComponentsSheet.vue'
 import ComponentFormSheet from './ComponentFormSheet.vue'
@@ -43,6 +46,8 @@ import type {
   ComponentType,
   Expense,
   ExpenseCategory,
+  CarDocument,
+  DocumentType,
   FuelEntry,
   MaintenanceItem,
   MaintenanceStatus,
@@ -73,7 +78,7 @@ const {
   hasAnyCost,
   costForecast,
   reminderStatuses,
-  expenseStatuses,
+  documentStatuses,
   latestComponentByType,
   totalBusinessKm,
   totalPersonalKm,
@@ -111,6 +116,9 @@ const showReminderSheet = ref(false)
 const showMasterList = ref(false)
 const editingMaster = ref<Master | null | 'new'>(null)
 const showExpenseList = ref(false)
+const showDocuments = ref(false)
+const editingDocument = ref<CarDocument | null | 'new'>(null)
+const newDocumentType = ref<DocumentType | undefined>(undefined)
 const editingExpense = ref<Expense | null | 'new'>(null)
 const showComponentsSheet = ref(false)
 const editingComponentType = ref<ComponentType | null>(null)
@@ -219,9 +227,9 @@ watch(
 )
 
 watch(
-  [car, expenseStatuses],
+  [car, documentStatuses],
   ([carVal, statusesVal]) => {
-    if (carVal) checkAndNotifyExpenses(carVal.id, statusesVal)
+    if (carVal) checkAndNotifyDocuments(carVal.id, statusesVal)
   },
   { immediate: true },
 )
@@ -234,7 +242,7 @@ function handleNotificationsEnabled() {
   checkAndNotify(car.value.id, statuses.value)
   checkAndNotifyLowFuel(car.value.id, estimatedRangeKm.value)
   checkAndNotifyReminders(car.value.id, reminderStatuses.value.filter((s) => s.isDue))
-  checkAndNotifyExpenses(car.value.id, expenseStatuses.value)
+  checkAndNotifyDocuments(car.value.id, documentStatuses.value)
 }
 
 function openEdit(id: string) {
@@ -311,7 +319,6 @@ async function handleSaveExpense(payload: {
   title?: string
   amount: number
   date: number
-  renewalDate?: number
   note?: string
   receiptPhoto?: string
 }) {
@@ -334,7 +341,6 @@ async function handleDeleteExpense(id: string) {
   const expense = store.expenses.find((e) => e.id === id)
   const removed = await store.deleteExpense(id)
   if (!removed) return
-  if (car.value) clearNotifiedExpense(car.value.id, id)
   haptic('delete')
   toast.show(expense ? 'Расход удалён' : 'Запись удалена', {
     label: 'Отменить',
@@ -402,12 +408,48 @@ function handleExportPdf() {
   })
 }
 
-async function handleAddCarPhoto(dataUrl: string) {
-  await store.addCarPhoto(dataUrl)
+async function handleSaveDocument(payload: {
+  type: DocumentType
+  title?: string
+  number?: string
+  issuedDate?: number
+  expiryDate?: number
+  photos: string[]
+  note?: string
+}) {
+  await submitOnce(async () => {
+    const editing = editingDocument.value
+    if (editing && editing !== 'new') {
+      await store.updateDocument(editing.id, payload)
+      // The expiry may have moved: let it notify again when it next becomes due.
+      if (car.value) clearNotifiedDocument(car.value.id, editing.id)
+      haptic('success')
+    } else {
+      await store.addDocument(payload)
+      haptic('success')
+      toast.show('Документ добавлен')
+    }
+    editingDocument.value = null
+    newDocumentType.value = undefined
+  })
 }
 
-async function handleRemoveCarPhoto(index: number) {
-  await store.removeCarPhoto(index)
+async function handleDeleteDocument(id: string) {
+  const document = store.documents.find((d) => d.id === id)
+  const removed = await store.deleteDocument(id)
+  if (!removed) return
+  if (car.value) clearNotifiedDocument(car.value.id, id)
+  editingDocument.value = null
+  haptic('delete')
+  toast.show(document ? 'Документ удалён' : 'Запись удалена', {
+    label: 'Отменить',
+    onAction: () => store.restoreDocument(removed),
+  })
+}
+
+function openNewDocument(type?: DocumentType) {
+  newDocumentType.value = type
+  editingDocument.value = 'new'
 }
 
 async function handleSaveItem(payload: {
@@ -573,7 +615,6 @@ async function handleSaveCarInfo(payload: {
   tankCapacity?: number
   vin?: string
   licensePlate?: string
-  stsNumber?: string
   referenceConsumptionL100km?: number
 }) {
   await submitOnce(() => store.updateCarInfo(payload))
@@ -627,7 +668,7 @@ function csvEscape(value: string): string {
 
 function handleExportFuelCsv() {
   const rows = store.fuelEntries.slice().sort((a, b) => a.date - b.date)
-  const header = ['Дата', 'Пробег, км', 'Литры', 'Стоимость, ₽', 'Цена, ₽/л', 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
+  const header = ['Дата', 'Пробег, км', 'Литры', `Стоимость, ${currency.value}`, `Цена, ${currency.value}/л`, 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
   const lines = [header.join(',')]
   for (const e of rows) {
     const price = e.cost !== undefined && e.liters > 0 ? (e.cost / e.liters).toFixed(2) : ''
@@ -729,6 +770,8 @@ async function handleImportCarCsv(file: File) {
 
 <template>
   <ion-page v-if="car">
+    <ion-tabs>
+      <ion-tab tab="dashboard">
     <DashboardTab
         v-if="activeTab === 'dashboard'"
         :car="car"
@@ -749,6 +792,9 @@ async function handleImportCarCsv(file: File) {
         :urgent-total="urgentStatuses.length"
         :estimated-range-km="estimatedRangeKm"
         :reminder-statuses="reminderStatuses"
+        :document-statuses="documentStatuses"
+        :document-count="store.documents.length"
+        @open-documents="showDocuments = true"
         @edit-mileage="showMileageSheet = true"
         @switch-car="showCarSwitcher = true"
         @quick-fuel="showFuelSheet = true"
@@ -761,7 +807,9 @@ async function handleImportCarCsv(file: File) {
         @delete-reminder="handleDeleteReminder"
         @view-other-expenses="showExpenseList = true"
       />
+      </ion-tab>
 
+      <ion-tab tab="maintenance">
       <MaintenanceTab
         v-if="activeTab === 'maintenance'"
         :sorted-statuses="sortedStatuses"
@@ -771,7 +819,9 @@ async function handleImportCarCsv(file: File) {
         @bulk-delete="handleBulkDelete"
         @add-item="editingItem = 'new'"
       />
+      </ion-tab>
 
+      <ion-tab tab="fuel">
       <FuelTab
         v-if="activeTab === 'fuel'"
         :fuel-history="fuelHistory"
@@ -792,13 +842,16 @@ async function handleImportCarCsv(file: File) {
         @export-csv="handleExportFuelCsv"
         @view-other-expenses="showExpenseList = true"
       />
+      </ion-tab>
 
+      <ion-tab tab="settings">
       <SettingsTab
         v-if="activeTab === 'settings'"
         :car="car"
         :car-count="cars.length"
         :master-count="store.masters.length"
         :expense-count="store.expenses.length"
+        :document-count="store.documents.length"
         :trip-count="store.trips.length"
         :import-error="importError"
         :import-csv-error="importCsvError"
@@ -814,11 +867,11 @@ async function handleImportCarCsv(file: File) {
         @open-expenses="showExpenseList = true"
         @open-components="showComponentsSheet = true"
         @open-trips="showTripList = true"
-        @add-photo="handleAddCarPhoto"
-        @remove-photo="handleRemoveCarPhoto"
+        @open-documents="showDocuments = true"
         @share-passport="showPassportSheet = true"
         @notifications-enabled="handleNotificationsEnabled"
       />
+      </ion-tab>
 
     <TabBar
       :active-tab="activeTab"
@@ -829,6 +882,7 @@ async function handleImportCarCsv(file: File) {
       @quick-reminder="showReminderSheet = true"
       @quick-expense="editingExpense = 'new'"
     />
+    </ion-tabs>
 
     <EditItemModal
       v-if="editingItem !== null"
@@ -938,10 +992,28 @@ async function handleImportCarCsv(file: File) {
       @save="handleSaveMaster"
     />
 
+    <DocumentsSheet
+      v-if="showDocuments"
+      :documents="store.documents"
+      :statuses="documentStatuses"
+      @close="showDocuments = false"
+      @add="openNewDocument"
+      @edit="editingDocument = $event"
+      @delete="handleDeleteDocument"
+    />
+
+    <DocumentFormSheet
+      v-if="editingDocument !== null"
+      :document="editingDocument !== 'new' ? editingDocument : null"
+      :preset-type="newDocumentType"
+      @close="editingDocument = null; newDocumentType = undefined"
+      @save="handleSaveDocument"
+      @delete="handleDeleteDocument"
+    />
+
     <ExpenseListSheet
       v-if="showExpenseList"
       :expenses="store.expenses"
-      :expense-statuses="expenseStatuses"
       :total="totalExpensesCost"
       @close="showExpenseList = false"
       @edit="editingExpense = $event"

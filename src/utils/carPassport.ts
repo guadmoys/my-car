@@ -1,5 +1,6 @@
 import type { Car, HistoryEntry } from '../types'
 import { formatDate } from './dateFormat'
+import { currency } from './currency'
 
 export interface PassportData {
   car: Car
@@ -59,7 +60,7 @@ function fmtNum(n: number): string {
 }
 
 function fmtCost(n: number): string {
-  return `${fmtNum(n)} ₽`
+  return `${fmtNum(n)} ${currency.value}`
 }
 
 /**

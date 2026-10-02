@@ -1,5 +1,5 @@
-import { EXPENSE_CATEGORY_LABELS } from '../types'
-import type { ExpenseStatus, MaintenanceStatus, ReminderStatus } from '../types'
+import { DOCUMENT_TYPE_LABELS } from '../types'
+import type { DocumentStatus, MaintenanceStatus, ReminderStatus } from '../types'
 
 const ENABLED_KEY = 'my-car-notifications-enabled'
 const ICON = `${import.meta.env.BASE_URL}icons/icon-192.png`
@@ -156,55 +156,55 @@ export async function checkAndNotifyLowFuel(carId: string, rangeKm: number | nul
   localStorage.setItem(key, 'true')
 }
 
-function expensesNotifiedKey(carId: string): string {
-  return `my-car-expenses-notified-${carId}`
+function documentsNotifiedKey(carId: string): string {
+  return `my-car-documents-notified-${carId}`
 }
 
-function getExpensesNotifiedIds(carId: string): Set<string> {
+function getDocumentsNotifiedIds(carId: string): Set<string> {
   try {
-    const raw = localStorage.getItem(expensesNotifiedKey(carId))
+    const raw = localStorage.getItem(documentsNotifiedKey(carId))
     return new Set(raw ? (JSON.parse(raw) as string[]) : [])
   } catch {
     return new Set()
   }
 }
 
-function saveExpensesNotifiedIds(carId: string, ids: Set<string>): void {
-  localStorage.setItem(expensesNotifiedKey(carId), JSON.stringify([...ids]))
+function saveDocumentsNotifiedIds(carId: string, ids: Set<string>): void {
+  localStorage.setItem(documentsNotifiedKey(carId), JSON.stringify([...ids]))
 }
 
-/** Call when an expense with a renewal date is deleted or edited, so it can notify again if it becomes due again. */
-export function clearNotifiedExpense(carId: string, expenseId: string): void {
-  const ids = getExpensesNotifiedIds(carId)
-  if (ids.delete(expenseId)) saveExpensesNotifiedIds(carId, ids)
+/** Call when a document is deleted or its expiry date changes, so it can notify again if it becomes due again. */
+export function clearNotifiedDocument(carId: string, documentId: string): void {
+  const ids = getDocumentsNotifiedIds(carId)
+  if (ids.delete(documentId)) saveDocumentsNotifiedIds(carId, ids)
 }
 
 /**
- * Notifies once per expense when its renewal date becomes due or soon
- * (insurance/tax/tech-inspection renewals etc), tracked per-car like the
+ * Notifies once per document when its expiry date becomes due or soon
+ * (insurance, tech inspection, licence, etc), tracked per-car like the
  * other checks above.
  */
-export async function checkAndNotifyExpenses(carId: string, statuses: ExpenseStatus[]): Promise<void> {
+export async function checkAndNotifyDocuments(carId: string, statuses: DocumentStatus[]): Promise<void> {
   if (!isNotificationsEnabled() || getNotificationPermission() !== 'granted') return
 
   const dueOrSoon = statuses.filter((s) => s.isDue || s.isSoon)
-  const notifiedIds = getExpensesNotifiedIds(carId)
-  const fresh = dueOrSoon.filter((s) => !notifiedIds.has(s.expense.id))
+  const notifiedIds = getDocumentsNotifiedIds(carId)
+  const fresh = dueOrSoon.filter((s) => !notifiedIds.has(s.document.id))
   if (fresh.length === 0) return
 
-  const label = (s: ExpenseStatus) => s.expense.title || EXPENSE_CATEGORY_LABELS[s.expense.category]
-  const title = fresh.length === 1 ? label(fresh[0]) : `Требуют продления: ${fresh.length}`
+  const label = (s: DocumentStatus) => s.document.title || DOCUMENT_TYPE_LABELS[s.document.type]
+  const title = fresh.length === 1 ? label(fresh[0]) : `Истекают документы: ${fresh.length}`
   const body =
     fresh.length === 1
       ? fresh[0].isDue
-        ? 'Срок продления истёк'
-        : 'Скоро нужно продлить'
+        ? 'Срок действия истёк'
+        : `Срок действия истекает через ${fresh[0].remainingDays} дн.`
       : fresh.map(label).join(', ')
 
   await showLocalNotification(title, body)
 
-  for (const s of fresh) notifiedIds.add(s.expense.id)
-  saveExpensesNotifiedIds(carId, notifiedIds)
+  for (const s of fresh) notifiedIds.add(s.document.id)
+  saveDocumentsNotifiedIds(carId, notifiedIds)
 }
 
 export function updateAppBadge(count: number): void {

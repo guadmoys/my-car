@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { IonButton, IonIcon, IonSpinner } from '@ionic/vue'
+import { IonButton, IonIcon, IonSpinner, IonThumbnail } from '@ionic/vue'
 import { cameraOutline, closeCircle } from 'ionicons/icons'
 import { fileToDataUrl } from '../utils/photo'
 import { useToast } from '../composables/useToast'
@@ -39,10 +39,12 @@ function remove() {
 <template>
   <div class="receipt-field">
     <div v-if="modelValue" class="thumb-wrap">
-      <img :src="modelValue" alt="Чек" class="thumb" />
-      <button type="button" class="remove-btn" aria-label="Удалить фото" @click="remove">
-        <ion-icon :icon="closeCircle" />
-      </button>
+      <ion-thumbnail class="thumb">
+        <img :src="modelValue" alt="Чек" />
+      </ion-thumbnail>
+      <ion-button class="remove-btn" fill="clear" color="danger" size="small" aria-label="Удалить фото" @click="remove">
+        <ion-icon slot="icon-only" :icon="closeCircle" />
+      </ion-button>
     </div>
     <ion-button v-else fill="outline" size="small" :disabled="loading" @click="fileInput?.click()">
       <ion-spinner v-if="loading" slot="start" name="dots" />
@@ -64,22 +66,16 @@ function remove() {
 }
 
 .thumb {
-  width: 84px;
-  height: 84px;
-  object-fit: cover;
-  border-radius: 10px;
-  display: block;
+  --size: 84px;
+  --border-radius: 10px;
 }
 
 .remove-btn {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  background: none;
-  border: none;
-  padding: 0;
-  line-height: 0;
-  color: var(--ion-color-danger);
-  font-size: 22px;
+  top: -12px;
+  right: -12px;
+  --padding-start: 0;
+  --padding-end: 0;
+  margin: 0;
 }
 </style>

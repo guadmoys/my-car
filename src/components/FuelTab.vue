@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { currency, formatMoney } from '../utils/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -32,6 +33,7 @@ import MonthlySpendChart from './MonthlySpendChart.vue'
 import StationPricesCard from './StationPricesCard.vue'
 import { formatDate } from '../utils/dateFormat'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
+import { buildYearlySummary } from '../utils/yearlySummary'
 
 const props = defineProps<{
   fuelHistory: FuelConsumption[]
@@ -59,6 +61,8 @@ const emit = defineEmits<{
 }>()
 
 const showAll = ref(false)
+
+const yearlySummary = computed(() => buildYearlySummary(fuelEntriesRaw.value, props.historyEntries, props.expenses))
 
 type Period = 'all' | '30' | '90' | 'year'
 const period = ref<Period>('all')
@@ -92,7 +96,7 @@ function fmt(n: number): string {
 }
 
 function fmtCost(n: number): string {
-  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+  return formatMoney(n)
 }
 
 function fmtCo2(kg: number): string {
@@ -140,6 +144,22 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
       </ion-item>
     </ion-list>
 
+    <ion-list v-if="yearlySummary.length > 0" inset>
+      <ion-list-header>По годам</ion-list-header>
+      <ion-item v-for="(y, i) in yearlySummary" :key="y.year" :lines="i === yearlySummary.length - 1 ? 'none' : undefined">
+        <ion-label class="ion-text-wrap">
+          <h2>{{ y.year }}</h2>
+          <p>
+            Топливо {{ fmtCost(y.fuel) }} · ТО {{ fmtCost(y.service) }}<template v-if="y.other > 0"> · Прочее {{ fmtCost(y.other) }}</template>
+          </p>
+          <p v-if="y.distanceKm !== null && y.costPerKm !== null">
+            {{ fmt(y.distanceKm) }} км · {{ y.costPerKm.toFixed(2) }} {{ currency }}/км
+          </p>
+        </ion-label>
+        <ion-note slot="end" color="primary"><strong>{{ fmtCost(y.total) }}</strong></ion-note>
+      </ion-item>
+    </ion-list>
+
     <ion-list v-if="costForecast.sixMonths && costForecast.twelveMonths" inset>
       <ion-list-header>Прогноз расходов</ion-list-header>
       <ion-item>
@@ -147,7 +167,7 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
         <ion-note slot="end" color="primary" class="ion-text-end">
           {{ fmtCost(costForecast.sixMonths.total) }}<br />
           <span class="forecast-breakdown">
-            ⛽ {{ fmtCost(costForecast.sixMonths.fuel) }} · 🔧 {{ fmtCost(costForecast.sixMonths.maintenance) }}
+            Топливо {{ fmtCost(costForecast.sixMonths.fuel) }} · ТО {{ fmtCost(costForecast.sixMonths.maintenance) }}
           </span>
         </ion-note>
       </ion-item>
@@ -156,7 +176,7 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
         <ion-note slot="end" color="primary" class="ion-text-end">
           {{ fmtCost(costForecast.twelveMonths.total) }}<br />
           <span class="forecast-breakdown">
-            ⛽ {{ fmtCost(costForecast.twelveMonths.fuel) }} · 🔧 {{ fmtCost(costForecast.twelveMonths.maintenance) }}
+            Топливо {{ fmtCost(costForecast.twelveMonths.fuel) }} · ТО {{ fmtCost(costForecast.twelveMonths.maintenance) }}
           </span>
         </ion-note>
       </ion-item>
@@ -213,7 +233,7 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
           </ion-label>
         </ion-item>
         <ion-item-options side="end">
-          <ion-item-option color="danger" @click="emit('deleteFuel', row.entry.id)">
+          <ion-item-option color="danger" aria-label="Удалить заправку" @click="emit('deleteFuel', row.entry.id)">
             <ion-icon slot="icon-only" :icon="trash" />
           </ion-item-option>
         </ion-item-options>
@@ -236,7 +256,7 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
     </ion-button>
 
     <ion-fab vertical="bottom" horizontal="start" slot="fixed">
-      <ion-fab-button @click="emit('addFuel')">
+      <ion-fab-button aria-label="Добавить заправку" @click="emit('addFuel')">
         <ion-icon :icon="add" />
       </ion-fab-button>
     </ion-fab>

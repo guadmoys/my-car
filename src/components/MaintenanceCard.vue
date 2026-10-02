@@ -94,7 +94,7 @@ function openSite(url: string) {
   <template v-else>
     <ion-item-sliding>
       <ion-item-options side="start">
-        <ion-item-option color="success" @click="emit('markServiced', status.item.id)">
+        <ion-item-option color="success" aria-label="Отметить выполненным" @click="emit('markServiced', status.item.id)">
           <ion-icon slot="icon-only" :icon="checkmark" />
         </ion-item-option>
       </ion-item-options>
@@ -116,7 +116,7 @@ function openSite(url: string) {
       </ion-item>
 
       <ion-item-options side="end">
-        <ion-item-option color="danger" @click="emit('delete', status.item.id)">
+        <ion-item-option color="danger" aria-label="Удалить" @click="emit('delete', status.item.id)">
           <ion-icon slot="icon-only" :icon="trash" />
         </ion-item-option>
       </ion-item-options>

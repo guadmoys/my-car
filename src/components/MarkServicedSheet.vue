@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { currency } from '../utils/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -70,7 +71,7 @@ async function canDismiss(): Promise<boolean> {
         <ion-item lines="full">
           <ion-input
             v-model="cost"
-            label="Стоимость замены, ₽ (необязательно)"
+            :label="`Стоимость замены, ${currency} (необязательно)`"
             label-placement="stacked"
             type="text"
             inputmode="decimal"

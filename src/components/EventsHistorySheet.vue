@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatMoney } from '../utils/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -12,12 +13,15 @@ import {
   IonListHeader,
   IonModal,
   IonNote,
+  IonSearchbar,
   IonSegment,
   IonSegmentButton,
+  IonSelect,
+  IonSelectOption,
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { construct, water } from 'ionicons/icons'
+import { construct, searchOutline, water } from 'ionicons/icons'
 import type { TimelineEvent } from '../types'
 
 const props = defineProps<{
@@ -36,6 +40,40 @@ const CATEGORY_LABELS: Record<TimelineEvent['kind'], string> = {
 }
 
 const filter = ref<EventFilter>('all')
+const query = ref('')
+
+type Period = 'all' | '30' | '90' | 'year'
+const period = ref<Period>('all')
+
+const PERIOD_OPTIONS: { value: Period; label: string }[] = [
+  { value: 'all', label: 'За всё время' },
+  { value: '30', label: 'Последние 30 дней' },
+  { value: '90', label: 'Последние 90 дней' },
+  { value: 'year', label: 'Этот год' },
+]
+
+function periodStart(p: Period): number {
+  const now = new Date()
+  if (p === '30') return now.getTime() - 30 * 86400000
+  if (p === '90') return now.getTime() - 90 * 86400000
+  if (p === 'year') return new Date(now.getFullYear(), 0, 1).getTime()
+  return 0
+}
+
+function searchText(e: TimelineEvent): string {
+  const parts: (string | number | undefined)[] =
+    e.kind === 'fuel'
+      ? [e.entry.station, e.entry.comment, e.entry.fuelType, 'заправка']
+      : [e.entry.itemName, e.entry.note, 'то']
+  parts.push(e.mileage, e.entry.cost)
+  return parts.filter((p) => p !== undefined).join(' ').toLowerCase()
+}
+
+const filteredEvents = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  const from = periodStart(period.value)
+  return props.events.filter((e) => e.date >= from && (!q || searchText(e).includes(q)))
+})
 
 const fuelCount = computed(() => props.events.filter((e) => e.kind === 'fuel').length)
 const serviceCount = computed(() => props.events.filter((e) => e.kind === 'service').length)
@@ -52,7 +90,7 @@ const groups = computed<EventGroup[]>(() => {
     .map((kind) => ({
       kind,
       label: CATEGORY_LABELS[kind],
-      events: props.events.filter((e) => e.kind === kind),
+      events: filteredEvents.value.filter((e) => e.kind === kind),
     }))
     .filter((group) => group.events.length > 0)
 })
@@ -77,7 +115,7 @@ function fmt(n: number): string {
 }
 
 function fmtCost(n: number): string {
-  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+  return formatMoney(n)
 }
 
 function fmtDate(ts: number): string {
@@ -107,8 +145,18 @@ function fmtDate(ts: number): string {
           </ion-segment-button>
         </ion-segment>
       </ion-toolbar>
+      <ion-toolbar>
+        <ion-searchbar v-model="query" placeholder="Поиск: АЗС, работа, заметка" :debounce="200" />
+      </ion-toolbar>
     </ion-header>
     <ion-content>
+      <ion-list inset>
+        <ion-item lines="none">
+          <ion-select v-model="period" label="Период" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }">
+            <ion-select-option v-for="o in PERIOD_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</ion-select-option>
+          </ion-select>
+        </ion-item>
+      </ion-list>
       <ion-list v-for="group in groups" :key="group.kind" inset>
         <ion-list-header v-if="filter === 'all'">
           <ion-label>{{ group.label }}</ion-label>
@@ -125,7 +173,8 @@ function fmtDate(ts: number): string {
       </ion-list>
       <ion-list v-if="groups.length === 0" inset>
         <ion-item>
-          <ion-label color="medium">Пока нет событий</ion-label>
+          <ion-icon slot="start" :icon="searchOutline" color="medium" />
+          <ion-label color="medium">{{ events.length === 0 ? 'Пока нет событий' : 'Ничего не найдено — измените запрос или период' }}</ion-label>
         </ion-item>
       </ion-list>
     </ion-content>

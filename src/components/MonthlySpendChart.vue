@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatMoney } from '../utils/currency'
 import { computed, ref } from 'vue'
 import { IonCard, IonCardContent } from '@ionic/vue'
 import type { Expense, FuelEntry, HistoryEntry } from '../types'
@@ -76,7 +77,7 @@ const areaPath = computed(() => {
 })
 
 function fmtCost(n: number): string {
-  return `${Math.round(n).toLocaleString('ru-RU')} ₽`
+  return formatMoney(n)
 }
 
 function toggle(key: string) {
@@ -92,7 +93,7 @@ function toggle(key: string) {
     </div>
 
     <div class="chart-area">
-      <svg class="chart-svg" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
+      <svg class="chart-svg" role="img" aria-label="График расходов по месяцам" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
         <defs>
           <linearGradient id="spend-area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="var(--ion-color-primary)" stop-opacity="0.28" />

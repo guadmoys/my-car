@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import {
+  IonAlert,
   IonAvatar,
   IonContent,
   IonHeader,
@@ -12,24 +13,27 @@ import {
   IonNote,
   IonRefresher,
   IonRefresherContent,
+  IonSelect,
+  IonSelectOption,
   IonSegment,
   IonSegmentButton,
   IonTitle,
   IonToggle,
   IonToolbar,
   type SegmentCustomEvent,
+  type SelectCustomEvent,
   type ToggleCustomEvent,
 } from '@ionic/vue'
 import {
   barcodeOutline,
   buildOutline,
   calendarOutline,
-  cameraOutline,
   carOutline,
   carSportOutline,
   cashOutline,
   cloudDownloadOutline,
   cloudUploadOutline,
+  timeOutline,
   closeCircleOutline,
   documentAttachOutline,
   documentOutline,
@@ -52,7 +56,6 @@ import {
 } from 'ionicons/icons'
 import type { Car } from '../types'
 import { CAR_MAKES, modelsForMake } from '../data/carCatalog'
-import { fileToDataUrl } from '../utils/photo'
 import PickerSheet from './PickerSheet.vue'
 import SettingsIconBadge from './SettingsIconBadge.vue'
 import HintButton from './HintButton.vue'
@@ -81,9 +84,13 @@ import {
   setShowYearEnabled,
 } from '../utils/dateFormat'
 import type { DateFormatId } from '../utils/dateFormat'
+import { CURRENCY_OPTIONS, currency, setCurrency } from '../utils/currency'
+import { THEME_OPTIONS, getThemeMode, setThemeMode, type ThemeMode } from '../utils/theme'
 import { checkForUpdate } from '../utils/appUpdate'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
 import { useToast } from '../composables/useToast'
+import { useCarStore } from '../composables/useCarStore'
+import { listSnapshots, type Snapshot } from '../utils/autoBackup'
 import { haptic } from '../utils/haptics'
 import { useCloudSync } from '../composables/useCloudSync'
 import type { CloudProvider } from '../utils/cloudSync'
@@ -93,6 +100,7 @@ const props = defineProps<{
   carCount: number
   masterCount: number
   expenseCount: number
+  documentCount: number
   tripCount: number
   importError: string | null
   importCsvError: string | null
@@ -107,7 +115,6 @@ const emit = defineEmits<{
       tankCapacity?: number
       vin?: string
       licensePlate?: string
-      stsNumber?: string
       referenceConsumptionL100km?: number
     },
   ]
@@ -122,8 +129,7 @@ const emit = defineEmits<{
   openExpenses: []
   openComponents: []
   openTrips: []
-  addPhoto: [dataUrl: string]
-  removePhoto: [index: number]
+  openDocuments: []
   sharePassport: []
   notificationsEnabled: []
 }>()
@@ -134,12 +140,10 @@ const year = ref(String(props.car.year))
 const tankCapacity = ref(props.car.tankCapacity !== undefined ? String(props.car.tankCapacity) : '')
 const vin = ref(props.car.vin ?? '')
 const licensePlate = ref(props.car.licensePlate ?? '')
-const stsNumber = ref(props.car.stsNumber ?? '')
 const referenceConsumption = ref(props.car.referenceConsumptionL100km !== undefined ? String(props.car.referenceConsumptionL100km) : '')
 const confirmingDelete = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const csvFileInput = ref<HTMLInputElement | null>(null)
-const photoFileInput = ref<HTMLInputElement | null>(null)
 const activePicker = ref<'make' | 'model' | null>(null)
 const modelOptions = computed(() => modelsForMake(make.value))
 
@@ -152,7 +156,6 @@ watch(
     tankCapacity.value = props.car.tankCapacity !== undefined ? String(props.car.tankCapacity) : ''
     vin.value = props.car.vin ?? ''
     licensePlate.value = props.car.licensePlate ?? ''
-    stsNumber.value = props.car.stsNumber ?? ''
     referenceConsumption.value = props.car.referenceConsumptionL100km !== undefined ? String(props.car.referenceConsumptionL100km) : ''
     confirmingDelete.value = false
   },
@@ -228,6 +231,18 @@ function selectDateFormat(event: SegmentCustomEvent) {
   setDateFormat(value)
 }
 
+const themeMode = ref<ThemeMode>(getThemeMode())
+
+function selectTheme(event: SegmentCustomEvent) {
+  const value = event.detail.value as ThemeMode
+  themeMode.value = value
+  setThemeMode(value)
+}
+
+function selectCurrency(event: SelectCustomEvent) {
+  setCurrency(event.detail.value as string)
+}
+
 function handleToggleShowYear(checked: boolean) {
   showYear.value = checked
   setShowYearEnabled(checked)
@@ -258,7 +273,6 @@ function commitCarInfo() {
 
   const vinTrimmed = vin.value.trim() || undefined
   const plateTrimmed = licensePlate.value.trim() || undefined
-  const stsTrimmed = stsNumber.value.trim() || undefined
 
   if (
     make.value.trim() === props.car.make &&
@@ -267,7 +281,6 @@ function commitCarInfo() {
     capacityNumber === props.car.tankCapacity &&
     vinTrimmed === props.car.vin &&
     plateTrimmed === props.car.licensePlate &&
-    stsTrimmed === props.car.stsNumber &&
     referenceNumber === props.car.referenceConsumptionL100km
   ) {
     return
@@ -279,25 +292,8 @@ function commitCarInfo() {
     tankCapacity: capacityNumber,
     vin: vinTrimmed,
     licensePlate: plateTrimmed,
-    stsNumber: stsTrimmed,
     referenceConsumptionL100km: referenceNumber,
   })
-}
-
-function triggerAddPhoto() {
-  photoFileInput.value?.click()
-}
-
-async function handlePhotoSelected(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-  try {
-    emit('addPhoto', await fileToDataUrl(file))
-  } catch {
-    toast.show('Не удалось загрузить фото')
-  }
 }
 
 function handleDelete() {
@@ -309,6 +305,51 @@ function handleDelete() {
 }
 
 const toast = useToast()
+const store = useCarStore()
+
+const snapshots = ref<Snapshot[]>([])
+const snapshotToRestore = ref<Snapshot | null>(null)
+
+async function refreshSnapshots() {
+  try {
+    snapshots.value = await listSnapshots()
+  } catch {
+    snapshots.value = []
+  }
+}
+
+function snapshotLabel(s: Snapshot): string {
+  const when = new Date(s.savedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+  const kind = s.reason === 'daily' ? 'Ежедневная' : s.reason === 'before-migration' ? 'Перед обновлением данных' : 'Перед импортом'
+  return `${kind} · ${when}`
+}
+
+function snapshotSummary(s: Snapshot): string {
+  const b = s.backup
+  return `${b.cars.length} авто · ${b.fuelEntries.length} заправок · ${b.historyEntries.length} работ`
+}
+
+const restoreAlertButtons = [
+  { text: 'Отмена', role: 'cancel' },
+  {
+    text: 'Восстановить',
+    role: 'destructive',
+    handler: async () => {
+      const snap = snapshotToRestore.value
+      if (!snap) return
+      const result = await store.importData(snap.backup)
+      if (result.ok) {
+        haptic('success')
+        toast.show('Данные восстановлены из копии')
+      } else {
+        toast.show(result.error)
+      }
+      await refreshSnapshots()
+    },
+  },
+]
+
+onMounted(refreshSnapshots)
 const checkingUpdate = ref(false)
 const appVersion = __APP_VERSION__
 
@@ -480,7 +521,7 @@ function handleCsvFileSelected(event: Event) {
         <SettingsIconBadge slot="start" :icon="barcodeOutline" color="medium" />
         <ion-input v-model="vin" label="VIN (необязательно)" label-placement="stacked" placeholder="—" @ion-blur="commitCarInfo" />
       </ion-item>
-      <ion-item>
+      <ion-item lines="none">
         <SettingsIconBadge slot="start" :icon="pricetagOutline" color="medium" />
         <ion-input
           v-model="licensePlate"
@@ -490,34 +531,16 @@ function handleCsvFileSelected(event: Event) {
           @ion-blur="commitCarInfo"
         />
       </ion-item>
-      <ion-item lines="none">
-        <SettingsIconBadge slot="start" :icon="folderOutline" color="medium" />
-        <ion-input v-model="stsNumber" label="СТС (необязательно)" label-placement="stacked" placeholder="—" @ion-blur="commitCarInfo" />
-      </ion-item>
-    </ion-list>
-
-    <ion-list inset>
-      <ion-list-header>
-        <ion-label>Фото машины и документов</ion-label>
-      </ion-list-header>
-      <ion-item lines="none">
-        <div class="photo-row">
-          <div v-for="(photo, index) in car.photos ?? []" :key="photo" class="photo-thumb-wrap">
-            <img :src="photo" alt="Фото машины" class="photo-thumb" />
-            <button type="button" class="photo-remove" aria-label="Удалить фото" @click="emit('removePhoto', index)">×</button>
-          </div>
-          <button type="button" class="photo-add" @click="triggerAddPhoto">
-            <ion-icon :icon="cameraOutline" />
-          </button>
-        </div>
-      </ion-item>
-      <input ref="photoFileInput" type="file" accept="image/*" class="sr-only" @change="handlePhotoSelected" />
     </ion-list>
 
     <ion-list inset>
       <ion-item button detail @click="emit('openCarSwitcher')">
         <SettingsIconBadge slot="start" :icon="carOutline" color="success" />
         <ion-label>Мои машины ({{ carCount }})</ion-label>
+      </ion-item>
+      <ion-item button detail @click="emit('openDocuments')">
+        <SettingsIconBadge slot="start" :icon="folderOutline" color="primary" />
+        <ion-label>Документы ({{ documentCount }})</ion-label>
       </ion-item>
       <ion-item button detail @click="emit('openMasters')">
         <SettingsIconBadge slot="start" :icon="peopleOutline" color="tertiary" />
@@ -597,6 +620,24 @@ function handleCsvFileSelected(event: Event) {
 
     <ion-list inset>
       <ion-list-header>
+        <ion-label>Оформление</ion-label>
+      </ion-list-header>
+      <ion-item>
+        <ion-segment :value="themeMode" aria-label="Тема оформления" @ionChange="selectTheme">
+          <ion-segment-button v-for="opt in THEME_OPTIONS" :key="opt.value" :value="opt.value">
+            <ion-label>{{ opt.label }}</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-select label="Валюта" :value="currency" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }" @ionChange="selectCurrency">
+          <ion-select-option v-for="c in CURRENCY_OPTIONS" :key="c.value" :value="c.value">{{ c.label }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+    </ion-list>
+
+    <ion-list inset>
+      <ion-list-header>
         <ion-label>Формат даты</ion-label>
         <HintButton :text="dateFormatHint" />
       </ion-list-header>
@@ -614,6 +655,36 @@ function handleCsvFileSelected(event: Event) {
         </ion-toggle>
       </ion-item>
     </ion-list>
+
+    <ion-list v-if="snapshots.length > 0" inset>
+      <ion-list-header>
+        <ion-label>Автокопии на этом устройстве</ion-label>
+        <HintButton
+          text="Приложение само хранит несколько последних копий данных на этом устройстве, а также копию перед каждым импортом или восстановлением из облака. Нажмите на копию, чтобы вернуть данные"
+        />
+      </ion-list-header>
+      <ion-item
+        v-for="(snap, index) in snapshots"
+        :key="snap.savedAt"
+        button
+        :detail="false"
+        :lines="index === snapshots.length - 1 ? 'none' : undefined"
+        @click="snapshotToRestore = snap"
+      >
+        <SettingsIconBadge slot="start" :icon="timeOutline" color="medium" />
+        <ion-label>
+          <h3>{{ snapshotLabel(snap) }}</h3>
+          <p>{{ snapshotSummary(snap) }}</p>
+        </ion-label>
+      </ion-item>
+    </ion-list>
+    <ion-alert
+      :is-open="snapshotToRestore !== null"
+      header="Восстановить данные?"
+      message="Текущие данные будут заменены этой копией. Перед заменой сохранится ещё одна копия, так что действие можно отменить."
+      :buttons="restoreAlertButtons"
+      @did-dismiss="snapshotToRestore = null"
+    />
 
     <ion-list inset>
       <ion-list-header>
@@ -784,52 +855,6 @@ function handleCsvFileSelected(event: Event) {
 
 .hint.error {
   color: var(--ion-color-danger);
-}
-
-.photo-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px 0;
-}
-
-.photo-thumb-wrap {
-  position: relative;
-}
-
-.photo-thumb {
-  width: 64px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 10px;
-  display: block;
-}
-
-.photo-remove {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: none;
-  background: var(--ion-color-danger);
-  color: #fff;
-  line-height: 1;
-  font-size: 14px;
-}
-
-.photo-add {
-  width: 64px;
-  height: 64px;
-  border-radius: 10px;
-  border: 1px dashed var(--ion-color-medium);
-  background: none;
-  color: var(--ion-color-medium);
-  font-size: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .cloud-avatar {

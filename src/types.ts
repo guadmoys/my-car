@@ -13,9 +13,9 @@ export interface Car {
   vin?: string
   /** Registration plate ("госномер"). */
   licensePlate?: string
-  /** Registration certificate number ("СТС"). */
+  /** @deprecated Moved into a CarDocument of type 'sts' by migrateLegacyToDocuments; only present on data from before the Documents section. */
   stsNumber?: string
-  /** Photos of the car itself and its documents (STS, insurance, etc), stored as compressed data URLs. */
+  /** @deprecated Moved into a CarDocument by migrateLegacyToDocuments; only present on data from before the Documents section. */
   photos?: string[]
   /**
    * Manufacturer-declared or otherwise expected average consumption, l/100km.
@@ -177,7 +177,8 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
 
 /**
  * A one-off or recurring non-fuel/non-service expense (insurance, fines,
- * parking, taxes, loan/lease payments). `renewalDate`, when set, is when
+ * parking, taxes, loan/lease payments). Renewal dates now live on
+ * CarDocument; the legacy `renewalDate` is migrated away on load. Previously, when set, it was when
  * this expense needs renewing/repeating (e.g. a policy's end date) — used
  * to drive a due/soon reminder the same way MaintenanceItem/Reminder do.
  */
@@ -189,6 +190,7 @@ export interface Expense {
   title?: string
   amount: number
   date: number
+  /** @deprecated Moved into a CarDocument's expiryDate by migrateLegacyToDocuments; only present on data from before the Documents section. */
   renewalDate?: number
   note?: string
   /** Photo of the receipt/invoice, as a compressed data URL. */
@@ -200,6 +202,48 @@ export interface ExpenseStatus {
   isDue: boolean
   isSoon: boolean
   remainingDays?: number
+}
+
+/** What kind of paper a CarDocument is. */
+export type DocumentType = 'sts' | 'pts' | 'license' | 'insurance' | 'inspection' | 'tax' | 'other'
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  sts: 'СТС',
+  pts: 'ПТС',
+  license: 'Водительское удостоверение',
+  insurance: 'Страховка (ОСАГО/КАСКО)',
+  inspection: 'Техосмотр',
+  tax: 'Налог',
+  other: 'Другое',
+}
+
+/**
+ * A vehicle or driver document ("документ"): registration certificate,
+ * insurance policy, tech inspection, etc. `expiryDate`, when set, drives a
+ * due/soon status and a notification the same way maintenance items do.
+ * Photos are compressed data URLs, like receipts.
+ */
+export interface CarDocument {
+  id: string
+  carId: string
+  type: DocumentType
+  /** Free-text name, e.g. "ОСАГО Ингосстрах". Falls back to the type label. */
+  title?: string
+  /** Series/number/policy number. */
+  number?: string
+  issuedDate?: number
+  /** When the document stops being valid / needs renewing. */
+  expiryDate?: number
+  photos: string[]
+  note?: string
+  createdAt: number
+}
+
+export interface DocumentStatus {
+  document: CarDocument
+  isDue: boolean
+  isSoon: boolean
+  remainingDays: number
 }
 
 /** Which serviceable component a ComponentCheck record is about. */
@@ -294,6 +338,8 @@ export interface BackupData {
   components?: ComponentCheck[]
   /** Absent when importing a backup made before trips existed. */
   trips?: Trip[]
+  /** Absent when importing a backup made before the documents section existed. */
+  documents?: CarDocument[]
 }
 
 /** Shape of a v1 backup (single car, no carId fields), kept only for import compatibility. */

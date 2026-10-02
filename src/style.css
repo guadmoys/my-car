@@ -9,3 +9,14 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+/* Tablets and landscape: keep grouped lists and cards at a readable width
+   instead of stretching edge to edge. */
+@media (min-width: 768px) {
+  ion-content ion-list.list-inset,
+  ion-content ion-card,
+  ion-content > ion-button {
+    max-width: 720px;
+    margin-inline: auto !important;
+  }
+}

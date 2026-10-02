@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatPricePerLiter } from '../utils/currency'
 import { computed } from 'vue'
 import { IonIcon, IonItem, IonLabel, IonList, IonListHeader, IonNote } from '@ionic/vue'
 import { caretDown, caretUp } from 'ionicons/icons'
@@ -69,7 +70,7 @@ function pathFor(points: { x: number; y: number }[]): string {
         <h2>{{ s.station }}</h2>
         <p>{{ s.count }} заправ{{ s.count === 1 ? 'ка' : 'ки' }}</p>
       </ion-label>
-      <svg class="sparkline" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
+      <svg class="sparkline" role="img" aria-label="Динамика цены топлива" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
         <path
           :d="pathFor(s.points)"
           fill="none"
@@ -79,7 +80,7 @@ function pathFor(points: { x: number; y: number }[]): string {
         />
       </svg>
       <div slot="end" class="station-price">
-        <ion-note>{{ s.avgPrice.toFixed(1) }} ₽/л</ion-note>
+        <ion-note>{{ formatPricePerLiter(s.avgPrice) }}</ion-note>
         <ion-icon v-if="s.trend === 'up'" :icon="caretUp" color="danger" />
         <ion-icon v-if="s.trend === 'down'" :icon="caretDown" color="success" />
       </div>

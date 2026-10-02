@@ -45,7 +45,7 @@ const subtitle = computed(() => {
     </ion-item>
 
     <ion-item-options side="end">
-      <ion-item-option color="danger" @click="emit('delete', status.reminder.id)">
+      <ion-item-option color="danger" aria-label="Удалить напоминание" @click="emit('delete', status.reminder.id)">
         <ion-icon slot="icon-only" :icon="trash" />
       </ion-item-option>
     </ion-item-options>

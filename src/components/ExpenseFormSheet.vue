@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { currency } from '../utils/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -15,9 +16,7 @@ import {
   IonModal,
   IonNote,
   IonTitle,
-  IonToggle,
   IonToolbar,
-  type ToggleCustomEvent,
 } from '@ionic/vue'
 import { EXPENSE_CATEGORY_LABELS, type Expense, type ExpenseCategory } from '../types'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
@@ -36,7 +35,6 @@ const emit = defineEmits<{
       title?: string
       amount: number
       date: number
-      renewalDate?: number
       note?: string
       receiptPhoto?: string
     },
@@ -49,8 +47,6 @@ const category = ref<ExpenseCategory>(props.expense?.category ?? props.lastCateg
 const title = ref(props.expense?.title ?? '')
 const amount = ref(props.expense ? String(props.expense.amount) : '')
 const dateIso = ref(new Date(props.expense?.date ?? Date.now()).toISOString())
-const hasRenewal = ref(props.expense?.renewalDate !== undefined)
-const renewalIso = ref(new Date(props.expense?.renewalDate ?? Date.now()).toISOString())
 const note = ref(props.expense?.note ?? '')
 const receiptPhoto = ref<string | undefined>(props.expense?.receiptPhoto)
 const maxDateIso = new Date().toISOString()
@@ -58,10 +54,6 @@ const maxDateIso = new Date().toISOString()
 const amountNumber = computed(() => Number(amount.value.replace(/\s/g, '').replace(',', '.')))
 
 const isValid = computed(() => amount.value.trim() !== '' && !Number.isNaN(amountNumber.value) && amountNumber.value > 0)
-
-function toggleRenewal(checked: boolean) {
-  hasRenewal.value = checked
-}
 
 function selectCategory(c: ExpenseCategory) {
   haptic('tap')
@@ -75,7 +67,6 @@ function handleSave() {
     title: title.value.trim() || undefined,
     amount: amountNumber.value,
     date: new Date(dateIso.value).getTime(),
-    renewalDate: hasRenewal.value ? new Date(renewalIso.value).getTime() : undefined,
     note: note.value.trim() || undefined,
     receiptPhoto: receiptPhoto.value,
   })
@@ -117,7 +108,7 @@ function handleSave() {
           <ion-input v-model="title" label="Название (необязательно)" label-placement="stacked" :placeholder="EXPENSE_CATEGORY_LABELS[category]" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="amount" label="Сумма, ₽" label-placement="stacked" inputmode="decimal" placeholder="0" />
+          <ion-input v-model="amount" :label="`Сумма, ${currency}`" label-placement="stacked" inputmode="decimal" placeholder="0" />
         </ion-item>
       </ion-list>
 
@@ -131,22 +122,8 @@ function handleSave() {
         <ion-datetime id="expense-date" v-model="dateIso" presentation="date" locale="ru-RU" :max="maxDateIso" />
       </ion-modal>
 
-      <ion-list inset>
-        <ion-item :lines="hasRenewal ? 'full' : 'none'">
-          <ion-toggle :checked="hasRenewal" @ion-change="(e: ToggleCustomEvent) => toggleRenewal(e.detail.checked)">
-            Есть срок продления
-          </ion-toggle>
-        </ion-item>
-        <ion-item v-if="hasRenewal" lines="none">
-          <ion-label>Дата продления</ion-label>
-          <ion-datetime-button slot="end" datetime="expense-renewal-date" />
-        </ion-item>
-      </ion-list>
-      <ion-modal v-if="hasRenewal" :keep-contents-mounted="true">
-        <ion-datetime id="expense-renewal-date" v-model="renewalIso" presentation="date" locale="ru-RU" />
-      </ion-modal>
-      <ion-note v-if="hasRenewal" color="medium" class="hint">
-        Пришлём напоминание, когда срок продления подойдёт
+      <ion-note v-if="category === 'insurance' || category === 'tax'" color="medium" class="hint">
+        Срок действия страховки, техосмотра или налога добавляйте в разделе «Документы» — там же напомним о продлении
       </ion-note>
 
       <ion-list inset>

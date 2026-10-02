@@ -1,13 +1,18 @@
 import { computed, reactive, ref } from 'vue'
+import { currency } from '../utils/currency'
+import { dailySnapshotDue, saveSnapshot } from '../utils/autoBackup'
+import { documentStatuses as buildDocumentStatuses, migrateLegacyToDocuments } from '../utils/documents'
 import type {
   BackupData,
+  CarDocument,
+  DocumentStatus,
+  DocumentType,
   Car,
   ComponentCheck,
   ComponentType,
   CostForecast,
   Expense,
   ExpenseCategory,
-  ExpenseStatus,
   FuelConsumption,
   FuelEntry,
   FuelInsight,
@@ -39,6 +44,7 @@ const masters = reactive<Master[]>([])
 const expenses = reactive<Expense[]>([])
 const componentChecks = reactive<ComponentCheck[]>([])
 const trips = reactive<Trip[]>([])
+const documents = reactive<CarDocument[]>([])
 const isLoaded = ref(false)
 /** True while importData/restoreFromCloud is replacing the whole database — lets useCloudSync suppress auto-sync so it can't export a partially-imported state over the cloud backup. */
 const isImporting = ref(false)
@@ -71,7 +77,7 @@ let loadCarDataToken = 0
 
 async function loadCarData(carId: string): Promise<void> {
   const token = ++loadCarDataToken
-  const [loadedItems, loadedFuel, loadedHistory, loadedReminders, loadedMasters, loadedExpenses, loadedComponents, loadedTrips] =
+  const [loadedItems, loadedFuel, loadedHistory, loadedReminders, loadedMasters, loadedExpenses, loadedComponents, loadedTrips, loadedDocuments] =
     await Promise.all([
       db.getMaintenanceItemsForCar(carId),
       db.getFuelEntriesForCar(carId),
@@ -81,6 +87,7 @@ async function loadCarData(carId: string): Promise<void> {
       db.getExpensesForCar(carId),
       db.getComponentsForCar(carId),
       db.getTripsForCar(carId),
+      db.getDocumentsForCar(carId),
     ])
   if (token !== loadCarDataToken) return
   items.splice(0, items.length, ...loadedItems.map((item) => ({ ...item, parts: item.parts ?? [] })))
@@ -91,9 +98,36 @@ async function loadCarData(carId: string): Promise<void> {
   expenses.splice(0, expenses.length, ...loadedExpenses)
   componentChecks.splice(0, componentChecks.length, ...loadedComponents)
   trips.splice(0, trips.length, ...loadedTrips)
+  documents.splice(0, documents.length, ...loadedDocuments)
+}
+
+/**
+ * One-time (and idempotent) move of document-like data into the Documents
+ * section: the car's STS number and photo gallery, and expense renewal
+ * dates. A safety snapshot is taken first, since this rewrites cars/expenses.
+ */
+async function migrateLegacyDocuments(): Promise<void> {
+  const [allCars, allExpenses, allDocs] = await Promise.all([
+    db.getAllCars(),
+    db.getAllExpensesRaw(),
+    db.getAllDocumentsRaw(),
+  ])
+  const migration = migrateLegacyToDocuments(allCars, allExpenses, allDocs, nowTs())
+  if (migration.cars.length === 0 && migration.expenses.length === 0 && migration.documents.length === 0) return
+  try {
+    await saveSnapshot(await exportData(), 'before-migration')
+  } catch {
+    /* a failed safety copy must not block the migration */
+  }
+  // Documents first: if anything below fails, the source fields are still
+  // there and the next launch retries (ids are deterministic, so no duplicates).
+  await db.putDocuments(migration.documents)
+  for (const c of migration.cars) await db.putCar(c)
+  for (const e of migration.expenses) await db.putExpense(e)
 }
 
 async function load(): Promise<void> {
+  await migrateLegacyDocuments()
   const loadedCars = await db.getAllCars()
   cars.splice(0, cars.length, ...loadedCars)
 
@@ -107,6 +141,15 @@ async function load(): Promise<void> {
   }
 
   isLoaded.value = true
+
+  // Rolling local safety copy (at most one per day), taken off the critical path.
+  if (cars.length > 0) {
+    void dailySnapshotDue()
+      .then(async (due) => {
+        if (due) await saveSnapshot(await exportData(), 'daily')
+      })
+      .catch(() => {})
+  }
 }
 
 async function switchCar(carId: string): Promise<void> {
@@ -187,25 +230,12 @@ async function updateCarInfo(
   patch: Partial<
     Pick<
       Car,
-      'make' | 'model' | 'year' | 'tankCapacity' | 'vin' | 'licensePlate' | 'stsNumber' | 'referenceConsumptionL100km'
+      'make' | 'model' | 'year' | 'tankCapacity' | 'vin' | 'licensePlate' | 'referenceConsumptionL100km'
     >
   >,
 ): Promise<void> {
   if (!activeCarId.value) return
   const updated = patchCar(activeCarId.value, patch)
-  if (updated) await db.putCar(updated)
-}
-
-async function addCarPhoto(dataUrl: string): Promise<void> {
-  if (!car.value) return
-  const updated = patchCar(car.value.id, { photos: [...(car.value.photos ?? []), dataUrl] })
-  if (updated) await db.putCar(updated)
-}
-
-async function removeCarPhoto(index: number): Promise<void> {
-  if (!car.value?.photos) return
-  const photos = car.value.photos.filter((_, i) => i !== index)
-  const updated = patchCar(car.value.id, { photos })
   if (updated) await db.putCar(updated)
 }
 
@@ -566,7 +596,6 @@ async function addExpense(input: {
   title?: string
   amount: number
   date?: number
-  renewalDate?: number
   note?: string
   receiptPhoto?: string
 }): Promise<void> {
@@ -578,7 +607,6 @@ async function addExpense(input: {
     title: input.title?.trim() || undefined,
     amount: input.amount,
     date: input.date ?? nowTs(),
-    renewalDate: input.renewalDate,
     note: input.note?.trim() || undefined,
     receiptPhoto: input.receiptPhoto,
   }
@@ -593,7 +621,6 @@ async function updateExpense(
     title?: string
     amount: number
     date: number
-    renewalDate?: number
     note?: string
     receiptPhoto?: string
   },
@@ -604,7 +631,6 @@ async function updateExpense(
   expense.title = patch.title?.trim() || undefined
   expense.amount = patch.amount
   expense.date = patch.date
-  expense.renewalDate = patch.renewalDate
   expense.note = patch.note?.trim() || undefined
   expense.receiptPhoto = patch.receiptPhoto
   await db.putExpense({ ...expense })
@@ -623,6 +649,73 @@ async function restoreExpense(expense: Expense): Promise<void> {
   expenses.push(expense)
   await db.putExpense(expense)
 }
+
+async function addDocument(input: {
+  type: DocumentType
+  title?: string
+  number?: string
+  issuedDate?: number
+  expiryDate?: number
+  photos?: string[]
+  note?: string
+}): Promise<void> {
+  if (!car.value) return
+  const document: CarDocument = {
+    id: makeId(),
+    carId: car.value.id,
+    type: input.type,
+    title: input.title?.trim() || undefined,
+    number: input.number?.trim() || undefined,
+    issuedDate: input.issuedDate,
+    expiryDate: input.expiryDate,
+    photos: input.photos ?? [],
+    note: input.note?.trim() || undefined,
+    createdAt: nowTs(),
+  }
+  documents.push(document)
+  await db.putDocument(document)
+}
+
+async function updateDocument(
+  id: string,
+  patch: {
+    type: DocumentType
+    title?: string
+    number?: string
+    issuedDate?: number
+    expiryDate?: number
+    photos: string[]
+    note?: string
+  },
+): Promise<void> {
+  const document = documents.find((d) => d.id === id)
+  if (!document) return
+  document.type = patch.type
+  document.title = patch.title?.trim() || undefined
+  document.number = patch.number?.trim() || undefined
+  document.issuedDate = patch.issuedDate
+  document.expiryDate = patch.expiryDate
+  document.photos = patch.photos
+  document.note = patch.note?.trim() || undefined
+  await db.putDocument({ ...document, photos: [...document.photos] })
+}
+
+async function deleteDocument(id: string): Promise<CarDocument | null> {
+  const index = documents.findIndex((d) => d.id === id)
+  if (index === -1) return null
+  const [removed] = documents.splice(index, 1)
+  await db.deleteDocument(id)
+  return removed
+}
+
+async function restoreDocument(document: CarDocument): Promise<void> {
+  if (documents.some((d) => d.id === document.id)) return
+  documents.push(document)
+  await db.putDocument(document)
+}
+
+/** Due/soon status for every document that has an expiry date, most urgent first. */
+const documentStatuses = computed<DocumentStatus[]>(() => buildDocumentStatuses(documents, Date.now()))
 
 async function addComponentCheck(input: {
   type: ComponentType
@@ -837,20 +930,6 @@ const reminderStatuses = computed<ReminderStatus[]>(() => {
       if (a.isDue !== b.isDue) return a.isDue ? -1 : 1
       return a.reminder.createdAt - b.reminder.createdAt
     })
-})
-
-const EXPENSE_SOON_DAYS = 14
-
-/** Due/soon status for expenses that carry a renewal date (insurance, tax, tech inspection, etc). */
-const expenseStatuses = computed<ExpenseStatus[]>(() => {
-  const now = Date.now()
-  return expenses
-    .filter((e) => e.renewalDate !== undefined)
-    .map((expense) => {
-      const remainingDays = Math.ceil((expense.renewalDate! - now) / DAY_MS)
-      return { expense, isDue: remainingDays <= 0, isSoon: remainingDays > 0 && remainingDays <= EXPENSE_SOON_DAYS, remainingDays }
-    })
-    .sort((a, b) => (a.remainingDays ?? 0) - (b.remainingDays ?? 0))
 })
 
 /**
@@ -1168,7 +1247,7 @@ const fuelInsights = computed<FuelInsight[]>(() => {
       insights.push({
         id: 'budget',
         icon: '📊',
-        text: `За последние ${Math.round(daysSpan)} дн. на топливо потрачено ${Math.round(totalSpent).toLocaleString('ru-RU')} ₽ — при таком темпе выйдет ~${Math.round(projected).toLocaleString('ru-RU')} ₽ за 30 дней`,
+        text: `За последние ${Math.round(daysSpan)} дн. на топливо потрачено ${Math.round(totalSpent).toLocaleString('ru-RU')} ${currency.value} — при таком темпе выйдет ~${Math.round(projected).toLocaleString('ru-RU')} ${currency.value} за 30 дней`,
         tone: 'neutral',
       })
     }
@@ -1207,14 +1286,14 @@ const fuelInsights = computed<FuelInsight[]>(() => {
       insights.push({
         id: 'price',
         icon: '💸',
-        text: `Последняя заправка дороже обычного на ${diffPct.toFixed(0)}% (${last.price.toFixed(1)} ₽/л против ${prevAvg.toFixed(1)} ₽/л в среднем)`,
+        text: `Последняя заправка дороже обычного на ${diffPct.toFixed(0)}% (${last.price.toFixed(1)} ${currency.value}/л против ${prevAvg.toFixed(1)} ${currency.value}/л в среднем)`,
         tone: 'bad',
       })
     } else if (diffPct <= -7) {
       insights.push({
         id: 'price',
         icon: '💰',
-        text: `Последняя заправка дешевле обычного на ${Math.abs(diffPct).toFixed(0)}% (${last.price.toFixed(1)} ₽/л против ${prevAvg.toFixed(1)} ₽/л в среднем)`,
+        text: `Последняя заправка дешевле обычного на ${Math.abs(diffPct).toFixed(0)}% (${last.price.toFixed(1)} ${currency.value}/л против ${prevAvg.toFixed(1)} ${currency.value}/л в среднем)`,
         tone: 'good',
       })
     }
@@ -1239,7 +1318,7 @@ const fuelInsights = computed<FuelInsight[]>(() => {
       insights.push({
         id: 'station',
         icon: '📍',
-        text: `Самая выгодная АЗС — «${best.station}»: в среднем ${best.avgPrice.toFixed(1)} ₽/л`,
+        text: `Самая выгодная АЗС — «${best.station}»: в среднем ${best.avgPrice.toFixed(1)} ${currency.value}/л`,
         tone: 'good',
       })
     }
@@ -1296,7 +1375,7 @@ const fuelInsights = computed<FuelInsight[]>(() => {
       insights.push({
         id: 'cost-per-km',
         icon: '🧮',
-        text: `Топливо обходится примерно в ${(totalSpent / distance).toFixed(2)} ₽/км пробега`,
+        text: `Топливо обходится примерно в ${(totalSpent / distance).toFixed(2)} ${currency.value}/км пробега`,
         tone: 'neutral',
       })
     }
@@ -1430,7 +1509,7 @@ function isLegacyBackup(data: unknown): data is LegacyBackupData {
 }
 
 async function exportData(): Promise<BackupData> {
-  const [allCars, allItems, allFuel, allHistory, allReminders, allMasters, allExpenses, allComponents, allTrips] =
+  const [allCars, allItems, allFuel, allHistory, allReminders, allMasters, allExpenses, allComponents, allTrips, allDocuments] =
     await Promise.all([
       db.getAllCars(),
       db.getAllMaintenanceItemsRaw(),
@@ -1441,6 +1520,7 @@ async function exportData(): Promise<BackupData> {
       db.getAllExpensesRaw(),
       db.getAllComponentsRaw(),
       db.getAllTripsRaw(),
+      db.getAllDocumentsRaw(),
     ])
   return {
     version: 2,
@@ -1455,6 +1535,7 @@ async function exportData(): Promise<BackupData> {
     expenses: allExpenses,
     components: allComponents,
     trips: allTrips,
+    documents: allDocuments,
   }
 }
 
@@ -1468,6 +1549,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   let importedExpenses: Expense[]
   let importedComponents: ComponentCheck[]
   let importedTrips: Trip[]
+  let importedDocuments: CarDocument[]
   let newActiveCarId: string | undefined
 
   if (isMultiCarBackup(data)) {
@@ -1480,6 +1562,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     importedExpenses = Array.isArray(data.expenses) ? data.expenses : []
     importedComponents = Array.isArray(data.components) ? data.components : []
     importedTrips = Array.isArray(data.trips) ? data.trips : []
+    importedDocuments = Array.isArray(data.documents) ? data.documents : []
     newActiveCarId =
       data.activeCarId && importedCars.some((c) => c.id === data.activeCarId)
         ? data.activeCarId
@@ -1495,6 +1578,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     importedExpenses = []
     importedComponents = []
     importedTrips = []
+    importedDocuments = []
     newActiveCarId = carId
   } else {
     return { ok: false, error: 'Файл повреждён или это не резервная копия «Моей машины»' }
@@ -1502,6 +1586,24 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
 
   if (!newActiveCarId || importedCars.length === 0) {
     return { ok: false, error: 'В файле нет ни одной машины' }
+  }
+
+  // Backups from before the Documents section still carry the STS number,
+  // car photos and expense renewal dates; move them over the same way the
+  // startup migration does so they aren't lost or shown twice.
+  const migration = migrateLegacyToDocuments(importedCars, importedExpenses, importedDocuments, nowTs())
+  if (migration.documents.length > 0 || migration.cars.length > 0 || migration.expenses.length > 0) {
+    importedDocuments = [...importedDocuments, ...migration.documents]
+    importedCars = importedCars.map((c) => migration.cars.find((m) => m.id === c.id) ?? c)
+    importedExpenses = importedExpenses.map((e) => migration.expenses.find((m) => m.id === e.id) ?? e)
+  }
+
+  // Keep a copy of what's about to be overwritten so a bad file or cloud
+  // restore can be undone from Settings → «Автокопии».
+  try {
+    await saveSnapshot(await exportData(), 'before-import')
+  } catch {
+    /* a failed safety copy must not block the import itself */
   }
 
   // Set before the write so a watcher-driven auto-sync can't export a
@@ -1518,6 +1620,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
       expenses: importedExpenses,
       components: importedComponents,
       trips: importedTrips,
+      documents: importedDocuments,
     })
 
     // The whole DB was just replaced wholesale — any loadCarData still in
@@ -1540,6 +1643,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     expenses.splice(0, expenses.length, ...importedExpenses.filter((e) => e.carId === newActiveCarId))
     componentChecks.splice(0, componentChecks.length, ...importedComponents.filter((c) => c.carId === newActiveCarId))
     trips.splice(0, trips.length, ...importedTrips.filter((t) => t.carId === newActiveCarId))
+    documents.splice(0, documents.length, ...importedDocuments.filter((d) => d.carId === newActiveCarId))
   } finally {
     isImporting.value = false
   }
@@ -1671,7 +1775,8 @@ export function useCarStore() {
     soonCount,
     okCount,
     reminderStatuses,
-    expenseStatuses,
+    documents,
+    documentStatuses,
     latestComponentByType,
     totalBusinessKm,
     totalPersonalKm,
@@ -1694,8 +1799,6 @@ export function useCarStore() {
     createCar,
     deleteCar,
     updateCarInfo,
-    addCarPhoto,
-    removeCarPhoto,
     updateMileage,
     updateItem,
     markServiced,
@@ -1714,6 +1817,10 @@ export function useCarStore() {
     updateExpense,
     deleteExpense,
     restoreExpense,
+    addDocument,
+    updateDocument,
+    deleteDocument,
+    restoreDocument,
     addComponentCheck,
     deleteComponentCheck,
     restoreComponentCheck,

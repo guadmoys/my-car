@@ -149,7 +149,7 @@ function bulkDelete() {
     </ion-toolbar>
 
     <ion-fab v-if="!selectMode" vertical="bottom" horizontal="start" slot="fixed">
-      <ion-fab-button @click="emit('addItem')">
+      <ion-fab-button aria-label="Добавить параметр ТО" @click="emit('addItem')">
         <ion-icon :icon="add" />
       </ion-fab-button>
     </ion-fab>

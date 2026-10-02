@@ -88,7 +88,7 @@ function dotColor(quality: FuelConsumption['quality']): string {
     </div>
 
     <div class="chart-area">
-      <svg class="chart-svg" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
+      <svg class="chart-svg" role="img" aria-label="График расхода топлива по заправкам" :viewBox="`0 0 ${W} ${H}`" preserveAspectRatio="none">
         <defs>
           <linearGradient id="consumption-area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="var(--ion-color-primary)" stop-opacity="0.28" />
