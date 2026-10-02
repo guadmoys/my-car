@@ -33,14 +33,13 @@ mode.
 ## Navigation shape
 
 - **Tabs are manual, not router-driven.** This app has no `vue-router` — `Dashboard.vue`
-  holds a plain `activeTab` ref and conditionally renders one of the four tab screens
-  (`DashboardTab`, `MaintenanceTab`, `FuelTab`, `SettingsTab`) inside a single `IonPage`,
-  with `TabBar.vue` rendering a real `IonTabBar`/`IonTabButton`/`IonIcon` row wired to
-  that ref via `@click` (not `IonTabs`, which requires a router outlet). Each tab
+  holds a plain `activeTab` ref. The page is `IonPage` > `IonTabs` > one `IonTab` per tab
+  screen (`DashboardTab`, `MaintenanceTab`, `FuelTab`, `SettingsTab`, each rendered with
+  `v-if` on `activeTab`) plus `TabBar.vue`, a real `IonTabBar`/`IonTabButton`/`IonBadge`
+  row wired to that ref via `@click`. `IonTabs` with `IonTab` children is Ionic's
+  router-less mode; a bare `IonTabBar` outside `IonTabs` throws at runtime. Each tab
   component is a template *fragment* — `<ion-header>` + `<ion-content>` as sibling root
-  nodes, no wrapping `<ion-page>` of its own — so swapping the active one swaps both the
-  header and the content together while `TabBar` stays mounted underneath as the page's
-  last child.
+  nodes, no wrapping `<ion-page>` of its own.
 - **Sheets/modals are `IonModal`**, controlled the same way the old custom sheets were:
   a parent `v-if="show"` mounts the component, which renders
   `<ion-modal :is-open="true" @did-dismiss="emit('close')">`. Compact single-field sheets
@@ -117,11 +116,14 @@ import of old backups — don't reintroduce those fields in the UI.
 ## Conventions
 
 - All UI copy is Russian; code, comments, identifiers stay English.
-- Currency is ₽, dates formatted with `toLocaleDateString('ru-RU', …)`.
+- Currency is ₽ by default and user-configurable (`utils/currency.ts`: use `formatMoney` / the reactive `currency` ref, never a literal ₽); dates formatted with `toLocaleDateString('ru-RU', …)`.
 - Reuse existing composables/utils instead of duplicating logic:
   `useCarStore` (all data), `useToast` (undo/notices), `haptics.ts`, `ics.ts` (calendar
   export). Icons come from `ionicons/icons` (`import { xOutline } from 'ionicons/icons'`)
   — don't hand-draw a new inline SVG glyph or reach for emoji where a real Ionicon fits.
-- Run `npm run typecheck` before considering any change done — the project has no test
-  suite, so type-checking + manual verification (dev server + Playwright screenshots) is
-  the bar.
+- Theme is `auto | light | dark` via the `ion-palette-dark` class (`utils/theme.ts`), not a
+  media query — dark-only CSS goes under `:root.ion-palette-dark`.
+- Before considering any change done run `npm run typecheck`, `npm test` (vitest, pure
+  utils under `src/**/__tests__`) and `npm run build` (vue-tsc doesn't catch every SFC
+  template error), plus manual verification (dev server + Playwright screenshots) for UI.
+  Put new pure logic in `src/utils` with a test.
