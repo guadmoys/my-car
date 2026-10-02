@@ -85,10 +85,10 @@ function handleSave() {
           <ion-note slot="end">{{ model || (make ? 'Выбрать' : 'Сначала выберите марку') }}</ion-note>
         </ion-item>
         <ion-item>
-          <ion-input v-model="year" label="Год выпуска" label-placement="stacked" inputmode="numeric" placeholder="2020" />
+          <ion-input v-model="year" label="Год выпуска" label-placement="stacked" enterkeyhint="next" inputmode="numeric" placeholder="2020" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="mileage" label="Текущий пробег, км" label-placement="stacked" inputmode="numeric" placeholder="45000" />
+          <ion-input v-model="mileage" label="Текущий пробег, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" placeholder="45000" />
         </ion-item>
       </ion-list>
     </ion-content>

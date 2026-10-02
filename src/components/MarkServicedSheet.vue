@@ -74,7 +74,7 @@ async function canDismiss(): Promise<boolean> {
             :label="`Стоимость замены, ${currency} (необязательно)`"
             label-placement="stacked"
             type="text"
-            inputmode="decimal"
+            enterkeyhint="next" inputmode="decimal"
             placeholder="—"
             autofocus
           />

@@ -800,6 +800,7 @@ async function handleImportCarCsv(file: File) {
         @edit-mileage="showMileageSheet = true"
         @switch-car="showCarSwitcher = true"
         @quick-fuel="showFuelSheet = true"
+        @quick-expense="editingExpense = 'new'"
         @open-item="openEditFromDashboard"
         @mark-serviced="handleMarkServiced"
         @view-all-maintenance="activeTab = 'maintenance'"

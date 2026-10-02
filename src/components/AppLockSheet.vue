@@ -65,7 +65,7 @@ function handleInput() {
             label="Код-пароль, 4–6 цифр"
             label-placement="stacked"
             type="password"
-            inputmode="numeric"
+            enterkeyhint="done" inputmode="numeric"
             autofocus
             @ion-input="handleInput"
           />

@@ -142,7 +142,7 @@ async function canDismiss(): Promise<boolean> {
             label="Пробег на выбранную дату, км"
             label-placement="stacked"
             type="text"
-            inputmode="numeric"
+            enterkeyhint="next" inputmode="numeric"
             autofocus
             @ion-input="touched = true"
           />

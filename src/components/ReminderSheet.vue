@@ -191,7 +191,7 @@ async function canDismiss(): Promise<boolean> {
               v-model="manualKm"
               label="Через сколько км напомнить"
               label-placement="stacked"
-              inputmode="numeric"
+              enterkeyhint="next" inputmode="numeric"
               placeholder="300"
               autofocus
             />

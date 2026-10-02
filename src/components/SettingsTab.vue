@@ -491,7 +491,7 @@ function handleCsvFileSelected(event: Event) {
           v-model="year"
           label="Год выпуска"
           label-placement="stacked"
-          inputmode="numeric"
+          enterkeyhint="next" inputmode="numeric"
           @ion-blur="commitCarInfo"
         />
       </ion-item>
@@ -501,7 +501,7 @@ function handleCsvFileSelected(event: Event) {
           v-model="tankCapacity"
           label="Объём бака, л (необязательно)"
           label-placement="stacked"
-          inputmode="decimal"
+          enterkeyhint="next" inputmode="decimal"
           placeholder="—"
           @ion-blur="commitCarInfo"
         />
@@ -512,7 +512,7 @@ function handleCsvFileSelected(event: Event) {
           v-model="referenceConsumption"
           label="Паспортный расход, л/100км (необязательно)"
           label-placement="stacked"
-          inputmode="decimal"
+          enterkeyhint="next" inputmode="decimal"
           placeholder="—"
           @ion-blur="commitCarInfo"
         />

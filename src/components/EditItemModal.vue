@@ -279,13 +279,13 @@ function handleAddToCalendar() {
 
       <ion-list inset>
         <ion-item>
-          <ion-input v-model="interval" label="Интервал, км" label-placement="stacked" inputmode="numeric" placeholder="5000" />
+          <ion-input v-model="interval" label="Интервал, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" placeholder="5000" />
         </ion-item>
         <ion-item>
-          <ion-input v-model="intervalMax" label="До (необязательно, для диапазона)" label-placement="stacked" inputmode="numeric" placeholder="—" />
+          <ion-input v-model="intervalMax" label="До (необязательно, для диапазона)" label-placement="stacked" enterkeyhint="next" inputmode="numeric" placeholder="—" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="intervalMonths" label="Или раз в N месяцев (необязательно)" label-placement="stacked" inputmode="numeric" placeholder="—" />
+          <ion-input v-model="intervalMonths" label="Или раз в N месяцев (необязательно)" label-placement="stacked" enterkeyhint="next" inputmode="numeric" placeholder="—" />
         </ion-item>
       </ion-list>
 
@@ -300,7 +300,7 @@ function handleAddToCalendar() {
                 v-model="notifyBeforeKm"
                 label="Уведомлять за, км до ТО"
                 label-placement="stacked"
-                inputmode="numeric"
+                enterkeyhint="next" inputmode="numeric"
                 :placeholder="`по умолчанию ${Math.round(kmThresholdDefault.value)}`"
               />
             </ion-item>
@@ -309,7 +309,7 @@ function handleAddToCalendar() {
                 v-model="notifyBeforeDays"
                 label="Уведомлять за, дней до ТО"
                 label-placement="stacked"
-                inputmode="numeric"
+                enterkeyhint="next" inputmode="numeric"
                 :placeholder="`по умолчанию ${Math.round(dayThresholdDefault.value)}`"
               />
             </ion-item>
@@ -328,7 +328,7 @@ function handleAddToCalendar() {
 
       <ion-list v-if="!isCreate" inset>
         <ion-item lines="none">
-          <ion-input v-model="lastServiceMileage" label="Пробег последнего ТО, км" label-placement="stacked" inputmode="numeric" />
+          <ion-input v-model="lastServiceMileage" label="Пробег последнего ТО, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" />
         </ion-item>
       </ion-list>
       <ion-note v-if="!isCreate && Number(lastServiceMileage) > currentMileage" color="danger" class="hint">

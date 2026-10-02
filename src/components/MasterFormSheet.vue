@@ -75,7 +75,7 @@ function handleSave() {
             label="Телефон (необязательно)"
             label-placement="stacked"
             type="tel"
-            inputmode="tel"
+            enterkeyhint="next" inputmode="tel"
             placeholder="+7 900 000-00-00"
           />
         </ion-item>
@@ -84,7 +84,7 @@ function handleSave() {
             v-model="cardNumber"
             label="Номер карты для оплаты (необязательно)"
             label-placement="stacked"
-            inputmode="numeric"
+            enterkeyhint="next" inputmode="numeric"
             placeholder="0000 0000 0000 0000"
           />
         </ion-item>

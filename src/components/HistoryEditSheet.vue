@@ -97,10 +97,10 @@ function handleSave() {
 
       <ion-list inset>
         <ion-item>
-          <ion-input v-model="mileage" label="Пробег, км" label-placement="stacked" inputmode="numeric" />
+          <ion-input v-model="mileage" label="Пробег, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="cost" :label="`Стоимость, ${currency} (необязательно)`" label-placement="stacked" inputmode="decimal" placeholder="—" />
+          <ion-input v-model="cost" :label="`Стоимость, ${currency} (необязательно)`" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
       <ion-list inset>

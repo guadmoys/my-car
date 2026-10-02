@@ -61,7 +61,7 @@ function handleInput() {
           <ion-input
             v-model="pin"
             type="password"
-            inputmode="numeric"
+            enterkeyhint="done" inputmode="numeric"
             placeholder="Код-пароль"
             autofocus
             :class="{ 'ion-invalid': error }"

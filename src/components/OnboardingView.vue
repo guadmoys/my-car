@@ -78,7 +78,7 @@ function handleSubmit() {
                 label="Год выпуска"
                 label-placement="stacked"
                 type="number"
-                inputmode="numeric"
+                enterkeyhint="next" inputmode="numeric"
                 :min="1950"
                 :max="currentYear + 1"
                 placeholder="2020"
@@ -90,7 +90,7 @@ function handleSubmit() {
                 label="Текущий пробег, км"
                 label-placement="stacked"
                 type="text"
-                inputmode="numeric"
+                enterkeyhint="next" inputmode="numeric"
                 placeholder="45000"
               />
             </ion-item>

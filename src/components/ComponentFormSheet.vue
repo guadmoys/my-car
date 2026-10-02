@@ -118,13 +118,13 @@ function handleSave() {
             </ion-label>
           </ion-item>
           <ion-item>
-            <ion-input v-model="treadDepthMm" label="Глубина протектора, мм" label-placement="stacked" inputmode="decimal" placeholder="—" />
+            <ion-input v-model="treadDepthMm" label="Глубина протектора, мм" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
           </ion-item>
           <ion-item>
-            <ion-input v-model="pressureFront" label="Давление, перед, бар" label-placement="stacked" inputmode="decimal" placeholder="—" />
+            <ion-input v-model="pressureFront" label="Давление, перед, бар" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
           </ion-item>
           <ion-item lines="none">
-            <ion-input v-model="pressureRear" label="Давление, зад, бар" label-placement="stacked" inputmode="decimal" placeholder="—" />
+            <ion-input v-model="pressureRear" label="Давление, зад, бар" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
           </ion-item>
         </ion-list>
       </template>
@@ -144,7 +144,7 @@ function handleSave() {
       <template v-else>
         <ion-list inset>
           <ion-item lines="none">
-            <ion-input v-model="thicknessMm" label="Толщина колодок, мм" label-placement="stacked" inputmode="decimal" placeholder="—" />
+            <ion-input v-model="thicknessMm" label="Толщина колодок, мм" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
           </ion-item>
         </ion-list>
       </template>

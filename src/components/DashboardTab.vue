@@ -20,7 +20,7 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { add, alarmOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, walletOutline, water } from 'ionicons/icons'
+import { add, alarmOutline, cashOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, walletOutline, water } from 'ionicons/icons'
 import { DOCUMENT_TYPE_LABELS, EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Car, DocumentStatus, MaintenanceStatus, ReminderStatus, TimelineEvent } from '../types'
 import { expiryLabel, statusColor } from '../utils/documents'
@@ -105,10 +105,20 @@ const priorityAction = computed<PriorityAction>(() => {
   return { kind: 'ok' }
 })
 
+// The top recommendation is shown in «Сделать сейчас», so «Требует внимания»
+// lists only the rest instead of repeating the same row.
+const otherUrgent = computed(() => {
+  const action = priorityAction.value
+  return action.kind === 'maintenance'
+    ? props.urgentStatuses.filter((s) => s.item.id !== action.status.item.id)
+    : props.urgentStatuses
+})
+
 const emit = defineEmits<{
   editMileage: []
   switchCar: []
   quickFuel: []
+  quickExpense: []
   openItem: [id: string]
   markServiced: [id: string]
   viewAllMaintenance: []
@@ -175,8 +185,14 @@ function fmtCost(n: number): string {
       @switch-car="emit('switchCar')"
     />
 
-    <ion-grid>
+    <ion-grid class="quick-actions">
       <ion-row>
+        <ion-col>
+          <ion-button expand="block" size="default" @click="emit('quickFuel')">
+            <ion-icon slot="start" :icon="water" />
+            Заправка
+          </ion-button>
+        </ion-col>
         <ion-col>
           <ion-button expand="block" fill="outline" @click="emit('editMileage')">
             <ion-icon slot="start" :icon="speedometerOutline" />
@@ -184,33 +200,10 @@ function fmtCost(n: number): string {
           </ion-button>
         </ion-col>
         <ion-col>
-          <ion-button expand="block" fill="outline" @click="emit('quickFuel')">
-            <ion-icon slot="start" :icon="water" />
-            Заправка
+          <ion-button expand="block" fill="outline" @click="emit('quickExpense')">
+            <ion-icon slot="start" :icon="cashOutline" />
+            Расход
           </ion-button>
-        </ion-col>
-      </ion-row>
-    </ion-grid>
-
-    <ion-grid v-if="averageConsumption !== null || monthDistanceKm !== null">
-      <ion-row>
-        <ion-col v-if="averageConsumption !== null">
-          <ion-card class="stat-card">
-            <div class="stat-headline">
-              {{ (latestConsumption ?? averageConsumption).toFixed(1) }}
-              <span class="stat-unit">л/100км</span>
-            </div>
-            <ion-note>Сред.: {{ averageConsumption.toFixed(1) }} л/100км</ion-note>
-          </ion-card>
-        </ion-col>
-        <ion-col v-if="monthDistanceKm !== null">
-          <ion-card class="stat-card">
-            <div class="stat-headline">
-              {{ fmt(monthDistanceKm) }}
-              <span class="stat-unit">км</span>
-            </div>
-            <ion-note>За {{ monthName }}</ion-note>
-          </ion-card>
         </ion-col>
       </ion-row>
     </ion-grid>
@@ -248,6 +241,66 @@ function fmtCost(n: number): string {
       </ion-item>
     </ion-list>
 
+    <ion-list v-if="priorityAction.kind === 'ok' || otherUrgent.length > 0" inset>
+      <ion-list-header>Требует внимания</ion-list-header>
+      <ion-item
+        v-for="status in otherUrgent"
+        :key="status.item.id"
+        button
+        detail
+        @click="emit('openItem', status.item.id)"
+      >
+        <ion-icon slot="start" :icon="ellipse" :color="stateColor(status.state)" />
+        <ion-label>
+          <h2>{{ status.item.name }}</h2>
+          <p>{{ statusText(status) }}</p>
+        </ion-label>
+      </ion-item>
+      <ion-item v-if="otherUrgent.length === 0">
+        <ion-icon slot="start" :icon="checkmarkCircleOutline" color="success" />
+        <ion-label color="success">Всё в порядке</ion-label>
+      </ion-item>
+    </ion-list>
+    <ion-button v-if="urgentTotal > urgentStatuses.length" expand="block" fill="clear" @click="emit('viewAllMaintenance')">
+      Смотреть все ({{ urgentTotal }})
+    </ion-button>
+
+    <ion-grid v-if="averageConsumption !== null || monthDistanceKm !== null">
+      <ion-row>
+        <ion-col v-if="averageConsumption !== null">
+          <ion-card class="stat-card">
+            <div class="stat-headline">
+              {{ (latestConsumption ?? averageConsumption).toFixed(1) }}
+              <span class="stat-unit">л/100км</span>
+            </div>
+            <ion-note>Сред.: {{ averageConsumption.toFixed(1) }} л/100км</ion-note>
+          </ion-card>
+        </ion-col>
+        <ion-col v-if="monthDistanceKm !== null">
+          <ion-card class="stat-card">
+            <div class="stat-headline">
+              {{ fmt(monthDistanceKm) }}
+              <span class="stat-unit">км</span>
+            </div>
+            <ion-note>За {{ monthName }}</ion-note>
+          </ion-card>
+        </ion-col>
+      </ion-row>
+    </ion-grid>
+
+    <ion-list v-if="eventsTotal > 0" inset>
+      <ion-list-header>
+        <ion-label>Последние события</ion-label>
+        <ion-button fill="clear" size="small" @click="emit('viewAllEvents')">Все события</ion-button>
+      </ion-list-header>
+      <ion-item v-for="event in recentEvents" :key="`${event.kind}-${event.id}`">
+        <ion-icon slot="start" :icon="eventIcon(event)" />
+        <ion-label>
+          <h2>{{ eventTitle(event) }}</h2>
+          <p>{{ eventMeta(event) }}</p>
+        </ion-label>
+      </ion-item>
+    </ion-list>
     <ion-list inset>
       <ion-list-header>
         <ion-label>Напоминания</ion-label>
@@ -315,43 +368,6 @@ function fmtCost(n: number): string {
       </ion-item>
     </ion-list>
 
-    <ion-list inset>
-      <ion-list-header>Требует внимания</ion-list-header>
-      <ion-item
-        v-for="status in urgentStatuses"
-        :key="status.item.id"
-        button
-        detail
-        @click="emit('openItem', status.item.id)"
-      >
-        <ion-icon slot="start" :icon="ellipse" :color="stateColor(status.state)" />
-        <ion-label>
-          <h2>{{ status.item.name }}</h2>
-          <p>{{ statusText(status) }}</p>
-        </ion-label>
-      </ion-item>
-      <ion-item v-if="urgentStatuses.length === 0">
-        <ion-icon slot="start" :icon="checkmarkCircleOutline" color="success" />
-        <ion-label color="success">Всё в порядке</ion-label>
-      </ion-item>
-    </ion-list>
-    <ion-button v-if="urgentTotal > urgentStatuses.length" expand="block" fill="clear" @click="emit('viewAllMaintenance')">
-      Смотреть все ({{ urgentTotal }})
-    </ion-button>
-
-    <ion-list v-if="eventsTotal > 0" inset>
-      <ion-list-header>
-        <ion-label>Последние события</ion-label>
-        <ion-button fill="clear" size="small" @click="emit('viewAllEvents')">Все события</ion-button>
-      </ion-list-header>
-      <ion-item v-for="event in recentEvents" :key="`${event.kind}-${event.id}`">
-        <ion-icon slot="start" :icon="eventIcon(event)" />
-        <ion-label>
-          <h2>{{ eventTitle(event) }}</h2>
-          <p>{{ eventMeta(event) }}</p>
-        </ion-label>
-      </ion-item>
-    </ion-list>
   </ion-content>
 </template>
 
@@ -362,6 +378,10 @@ function fmtCost(n: number): string {
 
 .soon-text {
   color: var(--ion-color-tertiary);
+}
+
+.quick-actions {
+  padding-bottom: 0;
 }
 
 .stat-card {

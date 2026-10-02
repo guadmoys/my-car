@@ -19,6 +19,7 @@ import {
   IonNote,
   IonSelect,
   IonSelectOption,
+  IonTextarea,
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
@@ -139,6 +140,18 @@ function handleSave() {
     </ion-header>
     <ion-content>
       <ion-list inset>
+        <ion-item>
+          <ion-input
+            v-model="amount"
+            :label="`Сумма, ${currency}`"
+            label-placement="stacked"
+            inputmode="decimal"
+            placeholder="0"
+            :autofocus="!props.expense"
+            enterkeyhint="next"
+            class="amount-input"
+          />
+        </ion-item>
         <ion-item lines="full">
           <ion-label class="ion-text-wrap">
             <p>Категория</p>
@@ -155,11 +168,8 @@ function handleSave() {
             </div>
           </ion-label>
         </ion-item>
-        <ion-item>
-          <ion-input v-model="title" label="Название (необязательно)" label-placement="stacked" :placeholder="EXPENSE_CATEGORY_LABELS[category]" />
-        </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="amount" :label="`Сумма, ${currency}`" label-placement="stacked" inputmode="decimal" placeholder="0" />
+          <ion-input v-model="title" label="Название (необязательно)" label-placement="stacked" :placeholder="EXPENSE_CATEGORY_LABELS[category]" enterkeyhint="done" />
         </ion-item>
       </ion-list>
 
@@ -177,13 +187,19 @@ function handleSave() {
           <ion-item>
             <ion-input
               v-model="item.name"
-              label="Название"
-              label-placement="stacked"
-              :placeholder="item.kind === 'labor' ? 'Например, покраска бампера' : item.kind === 'part' ? 'Например, бампер передний' : '—'"
+              aria-label="Название"
+              :placeholder="item.kind === 'labor' ? 'Например, покраска бампера' : item.kind === 'part' ? 'Например, бампер передний' : 'Название'"
+              enterkeyhint="next"
             />
-          </ion-item>
-          <ion-item>
-            <ion-input v-model="item.amount" :label="`Стоимость, ${currency}`" label-placement="stacked" inputmode="decimal" placeholder="0" />
+            <ion-input
+              v-model="item.amount"
+              slot="end"
+              class="item-amount"
+              :aria-label="`Стоимость, ${currency}`"
+              inputmode="decimal"
+              :placeholder="currency"
+              enterkeyhint="next"
+            />
           </ion-item>
         </template>
         <ion-item lines="none" class="add-row">
@@ -225,7 +241,7 @@ function handleSave() {
 
       <ion-list inset>
         <ion-item lines="none">
-          <ion-input v-model="note" label="Комментарий (необязательно)" label-placement="stacked" placeholder="—" />
+          <ion-textarea v-model="note" label="Комментарий (необязательно)" label-placement="stacked" placeholder="—" :auto-grow="true" />
         </ion-item>
       </ion-list>
 
@@ -240,6 +256,17 @@ function handleSave() {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 6px;
+}
+
+.amount-input {
+  --padding-top: 4px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.item-amount {
+  max-width: 110px;
+  text-align: right;
 }
 
 .add-row ion-button {
