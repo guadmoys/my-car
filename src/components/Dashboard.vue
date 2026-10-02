@@ -46,6 +46,7 @@ import type {
   ComponentType,
   Expense,
   ExpenseCategory,
+  ExpenseItem,
   CarDocument,
   DocumentType,
   FuelEntry,
@@ -321,6 +322,7 @@ async function handleSaveExpense(payload: {
   date: number
   note?: string
   receiptPhoto?: string
+  items?: ExpenseItem[]
 }) {
   await submitOnce(async () => {
     const isNew = !editingExpense.value || editingExpense.value === 'new'

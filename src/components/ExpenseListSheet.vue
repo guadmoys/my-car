@@ -19,8 +19,8 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { add, alertCircleOutline, carSportOutline, cardOutline, receiptOutline, shieldCheckmarkOutline, walletOutline } from 'ionicons/icons'
-import { EXPENSE_CATEGORY_LABELS, type Expense, type ExpenseCategory } from '../types'
+import { add, alertCircleOutline, buildOutline, carSportOutline, cardOutline, receiptOutline, shieldCheckmarkOutline, walletOutline } from 'ionicons/icons'
+import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS, type Expense, type ExpenseCategory } from '../types'
 
 const props = defineProps<{
   expenses: Expense[]
@@ -47,6 +47,31 @@ const filteredExpenses = computed(() => {
   })
 })
 
+interface MonthGroup {
+  key: string
+  label: string
+  expenses: Expense[]
+  total: number
+}
+
+/** Chronological, newest first, split only by month headers. */
+const months = computed<MonthGroup[]>(() => {
+  const sorted = [...filteredExpenses.value].sort((a, b) => b.date - a.date)
+  const result: MonthGroup[] = []
+  for (const e of sorted) {
+    const d = new Date(e.date)
+    const key = `${d.getFullYear()}-${d.getMonth()}`
+    let group = result[result.length - 1]
+    if (!group || group.key !== key) {
+      group = { key, label: d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }), expenses: [], total: 0 }
+      result.push(group)
+    }
+    group.expenses.push(e)
+    group.total += e.amount
+  }
+  return result
+})
+
 const isFiltered = computed(() => query.value.trim() !== '' || category.value !== 'all')
 const filteredTotal = computed(() => filteredExpenses.value.reduce((sum, e) => sum + e.amount, 0))
 const categoryOptions = Object.entries(EXPENSE_CATEGORY_LABELS) as [ExpenseCategory, string][]
@@ -59,6 +84,7 @@ const CATEGORY_ICONS: Record<ExpenseCategory, string> = {
   fine: alertCircleOutline,
   tax: receiptOutline,
   loan: cardOutline,
+  damage: buildOutline,
   other: walletOutline,
 }
 
@@ -107,13 +133,19 @@ function fmtDate(ts: number): string {
         </ion-item>
       </ion-list>
 
-      <ion-list inset>
-        <ion-list-header v-if="filteredExpenses.length > 0">Записи</ion-list-header>
-        <ion-item v-for="e in filteredExpenses" :key="e.id" button :detail="false" @click="emit('edit', e)">
+      <ion-list v-for="month in months" :key="month.key" inset>
+        <ion-list-header>
+          <ion-label class="month-label">{{ month.label }}</ion-label>
+          <ion-note>{{ fmt(month.total) }}</ion-note>
+        </ion-list-header>
+        <ion-item v-for="e in month.expenses" :key="e.id" button :detail="false" @click="emit('edit', e)">
           <ion-icon slot="start" :icon="CATEGORY_ICONS[e.category]" color="medium" />
-          <ion-label>
+          <ion-label class="ion-text-wrap">
             <h2>{{ e.title || EXPENSE_CATEGORY_LABELS[e.category] }}</h2>
-            <p>{{ fmtDate(e.date) }}</p>
+            <p>{{ fmtDate(e.date) }} · {{ EXPENSE_CATEGORY_LABELS[e.category] }}</p>
+            <p v-for="item in e.items ?? []" :key="item.id">
+              {{ EXPENSE_ITEM_KIND_LABELS[item.kind] }}: {{ item.name || '—' }} — {{ fmt(item.amount) }}
+            </p>
           </ion-label>
           <ion-note slot="end">{{ fmt(e.amount) }}</ion-note>
           <ion-button
@@ -125,7 +157,9 @@ function fmtDate(ts: number): string {
             {{ confirmingDeleteId === e.id ? 'Точно?' : 'Удалить' }}
           </ion-button>
         </ion-item>
-        <ion-item v-if="filteredExpenses.length === 0" lines="none">
+      </ion-list>
+      <ion-list v-if="months.length === 0" inset>
+        <ion-item lines="none">
           <ion-label color="medium">{{ expenses.length === 0 ? 'Записей пока нет' : 'Ничего не найдено — измените запрос или категорию' }}</ion-label>
         </ion-item>
       </ion-list>
@@ -137,3 +171,9 @@ function fmtDate(ts: number): string {
     </ion-content>
   </ion-modal>
 </template>
+
+<style scoped>
+.month-label {
+  text-transform: capitalize;
+}
+</style>

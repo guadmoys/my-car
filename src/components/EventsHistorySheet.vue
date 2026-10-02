@@ -21,8 +21,8 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { construct, searchOutline, water } from 'ionicons/icons'
-import type { TimelineEvent } from '../types'
+import { construct, searchOutline, walletOutline, water } from 'ionicons/icons'
+import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS, type TimelineEvent } from '../types'
 
 const props = defineProps<{
   events: TimelineEvent[]
@@ -33,11 +33,6 @@ const emit = defineEmits<{
 }>()
 
 type EventFilter = 'all' | TimelineEvent['kind']
-
-const CATEGORY_LABELS: Record<TimelineEvent['kind'], string> = {
-  fuel: 'Заправки',
-  service: 'ТО',
-}
 
 const filter = ref<EventFilter>('all')
 const query = ref('')
@@ -61,52 +56,69 @@ function periodStart(p: Period): number {
 }
 
 function searchText(e: TimelineEvent): string {
-  const parts: (string | number | undefined)[] =
-    e.kind === 'fuel'
-      ? [e.entry.station, e.entry.comment, e.entry.fuelType, 'заправка']
-      : [e.entry.itemName, e.entry.note, 'то']
-  parts.push(e.mileage, e.entry.cost)
-  return parts.filter((p) => p !== undefined).join(' ').toLowerCase()
+  const parts: (string | number | null | undefined)[] = [e.mileage]
+  if (e.kind === 'fuel') parts.push(e.entry.station, e.entry.comment, e.entry.fuelType, 'заправка', e.entry.cost)
+  else if (e.kind === 'service') parts.push(e.entry.itemName, e.entry.note, 'то', e.entry.cost)
+  else {
+    parts.push(e.entry.title, EXPENSE_CATEGORY_LABELS[e.entry.category], e.entry.note, 'расход', e.entry.amount)
+    for (const item of e.entry.items ?? []) parts.push(item.name)
+  }
+  return parts.filter((p) => p !== undefined && p !== null).join(' ').toLowerCase()
 }
 
 const filteredEvents = computed(() => {
   const q = query.value.trim().toLowerCase()
   const from = periodStart(period.value)
-  return props.events.filter((e) => e.date >= from && (!q || searchText(e).includes(q)))
+  return props.events.filter(
+    (e) => (filter.value === 'all' || e.kind === filter.value) && e.date >= from && (!q || searchText(e).includes(q)),
+  )
 })
 
 const fuelCount = computed(() => props.events.filter((e) => e.kind === 'fuel').length)
 const serviceCount = computed(() => props.events.filter((e) => e.kind === 'service').length)
+const expenseCount = computed(() => props.events.filter((e) => e.kind === 'expense').length)
 
-interface EventGroup {
-  kind: TimelineEvent['kind']
+interface MonthGroup {
+  key: string
   label: string
   events: TimelineEvent[]
 }
 
-const groups = computed<EventGroup[]>(() => {
-  const kinds: TimelineEvent['kind'][] = filter.value === 'all' ? ['fuel', 'service'] : [filter.value]
-  return kinds
-    .map((kind) => ({
-      kind,
-      label: CATEGORY_LABELS[kind],
-      events: filteredEvents.value.filter((e) => e.kind === kind),
-    }))
-    .filter((group) => group.events.length > 0)
+/** One chronological feed (newest first), split only by month headers. */
+const months = computed<MonthGroup[]>(() => {
+  const sorted = [...filteredEvents.value].sort((a, b) => b.date - a.date)
+  const result: MonthGroup[] = []
+  for (const event of sorted) {
+    const d = new Date(event.date)
+    const key = `${d.getFullYear()}-${d.getMonth()}`
+    let group = result[result.length - 1]
+    if (!group || group.key !== key) {
+      group = { key, label: d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }), events: [] }
+      result.push(group)
+    }
+    group.events.push(event)
+  }
+  return result
 })
 
 function eventIcon(event: TimelineEvent): string {
+  if (event.kind === 'expense') return walletOutline
   return event.kind === 'fuel' ? water : construct
 }
 
 function eventTitle(event: TimelineEvent): string {
   if (event.kind === 'fuel') return `Заправка · ${fmt(event.entry.liters)} л`
+  if (event.kind === 'expense') return event.entry.title || EXPENSE_CATEGORY_LABELS[event.entry.category]
   return event.entry.itemName
 }
 
+function eventCost(event: TimelineEvent): number | undefined {
+  return event.kind === 'expense' ? event.entry.amount : event.entry.cost
+}
+
 function eventMeta(event: TimelineEvent): string {
-  const parts = [fmt(event.mileage) + ' км', fmtDate(event.date)]
-  if (event.entry.cost !== undefined) parts.push(fmtCost(event.entry.cost))
+  const parts = event.mileage === null ? [fmtDate(event.date)] : [fmt(event.mileage) + ' км', fmtDate(event.date)]
+  if (event.kind === 'expense') parts.push(EXPENSE_CATEGORY_LABELS[event.entry.category])
   return parts.join(' · ')
 }
 
@@ -143,6 +155,9 @@ function fmtDate(ts: number): string {
           <ion-segment-button value="service" :disabled="serviceCount === 0">
             <ion-label>ТО</ion-label>
           </ion-segment-button>
+          <ion-segment-button value="expense" :disabled="expenseCount === 0">
+            <ion-label>Прочее</ion-label>
+          </ion-segment-button>
         </ion-segment>
       </ion-toolbar>
       <ion-toolbar>
@@ -157,21 +172,28 @@ function fmtDate(ts: number): string {
           </ion-select>
         </ion-item>
       </ion-list>
-      <ion-list v-for="group in groups" :key="group.kind" inset>
-        <ion-list-header v-if="filter === 'all'">
-          <ion-label>{{ group.label }}</ion-label>
-          <ion-note>{{ group.events.length }}</ion-note>
+      <ion-list v-for="month in months" :key="month.key" inset>
+        <ion-list-header>
+          <ion-label class="month-label">{{ month.label }}</ion-label>
+          <ion-note>{{ month.events.length }}</ion-note>
         </ion-list-header>
-        <ion-item v-for="event in group.events" :key="`${event.kind}-${event.id}`">
+        <ion-item v-for="event in month.events" :key="`${event.kind}-${event.id}`">
           <ion-icon slot="start" :icon="eventIcon(event)" />
-          <ion-label>
+          <ion-label class="ion-text-wrap">
             <h2>{{ eventTitle(event) }}</h2>
             <p>{{ eventMeta(event) }}</p>
+            <template v-if="event.kind === 'expense' && event.entry.items?.length">
+              <p v-for="item in event.entry.items" :key="item.id">
+                {{ EXPENSE_ITEM_KIND_LABELS[item.kind] }}: {{ item.name }} — {{ fmtCost(item.amount) }}
+              </p>
+            </template>
             <p v-if="event.kind === 'service' && event.entry.note" class="event-note">{{ event.entry.note }}</p>
+            <p v-if="event.kind === 'expense' && event.entry.note" class="event-note">{{ event.entry.note }}</p>
           </ion-label>
+          <ion-note v-if="eventCost(event) !== undefined" slot="end">{{ fmtCost(eventCost(event) as number) }}</ion-note>
         </ion-item>
       </ion-list>
-      <ion-list v-if="groups.length === 0" inset>
+      <ion-list v-if="months.length === 0" inset>
         <ion-item>
           <ion-icon slot="start" :icon="searchOutline" color="medium" />
           <ion-label color="medium">{{ events.length === 0 ? 'Пока нет событий' : 'Ничего не найдено — измените запрос или период' }}</ion-label>
@@ -182,6 +204,10 @@ function fmtDate(ts: number): string {
 </template>
 
 <style scoped>
+.month-label {
+  text-transform: capitalize;
+}
+
 .event-note {
   white-space: pre-line;
 }

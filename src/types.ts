@@ -164,7 +164,7 @@ export interface FuelEntry {
 }
 
 /** Non-fuel, non-service running cost — the categories a car owner pays for besides gas and repairs. */
-export type ExpenseCategory = 'insurance' | 'parking' | 'fine' | 'tax' | 'loan' | 'other'
+export type ExpenseCategory = 'insurance' | 'parking' | 'fine' | 'tax' | 'loan' | 'damage' | 'other'
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   insurance: 'Страховка',
@@ -172,6 +172,7 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   fine: 'Штраф',
   tax: 'Налог/ОСАГО/техосмотр',
   loan: 'Кредит/лизинг',
+  damage: 'Ущерб/ремонт',
   other: 'Другое',
 }
 
@@ -182,6 +183,23 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
  * this expense needs renewing/repeating (e.g. a policy's end date) — used
  * to drive a due/soon reminder the same way MaintenanceItem/Reminder do.
  */
+/** What a line of an expense's breakdown pays for. */
+export type ExpenseItemKind = 'part' | 'labor' | 'other'
+
+export const EXPENSE_ITEM_KIND_LABELS: Record<ExpenseItemKind, string> = {
+  part: 'Деталь',
+  labor: 'Работа',
+  other: 'Другое',
+}
+
+/** One line of an expense's optional breakdown (a part, a job, ...). Lines are informational: Expense.amount stays the total. */
+export interface ExpenseItem {
+  id: string
+  kind: ExpenseItemKind
+  name: string
+  amount: number
+}
+
 export interface Expense {
   id: string
   carId: string
@@ -195,6 +213,8 @@ export interface Expense {
   note?: string
   /** Photo of the receipt/invoice, as a compressed data URL. */
   receiptPhoto?: string
+  /** Optional breakdown of `amount` into parts, labor, etc. */
+  items?: ExpenseItem[]
 }
 
 export interface ExpenseStatus {
@@ -315,10 +335,11 @@ export interface CostForecast {
   total: number
 }
 
-/** A fuel fill-up or a completed maintenance item, merged into one date-sorted feed for the home screen. */
+/** A fuel fill-up, a completed maintenance item or another expense, merged into one date-sorted feed for the home screen. */
 export type TimelineEvent =
   | { kind: 'fuel'; id: string; date: number; mileage: number; entry: FuelEntry }
   | { kind: 'service'; id: string; date: number; mileage: number; entry: HistoryEntry }
+  | { kind: 'expense'; id: string; date: number; mileage: null; entry: Expense }
 
 export interface BackupData {
   version: 2

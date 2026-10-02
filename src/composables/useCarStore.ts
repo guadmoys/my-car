@@ -13,6 +13,7 @@ import type {
   CostForecast,
   Expense,
   ExpenseCategory,
+  ExpenseItem,
   FuelConsumption,
   FuelEntry,
   FuelInsight,
@@ -598,6 +599,7 @@ async function addExpense(input: {
   date?: number
   note?: string
   receiptPhoto?: string
+  items?: ExpenseItem[]
 }): Promise<void> {
   if (!car.value) return
   const expense: Expense = {
@@ -609,6 +611,7 @@ async function addExpense(input: {
     date: input.date ?? nowTs(),
     note: input.note?.trim() || undefined,
     receiptPhoto: input.receiptPhoto,
+    items: input.items?.length ? input.items : undefined,
   }
   expenses.unshift(expense)
   await db.putExpense(expense)
@@ -623,6 +626,7 @@ async function updateExpense(
     date: number
     note?: string
     receiptPhoto?: string
+    items?: ExpenseItem[]
   },
 ): Promise<void> {
   const expense = expenses.find((e) => e.id === id)
@@ -633,6 +637,7 @@ async function updateExpense(
   expense.date = patch.date
   expense.note = patch.note?.trim() || undefined
   expense.receiptPhoto = patch.receiptPhoto
+  expense.items = patch.items?.length ? patch.items : undefined
   await db.putExpense({ ...expense })
 }
 
@@ -1405,7 +1410,7 @@ const monthDistanceKm = computed<number | null>(() => {
   return Math.max(0, car.value.currentMileage - baseline.mileage)
 })
 
-/** Fuel fill-ups and completed maintenance, merged into one date-sorted feed. */
+/** Fuel fill-ups, completed maintenance and other expenses, merged into one date-sorted feed. */
 const timelineEvents = computed<TimelineEvent[]>(() => {
   const fuel: TimelineEvent[] = fuelEntries.map((e) => ({
     kind: 'fuel',
@@ -1421,7 +1426,14 @@ const timelineEvents = computed<TimelineEvent[]>(() => {
     mileage: h.mileage,
     entry: h,
   }))
-  return [...fuel, ...service].sort((a, b) => b.date - a.date)
+  const other: TimelineEvent[] = expenses.map((e) => ({
+    kind: 'expense',
+    id: e.id,
+    date: e.date,
+    mileage: null,
+    entry: e,
+  }))
+  return [...fuel, ...service, ...other].sort((a, b) => b.date - a.date)
 })
 
 const totalFuelCost = computed(() =>

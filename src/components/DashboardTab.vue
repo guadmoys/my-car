@@ -20,8 +20,8 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { add, alarmOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, water } from 'ionicons/icons'
-import { DOCUMENT_TYPE_LABELS } from '../types'
+import { add, alarmOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, walletOutline, water } from 'ionicons/icons'
+import { DOCUMENT_TYPE_LABELS, EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Car, DocumentStatus, MaintenanceStatus, ReminderStatus, TimelineEvent } from '../types'
 import { expiryLabel, statusColor } from '../utils/documents'
 import SummaryCard from './SummaryCard.vue'
@@ -59,17 +59,20 @@ const monthName = computed(() =>
 )
 
 function eventIcon(event: TimelineEvent): string {
+  if (event.kind === 'expense') return walletOutline
   return event.kind === 'fuel' ? water : construct
 }
 
 function eventTitle(event: TimelineEvent): string {
   if (event.kind === 'fuel') return `Заправка · ${fmt(event.entry.liters)} л`
+  if (event.kind === 'expense') return event.entry.title || EXPENSE_CATEGORY_LABELS[event.entry.category]
   return event.entry.itemName
 }
 
 function eventMeta(event: TimelineEvent): string {
-  const parts = [fmt(event.mileage) + ' км', fmtDate(event.date)]
-  if (event.entry.cost !== undefined) parts.push(fmtCost(event.entry.cost))
+  const parts = event.mileage === null ? [fmtDate(event.date)] : [fmt(event.mileage) + ' км', fmtDate(event.date)]
+  const cost = event.kind === 'expense' ? event.entry.amount : event.entry.cost
+  if (cost !== undefined) parts.push(fmtCost(cost))
   return parts.join(' · ')
 }
 
