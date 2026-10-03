@@ -310,7 +310,7 @@ async function markServiced(
   cost?: number,
   receiptPhoto?: string,
   date?: number,
-  items?: ExpenseItem[],
+  breakdown?: ExpenseItem[],
 ): Promise<MarkServicedResult | null> {
   const item = items.find((i) => i.id === id)
   if (!item || !car.value) return null
@@ -327,7 +327,7 @@ async function markServiced(
     date: serviceDate,
     cost,
     receiptPhoto,
-    items: items?.length ? items : undefined,
+    items: breakdown?.length ? breakdown : undefined,
   }
 
   item.lastServiceMileage = mileage
