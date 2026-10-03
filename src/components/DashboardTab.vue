@@ -194,28 +194,20 @@ function fmtCost(n: number): string {
       @switch-car="emit('switchCar')"
     />
 
-    <ion-grid class="quick-actions">
-      <ion-row>
-        <ion-col>
-          <ion-button expand="block" size="default" @click="emit('quickFuel')">
-            <ion-icon slot="start" :icon="water" />
-            Заправка
-          </ion-button>
-        </ion-col>
-        <ion-col>
-          <ion-button expand="block" fill="outline" @click="emit('editMileage')">
-            <ion-icon slot="start" :icon="speedometerOutline" />
-            Пробег
-          </ion-button>
-        </ion-col>
-        <ion-col>
-          <ion-button expand="block" fill="outline" @click="emit('quickExpense')">
-            <ion-icon slot="start" :icon="cashOutline" />
-            Расход
-          </ion-button>
-        </ion-col>
-      </ion-row>
-    </ion-grid>
+    <div class="quick-actions">
+      <ion-button @click="emit('quickFuel')">
+        <ion-icon slot="start" :icon="water" />
+        Заправка
+      </ion-button>
+      <ion-button fill="outline" @click="emit('editMileage')">
+        <ion-icon slot="start" :icon="speedometerOutline" />
+        Пробег
+      </ion-button>
+      <ion-button fill="outline" @click="emit('quickExpense')">
+        <ion-icon slot="start" :icon="cashOutline" />
+        Расход
+      </ion-button>
+    </div>
 
     <ion-list v-if="priorityAction.kind !== 'ok'" inset>
       <ion-list-header>Сделать сейчас</ion-list-header>
@@ -378,7 +370,7 @@ function fmtCost(n: number): string {
         <ion-icon slot="start" :icon="shieldCheckmarkOutline" :color="w.remainingDays <= 30 ? 'warning' : 'medium'" />
         <ion-label>
           <h2>{{ w.name }}</h2>
-          <p>{{ w.source }} · до {{ fmtDate(w.endsAt) }}</p>
+          <p>{{ w.source }} · до {{ new Date(w.endsAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) }}</p>
         </ion-label>
         <ion-note slot="end" :color="w.remainingDays <= 30 ? 'warning' : undefined">{{ w.remainingDays }} дн.</ion-note>
       </ion-item>
@@ -424,7 +416,18 @@ function fmtCost(n: number): string {
 }
 
 .quick-actions {
-  padding-bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 0;
+}
+
+.quick-actions ion-button {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  text-transform: none;
+  --padding-start: 6px;
+  --padding-end: 6px;
 }
 
 .stat-card {

@@ -631,7 +631,16 @@ function handleCsvFileSelected(event: Event) {
           </ion-segment-button>
         </ion-segment>
       </ion-item>
-      <ion-item>
+      <ion-item lines="none">
+        <ion-select label="Валюта" :value="currency" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }" @ionChange="selectCurrency">
+          <ion-select-option v-for="c in CURRENCY_OPTIONS" :key="c.value" :value="c.value">{{ c.label }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+    </ion-list>
+
+    <ion-list inset>
+      <ion-list-header>Бюджет</ion-list-header>
+      <ion-item lines="none">
         <ion-input
           :value="monthlyBudget ?? ''"
           :label="`Бюджет на месяц, ${currency}`"
@@ -641,11 +650,6 @@ function handleCsvFileSelected(event: Event) {
           placeholder="Не задан"
           @ion-change="(e: InputCustomEvent) => setMonthlyBudget(Number(String(e.detail.value ?? '').replace(/\s/g, '').replace(',', '.')) || null)"
         />
-      </ion-item>
-      <ion-item lines="none">
-        <ion-select label="Валюта" :value="currency" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }" @ionChange="selectCurrency">
-          <ion-select-option v-for="c in CURRENCY_OPTIONS" :key="c.value" :value="c.value">{{ c.label }}</ion-select-option>
-        </ion-select>
       </ion-item>
     </ion-list>
 

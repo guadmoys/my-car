@@ -70,6 +70,23 @@ longer carry renewal dates. `migrateLegacyToDocuments` (`utils/documents.ts`) is
 and moves the legacy `Car.stsNumber`/`Car.photos`/`Expense.renewalDate` on startup and on
 import of old backups — don't reintroduce those fields in the UI.
 
+## Expenses, breakdowns & money features
+
+- **Chronological feeds.** «Все события» (`EventsHistorySheet`) and «Прочие расходы» (`ExpenseListSheet`)
+  are one newest-first list split only by month headers (`utils/monthLabel.ts`) — never regrouped by kind.
+  `TimelineEvent` has three kinds: `fuel`, `service`, `expense` (expenses have `mileage: null`).
+- **Breakdown (`ExpenseItem`: part / labor / other).** Optional `items` on `Expense` and `HistoryEntry`;
+  the total (`amount`/`cost`) stays the source of truth and the lines are informational. Edited through the
+  shared `CostBreakdownEditor.vue` (expense form, ТО edit, «Выполнено»); a part can carry `warrantyMonths`.
+  `utils/costStructure.ts` powers «Куда уходят деньги», `utils/expensesCsv.ts` the full CSV export, and the PDF
+  report prints the lines too.
+- **Recurring expenses.** `Expense.recurrence` lives only on the newest entry of a series;
+  `utils/recurring.ts` (`materializeRecurring`, idempotent) creates owed entries on load and after each save.
+- **Budget** is a per-device monthly limit (`utils/budget.ts`, localStorage, set in Settings → Бюджет), shown on
+  the home screen. **Warranties** (`utils/warranty.ts`) and **master stats** (`utils/masterStats.ts`, via
+  `masterId` on expenses/ТО and `MasterPicker.vue`) are derived, never stored. Damage photos use
+  `Expense.photos` + `PhotoGalleryField.vue`.
+
 ## Feedback & state
 
 - Every meaningful state-changing tap still gets a haptic via `src/utils/haptics.ts`

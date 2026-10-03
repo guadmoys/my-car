@@ -19,8 +19,9 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { add, alertCircleOutline, buildOutline, carSportOutline, cardOutline, receiptOutline, shieldCheckmarkOutline, walletOutline } from 'ionicons/icons'
+import { add, alertCircleOutline, buildOutline, trashOutline, carSportOutline, cardOutline, receiptOutline, shieldCheckmarkOutline, walletOutline } from 'ionicons/icons'
 import { EXPENSE_CATEGORY_LABELS, type Expense, type ExpenseCategory } from '../types'
+import { monthLabel } from '../utils/monthLabel'
 import { itemLine } from '../utils/expenseItems'
 import { useCarStore } from '../composables/useCarStore'
 
@@ -70,7 +71,7 @@ const months = computed<MonthGroup[]>(() => {
     const key = `${d.getFullYear()}-${d.getMonth()}`
     let group = result[result.length - 1]
     if (!group || group.key !== key) {
-      group = { key, label: d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }), expenses: [], total: 0 }
+      group = { key, label: monthLabel(e.date), expenses: [], total: 0 }
       result.push(group)
     }
     group.expenses.push(e)
@@ -142,14 +143,14 @@ function fmtDate(ts: number): string {
 
       <ion-list v-for="month in months" :key="month.key" inset>
         <ion-list-header>
-          <ion-label class="month-label">{{ month.label }}</ion-label>
-          <ion-note>{{ fmt(month.total) }}</ion-note>
+          <ion-label>{{ month.label }}</ion-label>
+          <ion-note class="month-note">{{ fmt(month.total) }}</ion-note>
         </ion-list-header>
         <ion-item v-for="e in month.expenses" :key="e.id" button :detail="false" @click="emit('edit', e)">
           <ion-icon slot="start" :icon="CATEGORY_ICONS[e.category]" color="medium" />
           <ion-label class="ion-text-wrap">
             <h2>{{ e.title || EXPENSE_CATEGORY_LABELS[e.category] }}</h2>
-            <p>{{ fmtDate(e.date) }} · {{ EXPENSE_CATEGORY_LABELS[e.category] }}</p>
+            <p>{{ fmtDate(e.date) }}<template v-if="e.title"> · {{ EXPENSE_CATEGORY_LABELS[e.category] }}</template></p>
             <p v-for="item in e.items ?? []" :key="item.id">{{ itemLine(item, fmt) }}</p>
             <p v-if="e.recurrence || e.photos?.length || e.masterId">
               <template v-if="e.recurrence">↻ {{ e.recurrence.every === 'month' ? 'каждый месяц' : 'каждый год' }}</template>
@@ -161,10 +162,13 @@ function fmtDate(ts: number): string {
           <ion-button
             slot="end"
             fill="clear"
+            size="small"
             :color="confirmingDeleteId === e.id ? 'danger' : 'medium'"
+            :aria-label="confirmingDeleteId === e.id ? 'Подтвердить удаление' : 'Удалить'"
             @click.stop="handleDeleteClick(e.id)"
           >
-            {{ confirmingDeleteId === e.id ? 'Точно?' : 'Удалить' }}
+            <template v-if="confirmingDeleteId === e.id">Точно?</template>
+            <ion-icon v-else slot="icon-only" :icon="trashOutline" />
           </ion-button>
         </ion-item>
       </ion-list>
@@ -183,7 +187,7 @@ function fmtDate(ts: number): string {
 </template>
 
 <style scoped>
-.month-label {
-  text-transform: capitalize;
+.month-note {
+  margin-inline-end: 16px;
 }
 </style>

@@ -1,3 +1,4 @@
+import { EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Expense, HistoryEntry } from '../types'
 
 export interface WarrantyStatus {
@@ -19,7 +20,7 @@ function addMonths(ts: number, months: number): number {
 /** Parts still under warranty, soonest to expire first. Expired warranties are dropped. */
 export function buildWarranties(
   history: Pick<HistoryEntry, 'id' | 'date' | 'itemName' | 'items'>[],
-  expenses: Pick<Expense, 'id' | 'date' | 'title' | 'items'>[],
+  expenses: Pick<Expense, 'id' | 'date' | 'title' | 'category' | 'items'>[],
   now: number,
 ): WarrantyStatus[] {
   const result: WarrantyStatus[] = []
@@ -38,6 +39,6 @@ export function buildWarranties(
     }
   }
   for (const h of history) push(h.id, h.date, h.itemName, h.items)
-  for (const e of expenses) push(e.id, e.date, e.title || 'Расход', e.items)
+  for (const e of expenses) push(e.id, e.date, e.title || EXPENSE_CATEGORY_LABELS[e.category], e.items)
   return result.sort((a, b) => a.endsAt - b.endsAt)
 }

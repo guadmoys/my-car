@@ -23,6 +23,7 @@ import {
 } from '@ionic/vue'
 import { construct, searchOutline, walletOutline, water } from 'ionicons/icons'
 import { EXPENSE_CATEGORY_LABELS, type TimelineEvent } from '../types'
+import { monthLabel } from '../utils/monthLabel'
 import { itemLine } from '../utils/expenseItems'
 
 const props = defineProps<{
@@ -95,7 +96,7 @@ const months = computed<MonthGroup[]>(() => {
     const key = `${d.getFullYear()}-${d.getMonth()}`
     let group = result[result.length - 1]
     if (!group || group.key !== key) {
-      group = { key, label: d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }), events: [] }
+      group = { key, label: monthLabel(event.date), events: [] }
       result.push(group)
     }
     group.events.push(event)
@@ -176,8 +177,8 @@ function fmtDate(ts: number): string {
       </ion-list>
       <ion-list v-for="month in months" :key="month.key" inset>
         <ion-list-header>
-          <ion-label class="month-label">{{ month.label }}</ion-label>
-          <ion-note>{{ month.events.length }}</ion-note>
+          <ion-label>{{ month.label }}</ion-label>
+          <ion-note class="month-note">{{ month.events.length }}</ion-note>
         </ion-list-header>
         <ion-item v-for="event in month.events" :key="`${event.kind}-${event.id}`">
           <ion-icon slot="start" :icon="eventIcon(event)" />
@@ -204,8 +205,8 @@ function fmtDate(ts: number): string {
 </template>
 
 <style scoped>
-.month-label {
-  text-transform: capitalize;
+.month-note {
+  margin-inline-end: 16px;
 }
 
 .event-note {
