@@ -148,6 +148,6 @@ import of old backups — don't reintroduce those fields in the UI.
   `useCarStore` (all data), `useToast` (undo/notices), `haptics.ts`, `ics.ts` (calendar
   export). Icons come from `ionicons/icons` (`import { xOutline } from 'ionicons/icons'`)
   — don't hand-draw a new inline SVG glyph or reach for emoji where a real Ionicon fits.
-- Run `npm run typecheck` before considering any change done — the project has no test
-  suite, so type-checking + manual verification (dev server + Playwright screenshots) is
-  the bar.
+- Run `npm run typecheck` and `npm test` (vitest; pure utils plus the store against
+  `fake-indexeddb`) before considering any change done, then verify UI changes manually
+  (dev server + Playwright screenshots). Fix a bug together with a test that fails without it.

@@ -2,6 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { currency } from '../utils/currency'
 import { dailySnapshotDue, saveSnapshot } from '../utils/autoBackup'
 import { monthlyBudget, setMonthlyBudget } from '../utils/budget'
+import { addMonthsClamped } from '../utils/dates'
 import { materializeRecurring } from '../utils/recurring'
 import { documentStatuses as buildDocumentStatuses, migrateLegacyToDocuments } from '../utils/documents'
 import type {
@@ -201,6 +202,7 @@ async function createCar(input: {
   expenses.splice(0, expenses.length)
   componentChecks.splice(0, componentChecks.length)
   trips.splice(0, trips.length)
+  documents.splice(0, documents.length)
 }
 
 async function deleteCar(carId: string): Promise<void> {
@@ -227,6 +229,7 @@ async function deleteCar(carId: string): Promise<void> {
     expenses.splice(0, expenses.length)
     componentChecks.splice(0, componentChecks.length)
     trips.splice(0, trips.length)
+    documents.splice(0, documents.length)
   }
 }
 
@@ -647,20 +650,29 @@ async function updateExpense(id: string, patch: ExpensePayload): Promise<void> {
   await applyRecurringExpenses()
 }
 
+// Serialises runs so a save and a car load can't both see the same head and
+// each create the entries it owes.
+let recurringQueue: Promise<unknown> = Promise.resolve()
+
 /** Creates the entries that repeating expenses owe up to now (see utils/recurring.ts). */
-async function applyRecurringExpenses(): Promise<number> {
-  const { updated, created } = materializeRecurring(expenses, nowTs(), makeId)
-  if (created.length === 0) return 0
-  for (const head of updated) {
-    const live = expenses.find((e) => e.id === head.id)
-    if (live) live.recurrence = undefined
-    await db.putExpense({ ...head })
+function applyRecurringExpenses(): Promise<number> {
+  const run = async (): Promise<number> => {
+    const { updated, created } = materializeRecurring(expenses, nowTs(), makeId)
+    if (created.length === 0) return 0
+    for (const head of updated) {
+      const live = expenses.find((e) => e.id === head.id)
+      if (live) live.recurrence = undefined
+      await db.putExpense({ ...head })
+    }
+    for (const e of created) {
+      expenses.unshift(e)
+      await db.putExpense(e)
+    }
+    return created.length
   }
-  for (const e of created) {
-    expenses.unshift(e)
-    await db.putExpense(e)
-  }
-  return created.length
+  const next = recurringQueue.then(run, run)
+  recurringQueue = next.catch(() => undefined)
+  return next
 }
 
 async function deleteExpense(id: string): Promise<Expense | null> {
@@ -842,9 +854,7 @@ const totalPersonalKm = computed(() =>
 )
 
 function addMonths(ts: number, months: number): number {
-  const d = new Date(ts)
-  d.setMonth(d.getMonth() + months)
-  return d.getTime()
+  return addMonthsClamped(ts, months)
 }
 
 function stateRank(state: MaintenanceStatus['state']): number {
@@ -878,7 +888,7 @@ function statusFor(
   const dueAtMileage = item.lastServiceMileage + item.intervalKm
   const remainingKm = dueAtMileage - currentMileage
   const traveled = currentMileage - item.lastServiceMileage
-  const kmProgress = Math.min(1, Math.max(0, traveled / item.intervalKm))
+  const kmProgress = item.intervalKm > 0 ? Math.min(1, Math.max(0, traveled / item.intervalKm)) : 1
   const itemHistory = historyEntries.filter((h) => h.itemId === item.id)
   const kmSoonThreshold = adaptiveKmThreshold(
     item.intervalKm,
@@ -1173,12 +1183,15 @@ const fuelInsights = computed<FuelInsight[]>(() => {
   // negative one is almost always a typo, since consumption can't improve
   // that much between two fill-ups.
   if (validSegments.length >= 5) {
-    const values = validSegments.map((r) => r.litersPer100km as number)
+    // Judge the latest fill-up against the ones before it. Including it in its
+    // own baseline caps the z-score at sqrt(n-1), so with a handful of fill-ups
+    // even an extreme outlier could never reach the threshold.
+    const latest = validSegments[0].litersPer100km as number
+    const values = validSegments.slice(1).map((r) => r.litersPer100km as number)
     const mean = average(values)
     const variance = average(values.map((v) => (v - mean) ** 2))
     const stddev = Math.sqrt(variance)
     if (stddev > 0) {
-      const latest = validSegments[0].litersPer100km as number
       const z = (latest - mean) / stddev
       if (z >= 2) {
         insights.push({
@@ -1486,7 +1499,7 @@ function expectedServicesIn(days: number, dailyKm: number | null): number {
   for (const item of items) {
     if (item.intervalMonths) {
       count += days / (item.intervalMonths * MONTH_DAYS)
-    } else if (dailyKm !== null && dailyKm > 0) {
+    } else if (dailyKm !== null && dailyKm > 0 && item.intervalKm > 0) {
       count += (dailyKm * days) / item.intervalKm
     }
   }

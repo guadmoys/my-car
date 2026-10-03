@@ -1,7 +1,9 @@
 import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS } from '../types'
 import type { ExpenseItem, TimelineEvent } from '../types'
 
-function esc(value: string): string {
+function esc(raw: string): string {
+  // A cell starting with = + - @ would run as a formula when opened in Excel/Sheets.
+  const value = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw
   return /["\n,;]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
 }
 

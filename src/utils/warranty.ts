@@ -1,4 +1,5 @@
 import { EXPENSE_CATEGORY_LABELS } from '../types'
+import { addMonthsClamped, calendarDaysBetween } from './dates'
 import type { Expense, HistoryEntry } from '../types'
 
 export interface WarrantyStatus {
@@ -7,14 +8,6 @@ export interface WarrantyStatus {
   source: string
   endsAt: number
   remainingDays: number
-}
-
-function addMonths(ts: number, months: number): number {
-  const d = new Date(ts)
-  const target = new Date(d.getFullYear(), d.getMonth() + months, 1)
-  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()
-  target.setDate(Math.min(d.getDate(), lastDay))
-  return target.getTime()
 }
 
 /** Parts still under warranty, soonest to expire first. Expired warranties are dropped. */
@@ -27,14 +20,16 @@ export function buildWarranties(
   const push = (id: string, date: number, source: string, items: Expense['items']) => {
     for (const item of items ?? []) {
       if (item.kind !== 'part' || !item.warrantyMonths || item.warrantyMonths <= 0) continue
-      const endsAt = addMonths(date, item.warrantyMonths)
-      if (endsAt < now) continue
+      const endsAt = addMonthsClamped(date, item.warrantyMonths)
+      // Valid through the whole last day, so compare calendar days, not instants.
+      const remainingDays = calendarDaysBetween(now, endsAt)
+      if (remainingDays < 0) continue
       result.push({
         key: `${id}-${item.id}`,
         name: item.name || 'Деталь',
         source,
         endsAt,
-        remainingDays: Math.ceil((endsAt - now) / 86400000),
+        remainingDays,
       })
     }
   }

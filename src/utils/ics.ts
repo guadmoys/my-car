@@ -1,8 +1,11 @@
-export function downloadIcsReminder(opts: { title: string; description?: string; dueAt: number }): void {
-  const dateStr = formatIcsDate(new Date(opts.dueAt))
-  const dateEndStr = formatIcsDate(new Date(opts.dueAt + 24 * 60 * 60 * 1000))
-  const stamp = formatIcsDateTime(new Date())
-  const uid = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}@moya-mashina`
+/** The .ics text for a one-day all-day reminder with a day-before alarm. */
+export function buildIcsReminder(opts: { title: string; description?: string; dueAt: number }, now = new Date()): string {
+  const due = new Date(opts.dueAt)
+  const dateStr = formatIcsDate(due)
+  // Next calendar day by date arithmetic: adding 24h lands on the same date on a 25-hour DST day.
+  const dateEndStr = formatIcsDate(new Date(due.getFullYear(), due.getMonth(), due.getDate() + 1))
+  const stamp = formatIcsDateTime(now)
+  const uid = `${now.getTime()}-${Math.random().toString(36).slice(2, 10)}@moya-mashina`
 
   const lines = [
     'BEGIN:VCALENDAR',
@@ -25,7 +28,11 @@ export function downloadIcsReminder(opts: { title: string; description?: string;
     'END:VCALENDAR',
   ].filter((line): line is string => line !== null)
 
-  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' })
+  return lines.join('\r\n')
+}
+
+export function downloadIcsReminder(opts: { title: string; description?: string; dueAt: number }): void {
+  const blob = new Blob([buildIcsReminder(opts)], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -48,5 +55,5 @@ function formatIcsDateTime(d: Date): string {
 }
 
 function escapeIcs(text: string): string {
-  return text.replace(/([,;])/g, '\\$1').replace(/\n/g, '\\n')
+  return text.replace(/([\\,;])/g, '\\$1').replace(/\r?\n/g, '\\n')
 }

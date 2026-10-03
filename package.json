@@ -1,7 +1,7 @@
 {
   "name": "my-car",
   "private": true,
-  "version": "2.6.0",
+  "version": "2.6.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.2",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^5.5.3",
     "vite": "^5.4.1",
     "vite-plugin-pwa": "^0.20.5",
