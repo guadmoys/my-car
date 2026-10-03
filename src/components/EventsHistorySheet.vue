@@ -63,6 +63,7 @@ function searchText(e: TimelineEvent): string {
     parts.push(e.entry.title, EXPENSE_CATEGORY_LABELS[e.entry.category], e.entry.note, 'расход', e.entry.amount)
     for (const item of e.entry.items ?? []) parts.push(item.name)
   }
+  if (e.kind === 'service') for (const item of e.entry.items ?? []) parts.push(item.name)
   return parts.filter((p) => p !== undefined && p !== null).join(' ').toLowerCase()
 }
 
@@ -182,7 +183,7 @@ function fmtDate(ts: number): string {
           <ion-label class="ion-text-wrap">
             <h2>{{ eventTitle(event) }}</h2>
             <p>{{ eventMeta(event) }}</p>
-            <template v-if="event.kind === 'expense' && event.entry.items?.length">
+            <template v-if="event.kind !== 'fuel' && event.entry.items?.length">
               <p v-for="item in event.entry.items" :key="item.id">
                 {{ EXPENSE_ITEM_KIND_LABELS[item.kind] }}: {{ item.name }} — {{ fmtCost(item.amount) }}
               </p>

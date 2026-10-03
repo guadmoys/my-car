@@ -18,7 +18,8 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import type { HistoryEntry } from '../types'
+import type { ExpenseItem, HistoryEntry } from '../types'
+import CostBreakdownEditor from './CostBreakdownEditor.vue'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
@@ -28,7 +29,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string }]
+  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[] }]
 }>()
 
 const itemName = ref(props.entry.itemName)
@@ -36,6 +37,7 @@ const mileage = ref(String(props.entry.mileage))
 const cost = ref(props.entry.cost !== undefined ? String(props.entry.cost) : '')
 const note = ref(props.entry.note ?? '')
 const receiptPhoto = ref<string | undefined>(props.entry.receiptPhoto)
+const items = ref<ExpenseItem[]>(props.entry.items ? props.entry.items.map((i) => ({ ...i })) : [])
 const dateIso = ref(new Date(props.entry.date).toISOString())
 
 const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '').replace(',', '.')))
@@ -57,11 +59,15 @@ const isValid = computed(() => {
 
 function handleSave() {
   if (!isValid.value) return
+  const itemsSum = items.value.reduce((s, i) => s + i.amount, 0)
+  // No total typed but the breakdown is filled: the total is the sum of its lines.
+  const total = cost.value.trim() === '' ? (itemsSum > 0 ? itemsSum : undefined) : costNumber.value
   emit('save', {
     itemName: itemName.value.trim(),
     mileage: Math.round(mileageNumber.value),
     date: new Date(dateIso.value).getTime(),
-    cost: cost.value.trim() === '' ? undefined : costNumber.value,
+    cost: total,
+    items: items.value,
     receiptPhoto: receiptPhoto.value,
     note: note.value.trim() || undefined,
   })
@@ -103,6 +109,8 @@ function handleSave() {
           <ion-input v-model="cost" :label="`Стоимость, ${currency} (необязательно)`" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
+      <CostBreakdownEditor v-model="items" :total="cost.trim() !== '' && costNumber > 0 ? costNumber : null" />
+
       <ion-list inset>
         <ion-item lines="none">
           <ion-textarea v-model="note" label="Заметка (необязательно)" label-placement="stacked" placeholder="—" :auto-grow="true" />

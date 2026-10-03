@@ -605,7 +605,7 @@ async function handleSaveFuelEntry(payload: {
 
 async function handleUpdateHistory(
   id: string,
-  payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
+  payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[] },
 ) {
   await submitOnce(() => store.updateHistoryEntry(id, payload))
 }

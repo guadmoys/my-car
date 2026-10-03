@@ -20,7 +20,7 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { calendarOutline, close, trash } from 'ionicons/icons'
-import type { HistoryEntry, MaintenanceItem, Part } from '../types'
+import type { ExpenseItem, HistoryEntry, MaintenanceItem, Part } from '../types'
 import HistoryEditSheet from './HistoryEditSheet.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
 import { downloadIcsReminder } from '../utils/ics'
@@ -78,7 +78,7 @@ const emit = defineEmits<{
   delete: [id: string]
   updateHistory: [
     id: string,
-    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
+    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[] },
   ]
 }>()
 
@@ -94,6 +94,7 @@ function handleSaveHistory(payload: {
   cost?: number
   receiptPhoto?: string
   note?: string
+  items?: ExpenseItem[]
 }) {
   if (editingHistoryId.value) emit('updateHistory', editingHistoryId.value, payload)
   editingHistoryId.value = null

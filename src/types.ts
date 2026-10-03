@@ -138,6 +138,8 @@ export interface HistoryEntry {
   receiptPhoto?: string
   /** Free-text note. Also where details that don't have a dedicated field (location, work breakdown, imported part specs) are kept. */
   note?: string
+  /** Optional breakdown of `cost` into parts, labor, etc. */
+  items?: ExpenseItem[]
 }
 
 export interface FuelEntry {

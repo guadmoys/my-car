@@ -493,7 +493,7 @@ async function updateFuelEntry(
 
 async function updateHistoryEntry(
   id: string,
-  input: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
+  input: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[] },
 ): Promise<void> {
   const entry = historyEntries.find((h) => h.id === id)
   if (!entry) return
@@ -503,6 +503,7 @@ async function updateHistoryEntry(
   entry.cost = input.cost ?? undefined
   entry.receiptPhoto = input.receiptPhoto
   entry.note = input.note?.trim() || undefined
+  entry.items = input.items?.length ? input.items : undefined
   await db.putHistoryEntry({ ...entry })
 }
 

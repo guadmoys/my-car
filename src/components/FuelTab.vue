@@ -16,6 +16,7 @@ import {
   IonList,
   IonListHeader,
   IonNote,
+  IonProgressBar,
   IonRefresher,
   IonRefresherContent,
   IonSegment,
@@ -34,6 +35,7 @@ import StationPricesCard from './StationPricesCard.vue'
 import { formatDate } from '../utils/dateFormat'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
 import { buildYearlySummary } from '../utils/yearlySummary'
+import { buildCostStructure } from '../utils/costStructure'
 
 const props = defineProps<{
   fuelHistory: FuelConsumption[]
@@ -63,6 +65,8 @@ const emit = defineEmits<{
 const showAll = ref(false)
 
 const yearlySummary = computed(() => buildYearlySummary(fuelEntriesRaw.value, props.historyEntries, props.expenses))
+
+const costStructure = computed(() => buildCostStructure(fuelEntriesRaw.value, props.historyEntries, props.expenses))
 
 type Period = 'all' | '30' | '90' | 'year'
 const period = ref<Period>('all')
@@ -141,6 +145,19 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
       <ion-item v-if="totalCo2Kg > 0" lines="none">
         <ion-label color="medium">Выбросы CO₂</ion-label>
         <ion-note slot="end">{{ fmtCo2(totalCo2Kg) }}</ion-note>
+      </ion-item>
+    </ion-list>
+
+    <ion-list v-if="costStructure.length > 1" inset>
+      <ion-list-header>Куда уходят деньги</ion-list-header>
+      <ion-item v-for="(row, i) in costStructure" :key="row.key" :lines="i === costStructure.length - 1 ? 'none' : undefined">
+        <ion-label>
+          <div class="share-head">
+            <span>{{ row.label }}</span>
+            <ion-note>{{ fmtCost(row.amount) }} · {{ Math.round(row.share * 100) }}%</ion-note>
+          </div>
+          <ion-progress-bar :value="row.share" />
+        </ion-label>
       </ion-item>
     </ion-list>
 
@@ -264,6 +281,13 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
 </template>
 
 <style scoped>
+.share-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
 .charts-section {
   display: flex;
   flex-direction: column;
