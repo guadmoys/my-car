@@ -22,6 +22,7 @@ import {
   IonToolbar,
   type SegmentCustomEvent,
   type SelectCustomEvent,
+  type InputCustomEvent,
   type ToggleCustomEvent,
 } from '@ionic/vue'
 import {
@@ -85,6 +86,7 @@ import {
 } from '../utils/dateFormat'
 import type { DateFormatId } from '../utils/dateFormat'
 import { CURRENCY_OPTIONS, currency, setCurrency } from '../utils/currency'
+import { monthlyBudget, setMonthlyBudget } from '../utils/budget'
 import { THEME_OPTIONS, getThemeMode, setThemeMode, type ThemeMode } from '../utils/theme'
 import { checkForUpdate } from '../utils/appUpdate'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
@@ -628,6 +630,17 @@ function handleCsvFileSelected(event: Event) {
             <ion-label>{{ opt.label }}</ion-label>
           </ion-segment-button>
         </ion-segment>
+      </ion-item>
+      <ion-item>
+        <ion-input
+          :value="monthlyBudget ?? ''"
+          :label="`Бюджет на месяц, ${currency}`"
+          label-placement="stacked"
+          inputmode="numeric"
+          enterkeyhint="done"
+          placeholder="Не задан"
+          @ion-change="(e: InputCustomEvent) => setMonthlyBudget(Number(String(e.detail.value ?? '').replace(/\s/g, '').replace(',', '.')) || null)"
+        />
       </ion-item>
       <ion-item lines="none">
         <ion-select label="Валюта" :value="currency" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }" @ionChange="selectCurrency">

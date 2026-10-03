@@ -14,6 +14,7 @@ import {
   IonList,
   IonListHeader,
   IonNote,
+  IonProgressBar,
   IonRefresher,
   IonRefresherContent,
   IonRow,
@@ -21,6 +22,8 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { add, alarmOutline, cashOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, walletOutline, water } from 'ionicons/icons'
+import { monthlyBudget } from '../utils/budget'
+import type { WarrantyStatus } from '../utils/warranty'
 import { DOCUMENT_TYPE_LABELS, EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Car, DocumentStatus, MaintenanceStatus, ReminderStatus, TimelineEvent } from '../types'
 import { expiryLabel, statusColor } from '../utils/documents'
@@ -49,6 +52,8 @@ const props = defineProps<{
   reminderStatuses: ReminderStatus[]
   documentStatuses: DocumentStatus[]
   documentCount: number
+  warranties: WarrantyStatus[]
+  monthSpend: number
 }>()
 
 // The three most urgent dated documents; the full list lives in the Documents sheet.
@@ -113,6 +118,10 @@ const otherUrgent = computed(() => {
     ? props.urgentStatuses.filter((s) => s.item.id !== action.status.item.id)
     : props.urgentStatuses
 })
+
+const budgetShare = computed(() => (monthlyBudget.value ? props.monthSpend / monthlyBudget.value : 0))
+const budgetColor = computed(() => (budgetShare.value > 1 ? 'danger' : budgetShare.value >= 0.8 ? 'warning' : 'success'))
+const warrantyPreview = computed(() => props.warranties.slice(0, 3))
 
 const emit = defineEmits<{
   editMileage: []
@@ -348,6 +357,33 @@ function fmtCost(n: number): string {
       </ion-item>
     </ion-list>
 
+    <ion-list v-if="monthlyBudget" inset>
+      <ion-list-header>Бюджет на {{ monthName }}</ion-list-header>
+      <ion-item lines="none">
+        <ion-label class="ion-text-wrap">
+          <div class="budget-head">
+            <span>{{ fmtCost(monthSpend) }} из {{ fmtCost(monthlyBudget) }}</span>
+            <ion-note :color="budgetColor">{{ Math.round(budgetShare * 100) }}%</ion-note>
+          </div>
+          <ion-progress-bar :value="Math.min(budgetShare, 1)" :color="budgetColor" />
+          <p v-if="budgetShare > 1">Превышено на {{ fmtCost(monthSpend - monthlyBudget) }}</p>
+          <p v-else>Осталось {{ fmtCost(monthlyBudget - monthSpend) }}</p>
+        </ion-label>
+      </ion-item>
+    </ion-list>
+
+    <ion-list v-if="warrantyPreview.length > 0" inset>
+      <ion-list-header>Гарантия на детали</ion-list-header>
+      <ion-item v-for="w in warrantyPreview" :key="w.key" lines="full">
+        <ion-icon slot="start" :icon="shieldCheckmarkOutline" :color="w.remainingDays <= 30 ? 'warning' : 'medium'" />
+        <ion-label>
+          <h2>{{ w.name }}</h2>
+          <p>{{ w.source }} · до {{ fmtDate(w.endsAt) }}</p>
+        </ion-label>
+        <ion-note slot="end" :color="w.remainingDays <= 30 ? 'warning' : undefined">{{ w.remainingDays }} дн.</ion-note>
+      </ion-item>
+    </ion-list>
+
     <ion-list v-if="hasAnyCost" inset>
       <ion-list-header>Расходы</ion-list-header>
       <ion-item button detail @click="emit('viewAllFuel')">
@@ -378,6 +414,13 @@ function fmtCost(n: number): string {
 
 .soon-text {
   color: var(--ion-color-tertiary);
+}
+
+.budget-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
 }
 
 .quick-actions {

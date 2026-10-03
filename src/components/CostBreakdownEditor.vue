@@ -23,10 +23,11 @@ interface Draft {
   kind: ExpenseItemKind
   name: string
   amount: string
+  warranty: string
 }
 
 const ITEM_KINDS = Object.keys(EXPENSE_ITEM_KIND_LABELS) as ExpenseItemKind[]
-const drafts = ref<Draft[]>(props.modelValue.map((i) => ({ id: i.id, kind: i.kind, name: i.name, amount: String(i.amount) })))
+const drafts = ref<Draft[]>(props.modelValue.map((i) => ({ id: i.id, kind: i.kind, name: i.name, amount: String(i.amount), warranty: i.warrantyMonths ? String(i.warrantyMonths) : '' })))
 
 function parseAmount(raw: string): number {
   return Number(raw.replace(/\s/g, '').replace(',', '.'))
@@ -34,7 +35,12 @@ function parseAmount(raw: string): number {
 
 const parsed = computed<ExpenseItem[]>(() =>
   drafts.value
-    .map((i) => ({ id: i.id, kind: i.kind, name: i.name.trim(), amount: parseAmount(i.amount) }))
+    .map((i) => {
+      const warranty = Math.round(parseAmount(i.warranty))
+      const item: ExpenseItem = { id: i.id, kind: i.kind, name: i.name.trim(), amount: parseAmount(i.amount) }
+      if (i.kind === 'part' && Number.isFinite(warranty) && warranty > 0) item.warrantyMonths = warranty
+      return item
+    })
     .filter((i) => Number.isFinite(i.amount) && i.amount > 0 && (i.name !== '' || i.kind !== 'other')),
 )
 
@@ -45,7 +51,7 @@ const diff = computed(() => (props.total ? props.total - sum.value : 0))
 
 function add_(kind: ExpenseItemKind) {
   haptic('tap')
-  drafts.value.push({ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`, kind, name: '', amount: '' })
+  drafts.value.push({ id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`, kind, name: '', amount: '', warranty: '' })
 }
 
 function remove(id: string) {
@@ -81,6 +87,16 @@ function remove(id: string) {
           inputmode="decimal"
           :placeholder="currency"
           enterkeyhint="next"
+        />
+      </ion-item>
+      <ion-item v-if="item.kind === 'part'" lines="none">
+        <ion-input
+          v-model="item.warranty"
+          label="Гарантия, мес. (необязательно)"
+          label-placement="stacked"
+          inputmode="numeric"
+          enterkeyhint="next"
+          placeholder="—"
         />
       </ion-item>
     </template>

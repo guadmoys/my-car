@@ -1,6 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { currency } from '../utils/currency'
 import { dailySnapshotDue, saveSnapshot } from '../utils/autoBackup'
+import { materializeRecurring } from '../utils/recurring'
 import { documentStatuses as buildDocumentStatuses, migrateLegacyToDocuments } from '../utils/documents'
 import type {
   BackupData,
@@ -12,8 +13,8 @@ import type {
   ComponentType,
   CostForecast,
   Expense,
-  ExpenseCategory,
   ExpenseItem,
+  ExpensePayload,
   FuelConsumption,
   FuelEntry,
   FuelInsight,
@@ -97,6 +98,7 @@ async function loadCarData(carId: string): Promise<void> {
   reminders.splice(0, reminders.length, ...loadedReminders)
   masters.splice(0, masters.length, ...loadedMasters)
   expenses.splice(0, expenses.length, ...loadedExpenses)
+  await applyRecurringExpenses()
   componentChecks.splice(0, componentChecks.length, ...loadedComponents)
   trips.splice(0, trips.length, ...loadedTrips)
   documents.splice(0, documents.length, ...loadedDocuments)
@@ -311,6 +313,7 @@ async function markServiced(
   receiptPhoto?: string,
   date?: number,
   breakdown?: ExpenseItem[],
+  masterId?: string,
 ): Promise<MarkServicedResult | null> {
   const item = items.find((i) => i.id === id)
   if (!item || !car.value) return null
@@ -328,6 +331,7 @@ async function markServiced(
     cost,
     receiptPhoto,
     items: breakdown?.length ? breakdown : undefined,
+    masterId: masterId || undefined,
   }
 
   item.lastServiceMileage = mileage
@@ -495,7 +499,7 @@ async function updateFuelEntry(
 
 async function updateHistoryEntry(
   id: string,
-  input: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[] },
+  input: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[]; masterId?: string },
 ): Promise<void> {
   const entry = historyEntries.find((h) => h.id === id)
   if (!entry) return
@@ -506,6 +510,7 @@ async function updateHistoryEntry(
   entry.receiptPhoto = input.receiptPhoto
   entry.note = input.note?.trim() || undefined
   entry.items = input.items?.length ? input.items : undefined
+  entry.masterId = input.masterId || undefined
   await db.putHistoryEntry({ ...entry })
 }
 
@@ -595,43 +600,34 @@ async function restoreMaster(master: Master): Promise<void> {
   await db.putMaster(master)
 }
 
-async function addExpense(input: {
-  category: ExpenseCategory
-  title?: string
-  amount: number
-  date?: number
-  note?: string
-  receiptPhoto?: string
-  items?: ExpenseItem[]
-}): Promise<void> {
+function recurrenceFor(payload: Pick<ExpensePayload, 'repeat' | 'date'>): Expense['recurrence'] {
+  return payload.repeat ? { every: payload.repeat, anchorDay: new Date(payload.date).getDate() } : undefined
+}
+
+async function addExpense(input: Omit<ExpensePayload, 'date'> & { date?: number }): Promise<void> {
   if (!car.value) return
+  const date = input.date ?? nowTs()
   const expense: Expense = {
     id: makeId(),
     carId: car.value.id,
     category: input.category,
     title: input.title?.trim() || undefined,
     amount: input.amount,
-    date: input.date ?? nowTs(),
+    date,
     note: input.note?.trim() || undefined,
     receiptPhoto: input.receiptPhoto,
     items: input.items?.length ? input.items : undefined,
+    photos: input.photos?.length ? input.photos : undefined,
+    masterId: input.masterId || undefined,
+    recurrence: recurrenceFor({ repeat: input.repeat, date }),
   }
   expenses.unshift(expense)
   await db.putExpense(expense)
+  // A series started in the past (or just now) may already owe entries.
+  await applyRecurringExpenses()
 }
 
-async function updateExpense(
-  id: string,
-  patch: {
-    category: ExpenseCategory
-    title?: string
-    amount: number
-    date: number
-    note?: string
-    receiptPhoto?: string
-    items?: ExpenseItem[]
-  },
-): Promise<void> {
+async function updateExpense(id: string, patch: ExpensePayload): Promise<void> {
   const expense = expenses.find((e) => e.id === id)
   if (!expense) return
   expense.category = patch.category
@@ -641,7 +637,27 @@ async function updateExpense(
   expense.note = patch.note?.trim() || undefined
   expense.receiptPhoto = patch.receiptPhoto
   expense.items = patch.items?.length ? patch.items : undefined
+  expense.photos = patch.photos?.length ? patch.photos : undefined
+  expense.masterId = patch.masterId || undefined
+  expense.recurrence = recurrenceFor(patch)
   await db.putExpense({ ...expense })
+  await applyRecurringExpenses()
+}
+
+/** Creates the entries that repeating expenses owe up to now (see utils/recurring.ts). */
+async function applyRecurringExpenses(): Promise<number> {
+  const { updated, created } = materializeRecurring(expenses, nowTs(), makeId)
+  if (created.length === 0) return 0
+  for (const head of updated) {
+    const live = expenses.find((e) => e.id === head.id)
+    if (live) live.recurrence = undefined
+    await db.putExpense({ ...head })
+  }
+  for (const e of created) {
+    expenses.unshift(e)
+    await db.putExpense(e)
+  }
+  return created.length
 }
 
 async function deleteExpense(id: string): Promise<Expense | null> {

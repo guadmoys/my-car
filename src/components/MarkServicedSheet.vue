@@ -16,6 +16,7 @@ import {
 } from '@ionic/vue'
 import type { ExpenseItem } from '../types'
 import CostBreakdownEditor from './CostBreakdownEditor.vue'
+import MasterPicker from './MasterPicker.vue'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
@@ -24,12 +25,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { cost?: number; receiptPhoto?: string; items?: ExpenseItem[] }]
+  save: [payload: { cost?: number; receiptPhoto?: string; items?: ExpenseItem[]; masterId?: string }]
 }>()
 
 const cost = ref('')
 const receiptPhoto = ref<string | undefined>(undefined)
 const items = ref<ExpenseItem[]>([])
+const masterId = ref<string | undefined>(undefined)
 
 const costNumber = computed(() => Number(cost.value.replace(/\s/g, '').replace(',', '.')))
 const costInvalid = computed(() => cost.value.trim() !== '' && (Number.isNaN(costNumber.value) || costNumber.value < 0))
@@ -39,7 +41,7 @@ function handleSave() {
   const itemsSum = items.value.reduce((s, i) => s + i.amount, 0)
   // No total typed but the breakdown is filled: the total is the sum of its lines.
   const total = cost.value.trim() === '' ? (itemsSum > 0 ? itemsSum : undefined) : costNumber.value
-  emit('save', { cost: total, receiptPhoto: receiptPhoto.value, items: items.value })
+  emit('save', { cost: total, receiptPhoto: receiptPhoto.value, items: items.value, masterId: masterId.value })
 }
 
 // Guards only the accidental paths (swipe-down, backdrop tap) — the explicit
@@ -84,6 +86,7 @@ async function canDismiss(): Promise<boolean> {
       </ion-list>
       <ion-note v-if="costInvalid" color="danger" class="hint">Стоимость не может быть отрицательной</ion-note>
       <CostBreakdownEditor v-model="items" :total="cost.trim() !== '' && costNumber > 0 ? costNumber : null" />
+      <MasterPicker v-model="masterId" />
       <ReceiptPhotoField v-model="receiptPhoto" />
     </ion-content>
   </ion-modal>

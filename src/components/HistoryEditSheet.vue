@@ -20,6 +20,7 @@ import {
 } from '@ionic/vue'
 import type { ExpenseItem, HistoryEntry } from '../types'
 import CostBreakdownEditor from './CostBreakdownEditor.vue'
+import MasterPicker from './MasterPicker.vue'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
@@ -29,7 +30,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[] }]
+  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[]; masterId?: string }]
 }>()
 
 const itemName = ref(props.entry.itemName)
@@ -37,6 +38,7 @@ const mileage = ref(String(props.entry.mileage))
 const cost = ref(props.entry.cost !== undefined ? String(props.entry.cost) : '')
 const note = ref(props.entry.note ?? '')
 const receiptPhoto = ref<string | undefined>(props.entry.receiptPhoto)
+const masterId = ref<string | undefined>(props.entry.masterId)
 const items = ref<ExpenseItem[]>(props.entry.items ? props.entry.items.map((i) => ({ ...i })) : [])
 const dateIso = ref(new Date(props.entry.date).toISOString())
 
@@ -68,6 +70,7 @@ function handleSave() {
     date: new Date(dateIso.value).getTime(),
     cost: total,
     items: items.value,
+    masterId: masterId.value,
     receiptPhoto: receiptPhoto.value,
     note: note.value.trim() || undefined,
   })
@@ -116,6 +119,7 @@ function handleSave() {
           <ion-textarea v-model="note" label="Заметка (необязательно)" label-placement="stacked" placeholder="—" :auto-grow="true" />
         </ion-item>
       </ion-list>
+      <MasterPicker v-model="masterId" />
       <ReceiptPhotoField v-model="receiptPhoto" />
       <ion-note v-if="mileageNumber > currentMileage" color="danger" class="hint">
         Не может быть больше текущего пробега машины ({{ Math.round(currentMileage).toLocaleString('ru-RU') }} км)

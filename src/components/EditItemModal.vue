@@ -78,7 +78,7 @@ const emit = defineEmits<{
   delete: [id: string]
   updateHistory: [
     id: string,
-    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[] },
+    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[]; masterId?: string },
   ]
 }>()
 
@@ -95,6 +95,7 @@ function handleSaveHistory(payload: {
   receiptPhoto?: string
   note?: string
   items?: ExpenseItem[]
+  masterId?: string
 }) {
   if (editingHistoryId.value) emit('updateHistory', editingHistoryId.value, payload)
   editingHistoryId.value = null

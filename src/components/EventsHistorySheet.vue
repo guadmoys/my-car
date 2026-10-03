@@ -22,7 +22,8 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { construct, searchOutline, walletOutline, water } from 'ionicons/icons'
-import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS, type TimelineEvent } from '../types'
+import { EXPENSE_CATEGORY_LABELS, type TimelineEvent } from '../types'
+import { itemLine } from '../utils/expenseItems'
 
 const props = defineProps<{
   events: TimelineEvent[]
@@ -184,9 +185,7 @@ function fmtDate(ts: number): string {
             <h2>{{ eventTitle(event) }}</h2>
             <p>{{ eventMeta(event) }}</p>
             <template v-if="event.kind !== 'fuel' && event.entry.items?.length">
-              <p v-for="item in event.entry.items" :key="item.id">
-                {{ EXPENSE_ITEM_KIND_LABELS[item.kind] }}: {{ item.name }} — {{ fmtCost(item.amount) }}
-              </p>
+              <p v-for="item in event.entry.items" :key="item.id">{{ itemLine(item, fmtCost) }}</p>
             </template>
             <p v-if="event.kind === 'service' && event.entry.note" class="event-note">{{ event.entry.note }}</p>
             <p v-if="event.kind === 'expense' && event.entry.note" class="event-note">{{ event.entry.note }}</p>

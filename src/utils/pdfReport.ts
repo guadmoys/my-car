@@ -2,6 +2,8 @@ import { jsPDF } from 'jspdf'
 import { formatMoney } from './currency'
 import { EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Car, Expense, HistoryEntry, MaintenanceStatus, Trip } from '../types'
+import type { CostShare } from './costStructure'
+import { itemLine } from './expenseItems'
 
 export interface ReportData {
   car: Car
@@ -15,6 +17,8 @@ export interface ReportData {
   totalBusinessKm: number
   totalPersonalKm: number
   recentHistory: HistoryEntry[]
+  /** Where the money goes; omitted rows/sections are skipped. */
+  structure?: CostShare[]
 }
 
 // Renders the report as a canvas (same technique as carPassport.ts) rather
@@ -64,7 +68,7 @@ function truncate(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 
 interface Section {
   title: string
-  rows: { text: string; note?: string; color?: string }[]
+  rows: { text: string; note?: string; color?: string; sub?: boolean }[]
   emptyText?: string
 }
 
@@ -81,6 +85,13 @@ function buildSections(data: ReportData): Section[] {
     ],
   })
 
+  if (data.structure && data.structure.length > 1) {
+    sections.push({
+      title: 'КУДА УХОДЯТ ДЕНЬГИ',
+      rows: data.structure.map((r) => ({ text: r.label, note: `${fmtCost(r.amount)} · ${Math.round(r.share * 100)}%` })),
+    })
+  }
+
   const attention = data.statuses.filter((s) => s.state !== 'ok').slice(0, 10)
   sections.push({
     title: 'ТРЕБУЕТ ВНИМАНИЯ (ТО)',
@@ -95,9 +106,10 @@ function buildSections(data: ReportData): Section[] {
   if (data.expenses.length > 0) {
     sections.push({
       title: 'ПРОЧИЕ РАСХОДЫ',
-      rows: data.expenses
-        .slice(0, 10)
-        .map((e) => ({ text: `${fmtDate(e.date)} · ${e.title || EXPENSE_CATEGORY_LABELS[e.category]}`, note: fmtCost(e.amount) })),
+      rows: data.expenses.slice(0, 10).flatMap((e) => [
+        { text: `${fmtDate(e.date)} · ${e.title || EXPENSE_CATEGORY_LABELS[e.category]}`, note: fmtCost(e.amount) },
+        ...(e.items ?? []).map((i) => ({ text: `     ${itemLine(i, fmtCost)}`, sub: true })),
+      ]),
     })
   }
 
@@ -120,10 +132,10 @@ function buildSections(data: ReportData): Section[] {
   if (data.recentHistory.length > 0) {
     sections.push({
       title: 'ПОСЛЕДНЕЕ ТО',
-      rows: data.recentHistory.slice(0, 10).map((h) => ({
-        text: `${fmtDate(h.date)} · ${h.itemName}`,
-        note: h.cost !== undefined ? fmtCost(h.cost) : undefined,
-      })),
+      rows: data.recentHistory.slice(0, 10).flatMap((h) => [
+        { text: `${fmtDate(h.date)} · ${h.itemName}`, note: h.cost !== undefined ? fmtCost(h.cost) : undefined },
+        ...(h.items ?? []).map((i) => ({ text: `     ${itemLine(i, fmtCost)}`, sub: true })),
+      ]),
     })
   }
 
@@ -198,9 +210,9 @@ function draw(ctx: CanvasRenderingContext2D, data: ReportData, cardH: number) {
     } else {
       section.rows.forEach((row, i) => {
         const ry = by + i * ROW_H
-        ctx.font = '500 15px -apple-system, system-ui, sans-serif'
-        ctx.fillStyle = COLOR.text
-        ctx.fillText(truncate(ctx, row.text, bw * 0.62), bx, ry + 20)
+        ctx.font = row.sub ? '400 13px -apple-system, system-ui, sans-serif' : '500 15px -apple-system, system-ui, sans-serif'
+        ctx.fillStyle = row.sub ? COLOR.textSecondary : COLOR.text
+        ctx.fillText(truncate(ctx, row.text, row.sub ? bw : bw * 0.62), bx, ry + 20)
 
         if (row.note) {
           ctx.font = '600 15px -apple-system, system-ui, sans-serif'

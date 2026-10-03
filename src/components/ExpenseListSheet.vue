@@ -20,7 +20,9 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { add, alertCircleOutline, buildOutline, carSportOutline, cardOutline, receiptOutline, shieldCheckmarkOutline, walletOutline } from 'ionicons/icons'
-import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS, type Expense, type ExpenseCategory } from '../types'
+import { EXPENSE_CATEGORY_LABELS, type Expense, type ExpenseCategory } from '../types'
+import { itemLine } from '../utils/expenseItems'
+import { useCarStore } from '../composables/useCarStore'
 
 const props = defineProps<{
   expenses: Expense[]
@@ -33,6 +35,11 @@ const emit = defineEmits<{
   delete: [id: string]
   addExpense: []
 }>()
+
+const store = useCarStore()
+function masterName(id: string): string | undefined {
+  return store.masters.find((m) => m.id === id)?.name
+}
 
 const query = ref('')
 const category = ref<ExpenseCategory | 'all'>('all')
@@ -143,8 +150,11 @@ function fmtDate(ts: number): string {
           <ion-label class="ion-text-wrap">
             <h2>{{ e.title || EXPENSE_CATEGORY_LABELS[e.category] }}</h2>
             <p>{{ fmtDate(e.date) }} · {{ EXPENSE_CATEGORY_LABELS[e.category] }}</p>
-            <p v-for="item in e.items ?? []" :key="item.id">
-              {{ EXPENSE_ITEM_KIND_LABELS[item.kind] }}: {{ item.name || '—' }} — {{ fmt(item.amount) }}
+            <p v-for="item in e.items ?? []" :key="item.id">{{ itemLine(item, fmt) }}</p>
+            <p v-if="e.recurrence || e.photos?.length || e.masterId">
+              <template v-if="e.recurrence">↻ {{ e.recurrence.every === 'month' ? 'каждый месяц' : 'каждый год' }}</template>
+              <template v-if="e.masterId && masterName(e.masterId)"> · {{ masterName(e.masterId) }}</template>
+              <template v-if="e.photos?.length"> · {{ e.photos.length }} фото</template>
             </p>
           </ion-label>
           <ion-note slot="end">{{ fmt(e.amount) }}</ion-note>

@@ -15,6 +15,8 @@ import {
   IonList,
   IonModal,
   IonNote,
+  IonSelect,
+  IonSelectOption,
   IonTextarea,
   IonTitle,
   IonToolbar,
@@ -24,8 +26,11 @@ import {
   type Expense,
   type ExpenseCategory,
   type ExpenseItem,
+  type ExpensePayload,
 } from '../types'
 import CostBreakdownEditor from './CostBreakdownEditor.vue'
+import MasterPicker from './MasterPicker.vue'
+import PhotoGalleryField from './PhotoGalleryField.vue'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
 import { haptic } from '../utils/haptics'
 
@@ -36,17 +41,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [
-    payload: {
-      category: ExpenseCategory
-      title?: string
-      amount: number
-      date: number
-      note?: string
-      receiptPhoto?: string
-      items?: ExpenseItem[]
-    },
-  ]
+  save: [payload: ExpensePayload]
 }>()
 
 const CATEGORIES = Object.keys(EXPENSE_CATEGORY_LABELS) as ExpenseCategory[]
@@ -59,6 +54,9 @@ const note = ref(props.expense?.note ?? '')
 const receiptPhoto = ref<string | undefined>(props.expense?.receiptPhoto)
 const maxDateIso = new Date().toISOString()
 
+const photos = ref<string[]>([...(props.expense?.photos ?? [])])
+const masterId = ref<string | undefined>(props.expense?.masterId)
+const repeat = ref<'none' | 'month' | 'year'>(props.expense?.recurrence?.every ?? 'none')
 const items = ref<ExpenseItem[]>(props.expense?.items ? props.expense.items.map((i) => ({ ...i })) : [])
 
 const amountNumber = computed(() => Number(amount.value.replace(/\s/g, '').replace(',', '.')))
@@ -80,6 +78,9 @@ function handleSave() {
     note: note.value.trim() || undefined,
     receiptPhoto: receiptPhoto.value,
     items: items.value,
+    photos: photos.value,
+    masterId: masterId.value,
+    repeat: repeat.value === 'none' ? undefined : repeat.value,
   })
 }
 </script>
@@ -154,7 +155,23 @@ function handleSave() {
         </ion-item>
       </ion-list>
 
+      <MasterPicker v-model="masterId" />
+
+      <ion-list inset>
+        <ion-item lines="none">
+          <ion-select v-model="repeat" label="Повторять" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }">
+            <ion-select-option value="none">Не повторять</ion-select-option>
+            <ion-select-option value="month">Каждый месяц</ion-select-option>
+            <ion-select-option value="year">Каждый год</ion-select-option>
+          </ion-select>
+        </ion-item>
+      </ion-list>
+      <ion-note v-if="repeat !== 'none'" color="medium" class="hint">
+        Следующие записи появятся сами в тот же день {{ repeat === 'month' ? 'каждого месяца' : 'каждого года' }}
+      </ion-note>
+
       <ReceiptPhotoField v-model="receiptPhoto" />
+      <PhotoGalleryField v-model="photos" :label="category === 'damage' ? 'Фото повреждений' : 'Добавить фото'" />
     </ion-content>
   </ion-modal>
 </template>

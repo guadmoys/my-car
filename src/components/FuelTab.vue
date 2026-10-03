@@ -59,6 +59,7 @@ const emit = defineEmits<{
   deleteFuel: [id: string]
   editFuel: [id: string]
   exportCsv: []
+  exportExpensesCsv: []
   viewOtherExpenses: []
 }>()
 
@@ -66,7 +67,25 @@ const showAll = ref(false)
 
 const yearlySummary = computed(() => buildYearlySummary(fuelEntriesRaw.value, props.historyEntries, props.expenses))
 
-const costStructure = computed(() => buildCostStructure(fuelEntriesRaw.value, props.historyEntries, props.expenses))
+type StructurePeriod = 'month' | 'year' | 'all'
+const structurePeriod = ref<StructurePeriod>('all')
+
+const costStructure = computed(() => {
+  const now = new Date()
+  const from =
+    structurePeriod.value === 'month'
+      ? new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+      : structurePeriod.value === 'year'
+        ? new Date(now.getFullYear(), 0, 1).getTime()
+        : 0
+  return buildCostStructure(
+    fuelEntriesRaw.value.filter((f) => f.date >= from),
+    props.historyEntries.filter((h) => h.date >= from),
+    props.expenses.filter((e) => e.date >= from),
+  )
+})
+// The card stays visible when a short period happens to be empty, so the toggle can't strand itself.
+const hasStructureData = computed(() => props.hasAnyCost)
 
 type Period = 'all' | '30' | '90' | 'year'
 const period = ref<Period>('all')
@@ -148,8 +167,18 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
       </ion-item>
     </ion-list>
 
-    <ion-list v-if="costStructure.length > 1" inset>
+    <ion-list v-if="hasStructureData" inset>
       <ion-list-header>Куда уходят деньги</ion-list-header>
+      <ion-item lines="none">
+        <ion-segment :value="structurePeriod" @ionChange="(e: SegmentCustomEvent) => (structurePeriod = e.detail.value as StructurePeriod)">
+          <ion-segment-button value="month"><ion-label>Месяц</ion-label></ion-segment-button>
+          <ion-segment-button value="year"><ion-label>Год</ion-label></ion-segment-button>
+          <ion-segment-button value="all"><ion-label>Всё</ion-label></ion-segment-button>
+        </ion-segment>
+      </ion-item>
+      <ion-item v-if="costStructure.length === 0" lines="none">
+        <ion-label color="medium">За этот период трат нет</ion-label>
+      </ion-item>
       <ion-item v-for="(row, i) in costStructure" :key="row.key" :lines="i === costStructure.length - 1 ? 'none' : undefined">
         <ion-label>
           <div class="share-head">
@@ -270,6 +299,10 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
     <ion-button v-if="fuelHistory.length > 0" expand="block" fill="outline" class="ion-margin" @click="emit('exportCsv')">
       <ion-icon slot="start" :icon="downloadOutline" />
       Экспорт в CSV
+    </ion-button>
+    <ion-button v-if="hasAnyCost" expand="block" fill="outline" class="ion-margin" @click="emit('exportExpensesCsv')">
+      <ion-icon slot="start" :icon="downloadOutline" />
+      Все расходы в CSV (с деталями и работой)
     </ion-button>
 
     <ion-fab vertical="bottom" horizontal="start" slot="fixed">

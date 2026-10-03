@@ -140,6 +140,8 @@ export interface HistoryEntry {
   note?: string
   /** Optional breakdown of `cost` into parts, labor, etc. */
   items?: ExpenseItem[]
+  /** Master/service that did the work. */
+  masterId?: string
 }
 
 export interface FuelEntry {
@@ -200,6 +202,15 @@ export interface ExpenseItem {
   kind: ExpenseItemKind
   name: string
   amount: number
+  /** Warranty on a part, in months from the date of the expense/service. */
+  warrantyMonths?: number
+}
+
+/** How often an expense repeats on its own (insurance, loan payment, parking pass...). */
+export interface ExpenseRecurrence {
+  every: 'month' | 'year'
+  /** Day of month the series is anchored to, so a 31st clamped to Feb 28 doesn't drift. */
+  anchorDay: number
 }
 
 export interface Expense {
@@ -217,6 +228,26 @@ export interface Expense {
   receiptPhoto?: string
   /** Optional breakdown of `amount` into parts, labor, etc. */
   items?: ExpenseItem[]
+  /** Photos of damage, before/after, etc., as compressed data URLs. */
+  photos?: string[]
+  /** Master/service this was paid to. */
+  masterId?: string
+  /** Set only on the newest entry of a repeating series; the next one is created when it falls due. */
+  recurrence?: ExpenseRecurrence
+}
+
+/** What the expense form hands to the store. `repeat` becomes an ExpenseRecurrence anchored to `date`. */
+export interface ExpensePayload {
+  category: ExpenseCategory
+  title?: string
+  amount: number
+  date: number
+  note?: string
+  receiptPhoto?: string
+  items?: ExpenseItem[]
+  photos?: string[]
+  masterId?: string
+  repeat?: ExpenseRecurrence['every']
 }
 
 export interface ExpenseStatus {

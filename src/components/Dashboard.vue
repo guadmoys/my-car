@@ -31,6 +31,11 @@ import ReminderSheet from './ReminderSheet.vue'
 import MarkServicedSheet from './MarkServicedSheet.vue'
 import MasterListSheet from './MasterListSheet.vue'
 import MasterFormSheet from './MasterFormSheet.vue'
+import { buildCostStructure } from '../utils/costStructure'
+import { buildExpensesCsv } from '../utils/expensesCsv'
+import { buildWarranties } from '../utils/warranty'
+import { monthSpend } from '../utils/budget'
+import { buildMasterStats } from '../utils/masterStats'
 import ExpenseListSheet from './ExpenseListSheet.vue'
 import DocumentsSheet from './DocumentsSheet.vue'
 import DocumentFormSheet from './DocumentFormSheet.vue'
@@ -45,8 +50,8 @@ import { buildMoyaMashinaCsv, parseMoyaMashinaCsv } from '../utils/carCsvFormat'
 import type {
   ComponentType,
   Expense,
-  ExpenseCategory,
   ExpenseItem,
+  ExpensePayload,
   CarDocument,
   DocumentType,
   FuelEntry,
@@ -116,6 +121,9 @@ const showEventsSheet = ref(false)
 const showReminderSheet = ref(false)
 const showMasterList = ref(false)
 const editingMaster = ref<Master | null | 'new'>(null)
+const warranties = computed(() => buildWarranties(store.historyEntries, store.expenses, Date.now()))
+const thisMonthSpend = computed(() => monthSpend(store.fuelEntries, store.historyEntries, store.expenses, Date.now()))
+const masterStats = computed(() => buildMasterStats(store.historyEntries, store.expenses))
 const showExpenseList = ref(false)
 const showDocuments = ref(false)
 const editingDocument = ref<CarDocument | null | 'new'>(null)
@@ -265,14 +273,14 @@ function handleMarkServiced(id: string) {
   if (item) markServicedItem.value = item
 }
 
-async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?: string; items?: ExpenseItem[] }) {
+async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?: string; items?: ExpenseItem[]; masterId?: string }) {
   const item = markServicedItem.value
   if (!item) return
   markServicedItem.value = null
   await submitOnce(async () => {
     let result: Awaited<ReturnType<typeof store.markServiced>>
     try {
-      result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto, undefined, payload.items)
+      result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto, undefined, payload.items, payload.masterId)
     } catch {
       toast.show('Не удалось сохранить — попробуйте ещё раз')
       return
@@ -315,15 +323,7 @@ async function handleDeleteMaster(id: string) {
   })
 }
 
-async function handleSaveExpense(payload: {
-  category: ExpenseCategory
-  title?: string
-  amount: number
-  date: number
-  note?: string
-  receiptPhoto?: string
-  items?: ExpenseItem[]
-}) {
+async function handleSaveExpense(payload: ExpensePayload) {
   await submitOnce(async () => {
     const isNew = !editingExpense.value || editingExpense.value === 'new'
     if (editingExpense.value && editingExpense.value !== 'new') {
@@ -407,6 +407,7 @@ function handleExportPdf() {
     totalBusinessKm: totalBusinessKm.value,
     totalPersonalKm: totalPersonalKm.value,
     recentHistory: store.historyEntries.slice().sort((a, b) => b.date - a.date),
+    structure: buildCostStructure(store.fuelEntries, store.historyEntries, store.expenses),
   })
 }
 
@@ -605,7 +606,7 @@ async function handleSaveFuelEntry(payload: {
 
 async function handleUpdateHistory(
   id: string,
-  payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[] },
+  payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[]; masterId?: string },
 ) {
   await submitOnce(() => store.updateHistoryEntry(id, payload))
 }
@@ -666,6 +667,22 @@ async function handleExport() {
 
 function csvEscape(value: string): string {
   return /["\n,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+function downloadCsv(fileName: string, csv: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function handleExportExpensesCsv() {
+  const csv = buildExpensesCsv(timelineEvents.value, currency.value, (id) => store.masters.find((m) => m.id === id)?.name)
+  downloadCsv(`rashody-${new Date().toISOString().slice(0, 10)}.csv`, csv)
 }
 
 function handleExportFuelCsv() {
@@ -796,6 +813,8 @@ async function handleImportCarCsv(file: File) {
         :reminder-statuses="reminderStatuses"
         :document-statuses="documentStatuses"
         :document-count="store.documents.length"
+        :warranties="warranties"
+        :month-spend="thisMonthSpend"
         @open-documents="showDocuments = true"
         @edit-mileage="showMileageSheet = true"
         @switch-car="showCarSwitcher = true"
@@ -843,6 +862,7 @@ async function handleImportCarCsv(file: File) {
         @delete-fuel="handleDeleteFuel"
         @edit-fuel="editingFuelEntryId = $event"
         @export-csv="handleExportFuelCsv"
+        @export-expenses-csv="handleExportExpensesCsv"
         @view-other-expenses="showExpenseList = true"
       />
       </ion-tab>
@@ -982,6 +1002,7 @@ async function handleImportCarCsv(file: File) {
     <MasterListSheet
       v-if="showMasterList"
       :masters="store.masters"
+      :stats="masterStats"
       @close="showMasterList = false"
       @edit="editingMaster = $event"
       @delete="handleDeleteMaster"

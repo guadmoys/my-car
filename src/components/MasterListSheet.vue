@@ -16,9 +16,12 @@ import {
 } from '@ionic/vue'
 import { add } from 'ionicons/icons'
 import type { Master } from '../types'
+import type { MasterStats } from '../utils/masterStats'
+import { formatMoney } from '../utils/currency'
 
 defineProps<{
   masters: Master[]
+  stats?: Map<string, MasterStats>
 }>()
 
 const emit = defineEmits<{
@@ -61,6 +64,9 @@ function subtitle(m: Master): string {
           <ion-label>
             <h2>{{ m.name }}</h2>
             <p>{{ subtitle(m) }}</p>
+            <p v-if="stats?.get(m.id)">
+              Визитов: {{ stats.get(m.id)!.count }} · потрачено {{ formatMoney(stats.get(m.id)!.total) }}<template v-if="stats.get(m.id)!.laborCount > 0"> · работа в среднем {{ formatMoney(stats.get(m.id)!.labor / stats.get(m.id)!.laborCount) }}</template>
+            </p>
           </ion-label>
           <ion-button
             slot="end"
