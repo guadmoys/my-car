@@ -86,6 +86,15 @@ import of old backups — don't reintroduce those fields in the UI.
   the home screen. **Warranties** (`utils/warranty.ts`) and **master stats** (`utils/masterStats.ts`, via
   `masterId` on expenses/ТО and `MasterPicker.vue`) are derived, never stored. Damage photos use
   `Expense.photos` + `PhotoGalleryField.vue`.
+- **Alerts.** `checkAndNotifyBudget` (80% and 100%, once per month per level) and `checkAndNotifyWarranties`
+  (≤30 days, once per part) live in `utils/notifications.ts` and are wired in `Dashboard.vue` like the other checks.
+  The budget also travels in the backup (`BackupData.settings`), applied only after a successful import.
+- **Entering expenses fast.** `ExpenseFormSheet` has a quick-entry line (`utils/expenseQuickEntry.ts`: «осаго 12000»,
+  «ремонт бампера 45к») and «Заполнить по чеку» (`utils/receiptOcr.ts` → lazy `tesseract.js`, parsing in
+  `utils/receiptText.ts`; needs a connection once to fetch language data, fails softly offline).
+  `Expense.itemId` links an expense to a maintenance item and shows in that item's screen.
+- **Overviews.** «Месяц к месяцу» (`utils/monthComparison.ts`) and «Детали и работы» (`PartsHistorySheet.vue`,
+  `utils/partsList.ts`) on the расход tab.
 
 ## Feedback & state
 
