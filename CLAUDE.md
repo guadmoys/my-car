@@ -96,6 +96,13 @@ import of old backups — don't reintroduce those fields in the UI.
 - **Overviews.** «Месяц к месяцу» (`utils/monthComparison.ts`) and «Детали и работы» (`PartsHistorySheet.vue`,
   `utils/partsList.ts`) on the расход tab.
 
+## App lock
+
+`utils/appLock.ts` gates the UI with a PIN stored as a salted PBKDF2-SHA-256 hash (300k iterations, `my-car-lock-iterations`)
+and an optional WebAuthn step. PINs saved by older versions (plain salted SHA-256, no iteration key) still verify and are
+rehashed on the next successful unlock. Five wrong attempts start a pause (30 s, doubling, capped at 15 min) that
+`LockScreen.vue` shows as a countdown. It is a UI gate, not encryption of the IndexedDB data.
+
 ## Feedback & state
 
 - Every meaningful state-changing tap still gets a haptic via `src/utils/haptics.ts`
