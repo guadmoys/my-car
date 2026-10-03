@@ -3,6 +3,8 @@ import { useCarStore } from './useCarStore'
 import { useToast } from './useToast'
 import { haptic } from '../utils/haptics'
 import * as cloud from '../utils/cloudSync'
+import { openEncryptedBackup } from '../utils/backupFile'
+import { isVaultEnabled, isVaultUnlocked } from '../utils/vault'
 import type { CloudAccount, CloudProvider, CloudSyncRecord } from '../utils/cloudSync'
 
 const SYNC_DEBOUNCE_MS = 5000
@@ -44,6 +46,8 @@ function authErrorMessage(provider: CloudProvider): string {
 async function syncNow(showToast = true): Promise<void> {
   const provider = state.activeProvider
   if (!provider) return
+  // While locked the data can't be read (or encrypted), and there is nothing new to save anyway.
+  if (isVaultEnabled() && !isVaultUnlocked()) return
   const store = useCarStore()
   state.syncing = true
   state.error = null
@@ -155,14 +159,27 @@ function setAutoSync(enabled: boolean): void {
   if (enabled) scheduleAutoSync()
 }
 
-async function restoreFromCloud(provider: CloudProvider): Promise<{ ok: true } | { ok: false; error: string }> {
+async function restoreFromCloud(
+  provider: CloudProvider,
+  ask: (message?: string) => Promise<string | null> = async () => null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const store = useCarStore()
   state.syncing = true
   state.error = null
   try {
     const result = await cloud.downloadBackup(provider)
     if (!result) return { ok: false, error: 'В облаке ещё нет резервной копии' }
-    const imported = await store.importData(result.backup)
+    let data: unknown
+    if (result.backup) {
+      data = result.backup
+    } else if (result.encrypted) {
+      const opened = await openEncryptedBackup(result.encrypted, ask)
+      if (!opened.ok) return opened
+      data = opened.data
+    } else {
+      return { ok: false, error: 'Файл в облаке имеет неизвестный формат' }
+    }
+    const imported = await store.importData(data)
     if (!imported.ok) return imported
     state.lastSync[provider] = { savedAt: result.savedAt, appVersion: result.appVersion }
     haptic('success')

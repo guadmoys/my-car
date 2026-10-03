@@ -1,5 +1,6 @@
 import { openDB, type DBSchema } from 'idb'
 import type { BackupData } from '../types'
+import { isSealed, isVaultEnabled, isVaultUnlocked, openJson, sealJson, type Sealed } from './vault'
 
 /**
  * Local safety-net copies of the whole database, kept in a *separate*
@@ -14,8 +15,16 @@ export interface Snapshot {
   backup: BackupData
 }
 
+/** What is actually stored: with encryption on, the backup is sealed and never sits in the clear. */
+interface StoredSnapshot {
+  savedAt: number
+  reason: SnapshotReason
+  backup?: BackupData
+  sealed?: Sealed
+}
+
 interface SnapshotDB extends DBSchema {
-  snapshots: { key: number; value: Snapshot }
+  snapshots: { key: number; value: StoredSnapshot }
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -56,7 +65,22 @@ export function isDailySnapshotDue(list: Pick<Snapshot, 'savedAt' | 'reason'>[],
 
 export async function listSnapshots(): Promise<Snapshot[]> {
   const db = await dbPromise()
-  return (await db.getAll('snapshots')).sort((a, b) => b.savedAt - a.savedAt)
+  const stored = (await db.getAll('snapshots')).sort((a, b) => b.savedAt - a.savedAt)
+  const result: Snapshot[] = []
+  for (const row of stored) {
+    if (row.sealed && isSealed(row.sealed)) {
+      // Encrypted copies are invisible while locked, and skipped if they belong to an older key.
+      if (!isVaultUnlocked()) continue
+      try {
+        result.push({ savedAt: row.savedAt, reason: row.reason, backup: await openJson<BackupData>(row.sealed, `snapshot:${row.savedAt}`) })
+      } catch {
+        continue
+      }
+    } else if (row.backup) {
+      result.push({ savedAt: row.savedAt, reason: row.reason, backup: row.backup })
+    }
+  }
+  return result
 }
 
 export async function saveSnapshot(backup: BackupData, reason: SnapshotReason): Promise<void> {
@@ -64,8 +88,18 @@ export async function saveSnapshot(backup: BackupData, reason: SnapshotReason): 
   if (backup.cars.length === 0) return
   const db = await dbPromise()
   const savedAt = Date.now()
-  await db.put('snapshots', { savedAt, reason, backup: JSON.parse(JSON.stringify(backup)) })
+  const plain = JSON.parse(JSON.stringify(backup)) as BackupData
+  const row: StoredSnapshot = isVaultEnabled()
+    ? { savedAt, reason, sealed: await sealJson(plain, `snapshot:${savedAt}`) }
+    : { savedAt, reason, backup: plain }
+  await db.put('snapshots', row)
   for (const key of snapshotsToPrune(await db.getAll('snapshots'))) await db.delete('snapshots', key)
+}
+
+/** Removes every local safety copy, e.g. when encryption is turned on and older copies hold readable data. */
+export async function clearSnapshots(): Promise<void> {
+  const db = await dbPromise()
+  await db.clear('snapshots')
 }
 
 export async function dailySnapshotDue(): Promise<boolean> {

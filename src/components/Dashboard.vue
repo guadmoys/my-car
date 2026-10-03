@@ -34,6 +34,9 @@ import MarkServicedSheet from './MarkServicedSheet.vue'
 import MasterListSheet from './MasterListSheet.vue'
 import MasterFormSheet from './MasterFormSheet.vue'
 import { buildCostStructure } from '../utils/costStructure'
+import { isVaultEnabled, serializeBackup } from '../utils/vault'
+import { resolveBackupData } from '../utils/backupFile'
+import { askBackupSecret } from '../utils/secretPrompt'
 import { buildExpensesCsv } from '../utils/expensesCsv'
 import { buildWarranties } from '../utils/warranty'
 import { monthSpend, monthlyBudget } from '../utils/budget'
@@ -417,7 +420,14 @@ async function handleDeleteTrip(id: string) {
   })
 }
 
+/** CSV tables and the PDF report are plain files even with encryption on; make that explicit before saving one. */
+function confirmPlainExport(): boolean {
+  if (!isVaultEnabled()) return true
+  return window.confirm('Эта выгрузка не шифруется: файл можно будет открыть без пароля. Продолжить?')
+}
+
 function handleExportPdf() {
+  if (!confirmPlainExport()) return
   if (!car.value) return
   generateReportPdf({
     car: car.value,
@@ -675,7 +685,8 @@ async function handleCreateCar(payload: {
 
 async function handleExport() {
   const data = await store.exportData()
-  const json = JSON.stringify(data, null, 2)
+  // Encrypted with the vault key when encryption is on; readable JSON otherwise.
+  const json = await serializeBackup(data)
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const dateStr = new Date().toISOString().slice(0, 10)
@@ -705,11 +716,13 @@ function downloadCsv(fileName: string, csv: string) {
 }
 
 function handleExportExpensesCsv() {
+  if (!confirmPlainExport()) return
   const csv = buildExpensesCsv(timelineEvents.value, currency.value, (id) => store.masters.find((m) => m.id === id)?.name)
   downloadCsv(`rashody-${new Date().toISOString().slice(0, 10)}.csv`, csv)
 }
 
 function handleExportFuelCsv() {
+  if (!confirmPlainExport()) return
   const rows = store.fuelEntries.slice().sort((a, b) => a.date - b.date)
   const header = ['Дата', 'Пробег, км', 'Литры', `Стоимость, ${currency.value}`, `Цена, ${currency.value}/л`, 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
   const lines = [header.join(',')]
@@ -754,16 +767,23 @@ async function handleImportFile(file: File) {
     return
   }
 
+  const opened = await resolveBackupData(parsed, askBackupSecret)
+  if (!opened.ok) {
+    if (opened.error !== 'Отменено') importError.value = opened.error
+    return
+  }
+
   const confirmed = window.confirm(
     'Импорт полностью заменит текущие данные (машина, параметры ТО, заправки, история) содержимым файла. Продолжить?',
   )
   if (!confirmed) return
 
-  const result = await store.importData(parsed)
+  const result = await store.importData(opened.data)
   if (!result.ok) importError.value = result.error
 }
 
 function handleExportCarCsv() {
+  if (!confirmPlainExport()) return
   if (!car.value) return
   const csv = buildMoyaMashinaCsv({ fuel: store.fuelEntries, history: store.historyEntries })
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })

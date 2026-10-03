@@ -103,6 +103,23 @@ and an optional WebAuthn step. PINs saved by older versions (plain salted SHA-25
 rehashed on the next successful unlock. Five wrong attempts start a pause (30 s, doubling, capped at 15 min) that
 `LockScreen.vue` shows as a countdown. It is a UI gate, not encryption of the IndexedDB data.
 
+## Encryption at rest (opt-in)
+
+Settings → «Шифрование данных» (`VaultSetupSheet`/`VaultManageSheet`, logic in `utils/vault.ts` + `utils/vaultActions.ts`).
+- **Keys.** One random AES-256-GCM data key encrypts every record. It is stored only wrapped: once under the
+  passphrase (Argon2id via `hash-wasm`, 64 MiB × 3) and once under a 160-bit recovery code. Lose both and the data is
+  gone — there is no backdoor. While unlocked it lives in memory as a non-extractable `CryptoKey`.
+- **Storage seam.** Only `db/database.ts` seals/opens records (`seal`/`open`): a sealed row is `{id, carId?, e, iv, ct}`,
+  bound to `store:id` as AAD. Plain rows still read, so an interrupted migration is resumable
+  (`resumeInterruptedMigration`) and `reencryptAll` is idempotent and one transaction. Never await crypto inside an
+  IndexedDB transaction — seal first, then write.
+- **Everything that could leak is covered.** Local snapshots (`autoBackup.ts`, cleared on enable), the JSON export and cloud
+  payload (`serializeBackup`/`encryptBackup`, openable with passphrase or recovery code anywhere), and the Yandex token.
+  CSV/PDF exports stay plain files, so `Dashboard.vue` asks first when encryption is on.
+- **App flow.** With the vault on, `App.vue` loads nothing until `VaultUnlockScreen` emits `unlock`; the screen PIN is
+  disabled and biometrics can't unlock (they hold no key). Auto-lock drops the key after the chosen time in the background.
+  `onVaultStateChange` may only *raise* the lock — the unlock screen decides when it is done.
+
 ## Feedback & state
 
 - Every meaningful state-changing tap still gets a haptic via `src/utils/haptics.ts`
