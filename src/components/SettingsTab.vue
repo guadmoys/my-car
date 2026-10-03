@@ -66,6 +66,7 @@ import VaultSetupSheet from './VaultSetupSheet.vue'
 import VaultManageSheet from './VaultManageSheet.vue'
 import { isVaultEnabled } from '../utils/vault'
 import { askBackupSecret } from '../utils/secretPrompt'
+import { confirmDialog } from '../utils/confirmDialog'
 import {
   getNotificationPermission,
   isNotificationApiSupported,
@@ -523,8 +524,9 @@ function handleSyncNow() {
 async function handleRestoreFromCloud() {
   const provider = cloudSync.state.activeProvider
   if (!provider) return
-  const confirmed = window.confirm(
+  const confirmed = await confirmDialog(
     'Восстановление заменит текущие данные на устройстве резервной копией из облака. Продолжить?',
+    { header: 'Восстановить из облака', confirmText: 'Восстановить', destructive: true },
   )
   if (!confirmed) return
   haptic('tap')

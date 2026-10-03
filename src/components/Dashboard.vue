@@ -42,6 +42,7 @@ import { monthSpend, monthlyBudget } from '../utils/budget'
 import { buildPartsList } from '../utils/partsList'
 const PartsHistorySheet = lazy(() => import('./PartsHistorySheet.vue'))
 import { useBackup } from '../composables/useBackup'
+import { confirmDialog } from '../utils/confirmDialog'
 import { buildMasterStats } from '../utils/masterStats'
 const ExpenseListSheet = lazy(() => import('./ExpenseListSheet.vue'))
 const DocumentsSheet = lazy(() => import('./DocumentsSheet.vue'))
@@ -413,13 +414,13 @@ async function handleDeleteTrip(id: string) {
 }
 
 /** CSV tables and the PDF report are plain files even with encryption on; make that explicit before saving one. */
-function confirmPlainExport(): boolean {
+async function confirmPlainExport(): Promise<boolean> {
   if (!isVaultEnabled()) return true
-  return window.confirm('Эта выгрузка не шифруется: файл можно будет открыть без пароля. Продолжить?')
+  return confirmDialog('Эта выгрузка не шифруется: файл можно будет открыть без пароля. Продолжить?', { confirmText: 'Сохранить' })
 }
 
 async function handleExportPdf() {
-  if (!confirmPlainExport()) return
+  if (!(await confirmPlainExport())) return
   if (!car.value) return
   try {
     await generateReportPdf({
@@ -695,14 +696,14 @@ function downloadCsv(fileName: string, csv: string) {
   URL.revokeObjectURL(url)
 }
 
-function handleExportExpensesCsv() {
-  if (!confirmPlainExport()) return
+async function handleExportExpensesCsv() {
+  if (!(await confirmPlainExport())) return
   const csv = buildExpensesCsv(timelineEvents.value, currency.value, (id) => store.masters.find((m) => m.id === id)?.name)
   downloadCsv(`rashody-${new Date().toISOString().slice(0, 10)}.csv`, csv)
 }
 
-function handleExportFuelCsv() {
-  if (!confirmPlainExport()) return
+async function handleExportFuelCsv() {
+  if (!(await confirmPlainExport())) return
   const rows = store.fuelEntries.slice().sort((a, b) => a.date - b.date)
   const header = ['Дата', 'Пробег, км', 'Литры', `Стоимость, ${currency.value}`, `Цена, ${currency.value}/л`, 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
   const lines = [header.join(',')]
@@ -753,8 +754,9 @@ async function handleImportFile(file: File) {
     return
   }
 
-  const confirmed = window.confirm(
+  const confirmed = await confirmDialog(
     'Импорт полностью заменит текущие данные (машина, параметры ТО, заправки, история) содержимым файла. Продолжить?',
+    { header: 'Импорт копии', confirmText: 'Заменить данные', destructive: true },
   )
   if (!confirmed) return
 
@@ -763,8 +765,8 @@ async function handleImportFile(file: File) {
   else if (result.skipped > 0) toast.show(`Данные загружены. Пропущено повреждённых записей: ${result.skipped}`)
 }
 
-function handleExportCarCsv() {
-  if (!confirmPlainExport()) return
+async function handleExportCarCsv() {
+  if (!(await confirmPlainExport())) return
   if (!car.value) return
   const csv = buildMoyaMashinaCsv({ fuel: store.fuelEntries, history: store.historyEntries })
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })

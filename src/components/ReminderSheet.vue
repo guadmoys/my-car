@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmDialog } from '../utils/confirmDialog'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -127,7 +128,7 @@ async function canDismiss(): Promise<boolean> {
     ? manualText.value.trim() !== '' || manualKm.value.trim() !== ''
     : value.value.trim() !== ''
   if (!hasData) return true
-  return window.confirm('Напоминание не будет сохранено. Закрыть?')
+  return confirmDialog('Напоминание не будет сохранено. Закрыть?', { confirmText: 'Закрыть' })
 }
 </script>
 

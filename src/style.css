@@ -20,3 +20,8 @@
     margin-inline: auto !important;
   }
 }
+
+/* Confirm button of a destructive question (utils/confirmDialog.ts). */
+.alert-button-destructive {
+  color: var(--ion-color-danger) !important;
+}

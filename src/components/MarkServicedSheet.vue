@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmDialog } from '../utils/confirmDialog'
 import { currency } from '../utils/currency'
 import { computed, ref } from 'vue'
 import {
@@ -51,7 +52,7 @@ function handleSave() {
 // a heads-up before the entered cost is lost.
 async function canDismiss(): Promise<boolean> {
   if (cost.value.trim() === '' && !receiptPhoto.value && items.value.length === 0) return true
-  return window.confirm('Введённые данные не будут сохранены. Закрыть?')
+  return confirmDialog('Введённые данные не будут сохранены. Закрыть?', { confirmText: 'Закрыть' })
 }
 </script>
 

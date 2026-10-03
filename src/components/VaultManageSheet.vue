@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmDialog } from '../utils/confirmDialog'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -139,7 +140,10 @@ async function copyRecovery() {
 
 async function submitDisable() {
   if (busy.value || !current.value) return
-  const ok = window.confirm('Данные снова будут храниться без шифрования. Отключить шифрование?')
+  const ok = await confirmDialog('Данные снова будут храниться без шифрования. Отключить шифрование?', {
+    confirmText: 'Отключить',
+    destructive: true,
+  })
   if (!ok) return
   error.value = null
   busy.value = true
