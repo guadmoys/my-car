@@ -760,6 +760,7 @@ async function handleImportFile(file: File) {
 
   const result = await store.importData(opened.data)
   if (!result.ok) importError.value = result.error
+  else if (result.skipped > 0) toast.show(`Данные загружены. Пропущено повреждённых записей: ${result.skipped}`)
 }
 
 function handleExportCarCsv() {

@@ -64,6 +64,10 @@ mode.
 - **Store.** `composables/useCarStore.ts` is only a facade. State and logic live in `composables/store/*`, one module per
   concern (state, car, maintenance, fuel, expenses, documents, reminders, masters, components, trips, derived, backupData,
   csvImport). Modules import `state` and a few of each other, never the facade, so there are no cycles; keep it that way.
+- **Importing a backup.** Nothing in a file is trusted: `utils/backupValidation.ts` (`cleanBackupRecords`) checks every
+  record before it can replace the database, drops damaged, duplicate or orphaned ones (counted and shown to the user),
+  repairs what it safely can, keeps unknown fields, and `importData` refuses files from a newer format version. When you add
+  a field to a stored type, add it to the matching cleaner, and `importRoundTrip.test.ts` will tell you if it is lost.
 - **Pure logic.** Anything algorithmic belongs in `utils/` as a function that takes its inputs explicitly (see
   `maintenance.ts`, `fuelAnalytics.ts`, `alerts.ts`): it is then testable on its own and usable for any car, not just the
   active one. `composables/__tests__/fuelAnalytics.golden.test.ts` snapshots the real store output so a refactor can't

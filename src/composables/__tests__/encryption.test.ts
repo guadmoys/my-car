@@ -194,7 +194,7 @@ describe('encryption at rest', () => {
   it('imports a backup into an encrypted database as encrypted rows', async () => {
     const backup = await store.exportData()
     const result = await store.importData(JSON.parse(JSON.stringify(backup)))
-    expect(result).toEqual({ ok: true })
+    expect(result).toEqual({ ok: true, skipped: 0 })
     expect(await everythingStored()).not.toContain('Секретный бампер')
     expect(store.expenses.map((e) => e.title)).toContain('Секретный бампер')
   })

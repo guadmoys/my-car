@@ -15,6 +15,7 @@ import type {
 } from '../../types'
 import { saveSnapshot } from '../../utils/autoBackup'
 import { monthlyBudget, setMonthlyBudget } from '../../utils/budget'
+import { SUPPORTED_BACKUP_VERSION, cleanBackupRecords, type BackupRecords } from '../../utils/backupValidation'
 import { migrateLegacyToDocuments } from '../../utils/documents'
 import {
   ACTIVE_CAR_KEY,
@@ -79,53 +80,68 @@ export async function exportData(): Promise<BackupData> {
   }
 }
 
-export async function importData(data: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
-  let importedCars: Car[]
-  let importedItems: MaintenanceItem[]
-  let importedFuel: FuelEntry[]
-  let importedHistory: HistoryEntry[]
-  let importedReminders: Reminder[]
-  let importedMasters: Master[]
-  let importedExpenses: Expense[]
-  let importedComponents: ComponentCheck[]
-  let importedTrips: Trip[]
-  let importedDocuments: CarDocument[]
-  let newActiveCarId: string | undefined
-
+export async function importData(data: unknown): Promise<{ ok: true; skipped: number } | { ok: false; error: string }> {
   // Applied only once the import succeeded, so a rejected file can't change settings.
   const importedBudget = isMultiCarBackup(data) ? data.settings?.monthlyBudget : undefined
 
+  let raw: BackupRecords
+  let preferredActiveCarId: string | undefined
+
   if (isMultiCarBackup(data)) {
-    importedCars = data.cars
-    importedItems = data.items.map((i) => ({ ...i, parts: i.parts ?? [] }))
-    importedFuel = Array.isArray(data.fuelEntries) ? data.fuelEntries : []
-    importedHistory = Array.isArray(data.historyEntries) ? data.historyEntries : []
-    importedReminders = Array.isArray(data.reminders) ? data.reminders : []
-    importedMasters = Array.isArray(data.masters) ? data.masters : []
-    importedExpenses = Array.isArray(data.expenses) ? data.expenses : []
-    importedComponents = Array.isArray(data.components) ? data.components : []
-    importedTrips = Array.isArray(data.trips) ? data.trips : []
-    importedDocuments = Array.isArray(data.documents) ? data.documents : []
-    newActiveCarId =
-      data.activeCarId && importedCars.some((c) => c.id === data.activeCarId)
-        ? data.activeCarId
-        : importedCars[0]?.id
+    const version = (data as { version?: unknown }).version
+    if (typeof version === 'number' && version > SUPPORTED_BACKUP_VERSION) {
+      return { ok: false, error: 'Копия создана более новой версией приложения — обновите приложение и повторите' }
+    }
+    const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
+    raw = {
+      cars: data.cars,
+      items: data.items,
+      fuel: list(data.fuelEntries),
+      history: list(data.historyEntries),
+      reminders: list(data.reminders),
+      masters: list(data.masters),
+      expenses: list(data.expenses),
+      components: list(data.components),
+      trips: list(data.trips),
+      documents: list(data.documents),
+    }
+    preferredActiveCarId = typeof data.activeCarId === 'string' ? data.activeCarId : undefined
   } else if (isLegacyBackup(data)) {
     const carId = data.car.id && data.car.id !== 'main' ? data.car.id : makeId()
-    importedCars = [{ ...data.car, id: carId }]
-    importedItems = data.items.map((i) => ({ ...i, carId, parts: i.parts ?? [] }))
-    importedFuel = (data.fuelEntries ?? []).map((f) => ({ ...f, carId }))
-    importedHistory = (data.historyEntries ?? []).map((h) => ({ ...h, carId }))
-    importedReminders = []
-    importedMasters = []
-    importedExpenses = []
-    importedComponents = []
-    importedTrips = []
-    importedDocuments = []
-    newActiveCarId = carId
+    const withCar = (rows: unknown): unknown[] =>
+      (Array.isArray(rows) ? rows : []).map((r) => (typeof r === 'object' && r !== null ? { ...r, carId } : r))
+    raw = {
+      cars: [{ ...data.car, id: carId }],
+      items: withCar(data.items),
+      fuel: withCar(data.fuelEntries),
+      history: withCar(data.historyEntries),
+      reminders: [],
+      masters: [],
+      expenses: [],
+      components: [],
+      trips: [],
+      documents: [],
+    }
+    preferredActiveCarId = carId
   } else {
     return { ok: false, error: 'Файл повреждён или это не резервная копия «Моей машины»' }
   }
+
+  // Nothing in a backup file is trusted: damaged records are dropped (and counted) instead of
+  // reaching the database, where a missing id or a NaN mileage would break the app later.
+  const clean = cleanBackupRecords(raw, nowTs())
+  let importedCars: Car[] = clean.cars
+  const importedItems: MaintenanceItem[] = clean.items
+  const importedFuel: FuelEntry[] = clean.fuel
+  const importedHistory: HistoryEntry[] = clean.history
+  const importedReminders: Reminder[] = clean.reminders
+  const importedMasters: Master[] = clean.masters
+  let importedExpenses: Expense[] = clean.expenses
+  const importedComponents: ComponentCheck[] = clean.components
+  const importedTrips: Trip[] = clean.trips
+  let importedDocuments: CarDocument[] = clean.documents
+  const newActiveCarId =
+    preferredActiveCarId && importedCars.some((c) => c.id === preferredActiveCarId) ? preferredActiveCarId : importedCars[0]?.id
 
   if (!newActiveCarId || importedCars.length === 0) {
     return { ok: false, error: 'В файле нет ни одной машины' }
@@ -192,6 +208,6 @@ export async function importData(data: unknown): Promise<{ ok: true } | { ok: fa
   }
 
   if (typeof importedBudget === 'number') setMonthlyBudget(importedBudget)
-  return { ok: true }
+  return { ok: true, skipped: clean.skipped }
 }
 
