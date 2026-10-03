@@ -21,7 +21,7 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { add, alarmOutline, cashOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, walletOutline, water } from 'ionicons/icons'
+import { add, alarmOutline, cashOutline, cloudUploadOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, walletOutline, water } from 'ionicons/icons'
 import { monthlyBudget } from '../utils/budget'
 import type { WarrantyStatus } from '../utils/warranty'
 import { DOCUMENT_TYPE_LABELS, EXPENSE_CATEGORY_LABELS } from '../types'
@@ -53,6 +53,10 @@ const props = defineProps<{
   documentStatuses: DocumentStatus[]
   documentCount: number
   warranties: WarrantyStatus[]
+  backupDue: boolean
+  backupDays: number | null
+  backupNever: boolean
+  backupSaving: boolean
   monthSpend: number
 }>()
 
@@ -127,6 +131,8 @@ const emit = defineEmits<{
   editMileage: []
   switchCar: []
   quickFuel: []
+  saveBackup: []
+  snoozeBackup: []
   quickExpense: []
   openItem: [id: string]
   markServiced: [id: string]
@@ -183,6 +189,21 @@ function fmtCost(n: number): string {
         <ion-title size="large">Обзор</ion-title>
       </ion-toolbar>
     </ion-header>
+
+    <ion-list v-if="backupDue" inset>
+      <ion-item lines="none">
+        <ion-icon slot="start" :icon="cloudUploadOutline" color="warning" />
+        <ion-label class="ion-text-wrap">
+          <h2>Сохраните копию данных</h2>
+          <p v-if="backupNever">Копий ещё не было: если телефон потеряется или сотрётся, записи не вернуть.</p>
+          <p v-else>Последняя копия — {{ backupDays }} дн. назад. Сохраните новую, чтобы не потерять записи.</p>
+        </ion-label>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-button slot="end" fill="clear" size="small" :disabled="backupSaving" @click="emit('snoozeBackup')">Позже</ion-button>
+        <ion-button slot="end" size="small" :disabled="backupSaving" @click="emit('saveBackup')">Сохранить копию</ion-button>
+      </ion-item>
+    </ion-list>
 
     <SummaryCard
       :car="car"

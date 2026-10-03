@@ -83,6 +83,8 @@ import {
 import { computeAlerts } from '../utils/alerts'
 import { loadAllBundles } from '../utils/alertDispatcher'
 import { downloadIcsCalendar } from '../utils/ics'
+import { useBackup } from '../composables/useBackup'
+import { BACKUP_INTERVAL_OPTIONS, describeLastBackup } from '../utils/backupSchedule'
 import {
   disableBiometric,
   disableLock,
@@ -204,6 +206,24 @@ async function handleToggleNotifications(checked: boolean) {
   }
 }
 
+const backup = useBackup()
+const intervalValue = computed(() => String(backup.state.intervalDays))
+
+async function handleBackupInterval(e: CustomEvent) {
+  haptic('tap')
+  await backup.setInterval(Number(e.detail.value))
+}
+
+async function handleSaveBackupNow() {
+  haptic('tap')
+  await backup.saveNow()
+}
+
+async function handlePickFolder() {
+  haptic('tap')
+  if (await backup.pickFolder()) toast.show('Папка выбрана — копии будут сохраняться в неё сами')
+}
+
 const background = ref<BackgroundStatus>('off')
 
 async function refreshBackground() {
@@ -280,6 +300,7 @@ const showAppLockSheet = ref(false)
 onMounted(async () => {
   biometricSupported.value = await isPlatformAuthenticatorAvailable()
   void refreshBackground()
+  void backup.refresh()
 })
 
 function handleTogglePasscode(checked: boolean) {
@@ -832,9 +853,30 @@ function handleCsvFileSelected(event: Event) {
           text="Экспорт сохраняет все машины, параметры ТО, заправки и историю в файл. Импорт полностью заменит текущие данные содержимым файла. CSV-пункты — для обмена данными с приложением «Моя машина» (сторонним, не путать с этим): импорт добавляет заправки и записи ТО к текущим, не удаляя ничего"
         />
       </ion-list-header>
-      <ion-item button :detail="false" @click="emit('export')">
+      <ion-item button :detail="false" @click="handleSaveBackupNow">
         <SettingsIconBadge slot="start" :icon="downloadOutline" color="success" />
-        <ion-label color="primary">Экспортировать данные</ion-label>
+        <ion-label color="primary" class="ion-text-wrap">
+          Сохранить копию данных
+          <p>Последняя: {{ describeLastBackup(backup.state.lastAt) }}</p>
+        </ion-label>
+      </ion-item>
+      <ion-item>
+        <ion-select
+          label="Напоминать о копии"
+          :value="intervalValue"
+          interface="action-sheet"
+          :interface-options="{ cancelText: 'Отмена' }"
+          @ion-change="handleBackupInterval"
+        >
+          <ion-select-option v-for="o in BACKUP_INTERVAL_OPTIONS" :key="o.days" :value="String(o.days)">{{ o.label }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+      <ion-item v-if="backup.state.folderSupported" button :detail="false" @click="backup.state.folderName ? backup.clearFolder() : handlePickFolder()">
+        <SettingsIconBadge slot="start" :icon="folderOutline" color="warning" />
+        <ion-label class="ion-text-wrap">
+          <template v-if="backup.state.folderName">Автосохранение в папку «{{ backup.state.folderName }}»<p>Нажмите, чтобы отключить</p></template>
+          <template v-else>Автосохранение копий в папку<p>Выберите папку один раз — копии будут сохраняться сами, когда придёт срок</p></template>
+        </ion-label>
       </ion-item>
       <ion-item button :detail="false" @click="emit('exportPdf')">
         <SettingsIconBadge slot="start" :icon="documentOutline" color="danger" />

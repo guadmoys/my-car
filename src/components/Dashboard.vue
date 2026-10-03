@@ -24,7 +24,7 @@ import MarkServicedSheet from './MarkServicedSheet.vue'
 import MasterListSheet from './MasterListSheet.vue'
 import MasterFormSheet from './MasterFormSheet.vue'
 import { buildCostStructure } from '../utils/costStructure'
-import { isVaultEnabled, serializeBackup } from '../utils/vault'
+import { isVaultEnabled } from '../utils/vault'
 import { resolveBackupData } from '../utils/backupFile'
 import { askBackupSecret } from '../utils/secretPrompt'
 import { buildExpensesCsv } from '../utils/expensesCsv'
@@ -32,6 +32,7 @@ import { buildWarranties } from '../utils/warranty'
 import { monthSpend, monthlyBudget } from '../utils/budget'
 import { buildPartsList } from '../utils/partsList'
 import PartsHistorySheet from './PartsHistorySheet.vue'
+import { useBackup } from '../composables/useBackup'
 import { buildMasterStats } from '../utils/masterStats'
 import ExpenseListSheet from './ExpenseListSheet.vue'
 import DocumentsSheet from './DocumentsSheet.vue'
@@ -59,6 +60,7 @@ import type {
 } from '../types'
 
 const store = useCarStore()
+const backup = useBackup()
 const {
   car,
   cars,
@@ -652,20 +654,8 @@ async function handleCreateCar(payload: {
 }
 
 async function handleExport() {
-  const data = await store.exportData()
-  // Encrypted with the vault key when encryption is on; readable JSON otherwise.
-  const json = await serializeBackup(data)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const dateStr = new Date().toISOString().slice(0, 10)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `moya-mashina-backup-${dateStr}.json`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  // Encrypted with the vault key when encryption is on; saved to the chosen folder, the share sheet or a download.
+  await backup.saveNow()
 }
 
 function csvEscape(value: string): string {
@@ -826,6 +816,12 @@ async function handleImportCarCsv(file: File) {
         :document-statuses="documentStatuses"
         :document-count="store.documents.length"
         :warranties="warranties"
+        :backup-due="backup.state.due"
+        :backup-days="backup.state.daysSince"
+        :backup-never="backup.state.never"
+        :backup-saving="backup.state.saving"
+        @save-backup="backup.saveNow()"
+        @snooze-backup="backup.snooze()"
         :month-spend="thisMonthSpend"
         @open-documents="showDocuments = true"
         @edit-mileage="showMileageSheet = true"

@@ -16,6 +16,7 @@ import { getAutoLockMinutes, isVaultEnabled, isVaultUnlocked, lockVault, onVault
 import { resumeInterruptedMigration } from './utils/vaultActions'
 import { registerBackgroundCheck, runAlertsNow, scheduleAlertCycle } from './composables/useAlerts'
 import { isNotificationsEnabled } from './utils/notifications'
+import { useBackup } from './composables/useBackup'
 
 const store = useCarStore()
 const { cars, isLoaded } = store
@@ -35,6 +36,8 @@ async function startApp() {
   void store.load().then(() => {
     void runAlertsNow()
     if (isNotificationsEnabled()) void registerBackgroundCheck()
+    // If a folder was chosen, due copies are written to it without any tap; otherwise the home banner asks.
+    void useBackup().refresh().then(() => useBackup().autoSaveToFolder())
   })
   useCloudSync().initCloudSync()
 }
@@ -65,6 +68,7 @@ function handleVisibilityChange() {
   hiddenAt = null
   // Coming back to the app is a good moment to look at the clock again.
   scheduleAlertCycle(500)
+  if (isVaultUnlocked() || !isVaultEnabled()) void useBackup().refresh().then(() => useBackup().autoSaveToFolder())
 }
 
 let stopVaultWatch: (() => void) | undefined

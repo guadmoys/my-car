@@ -120,6 +120,23 @@ Settings → «Шифрование данных» (`VaultSetupSheet`/`VaultMana
   disabled and biometrics can't unlock (they hold no key). Auto-lock drops the key after the chosen time in the background.
   `onVaultStateChange` may only *raise* the lock — the unlock screen decides when it is done.
 
+## Notifications & backups
+
+- **Alert engine.** `utils/alerts.ts` turns every car's data into alerts (`computeAlerts`: ТО by mileage/date/pace, dated
+  and odometer reminders, document expiry, warranties) with *stable keys* that embed what resets them (last service,
+  expiry date), so nothing needs manual "notified" clean-up. `utils/alertDispatcher.ts` (`runAlertCycle`) runs over **all**
+  cars, delivers what is newly due once (grouped per car, soon → due escalates), and writes the upcoming ones to a small
+  plain database (`utils/alertStore.ts`, `my-car-alerts`). The first run is silent. Triggered from `composables/useAlerts.ts`
+  at startup, on returning to the app, and (debounced) on data changes. Low fuel and budget keep their own checks.
+- **Background.** `public/sw-extra.js` (pulled into the generated worker by `workbox.importScripts`) answers
+  `periodicsync` (Chromium, installed PWA only) from that schedule and handles notification taps. iOS has no background
+  path, so Settings also offers **deadlines as .ics** (`buildIcsCalendar`), which rings at the OS level. While encryption is
+  on the schedule is never written and the background check is off.
+- **Backups off the device.** `utils/backupSchedule.ts` decides when to remind (default weekly, a clock that starts when
+  data first exists, "later" = 1 day, cloud sync counts); `utils/backupExport.ts` saves via a chosen folder
+  (File System Access, written without a tap while permission lasts, newest 10 kept), else the share sheet, else a
+  download. `composables/useBackup.ts` drives the home banner and the Settings section. Files are encrypted when the vault is on.
+
 ## Feedback & state
 
 - Every meaningful state-changing tap still gets a haptic via `src/utils/haptics.ts`
