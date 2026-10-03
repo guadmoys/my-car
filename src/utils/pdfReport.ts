@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf'
 import { formatMoney } from './currency'
 import { EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Car, Expense, HistoryEntry, MaintenanceStatus, Trip } from '../types'
@@ -242,7 +241,7 @@ function draw(ctx: CanvasRenderingContext2D, data: ReportData, cardH: number) {
  * due list, other-expenses list, business/personal mileage split, recent
  * service history) and triggers a download.
  */
-export function generateReportPdf(data: ReportData): void {
+export async function generateReportPdf(data: ReportData): Promise<void> {
   const sections = buildSections(data)
   const cardH = computeHeight(sections)
   const totalH = cardH + MARGIN * 2
@@ -260,6 +259,8 @@ export function generateReportPdf(data: ReportData): void {
   // Page sized to exactly match the rendered content (in points, 1px = 0.75pt
   // at 96dpi) — a custom-sized single-page PDF, rather than fitting the
   // report into a fixed A4 frame with pagination logic.
+  // The PDF library is ~340 KB and only needed here, so it is fetched on demand.
+  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: [WIDTH * 0.75, totalH * 0.75] })
   doc.addImage(imgData, 'PNG', 0, 0, WIDTH * 0.75, totalH * 0.75)
 

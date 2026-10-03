@@ -59,6 +59,19 @@ mode.
   `.card` containers everywhere (`SettingsTab.vue`, `DashboardTab.vue`,
   `SettingsTab.vue`'s forms, etc).
 
+## Code layout
+
+- **Store.** `composables/useCarStore.ts` is only a facade. State and logic live in `composables/store/*`, one module per
+  concern (state, car, maintenance, fuel, expenses, documents, reminders, masters, components, trips, derived, backupData,
+  csvImport). Modules import `state` and a few of each other, never the facade, so there are no cycles; keep it that way.
+- **Pure logic.** Anything algorithmic belongs in `utils/` as a function that takes its inputs explicitly (see
+  `maintenance.ts`, `fuelAnalytics.ts`, `alerts.ts`): it is then testable on its own and usable for any car, not just the
+  active one. `composables/__tests__/fuelAnalytics.golden.test.ts` snapshots the real store output so a refactor can't
+  silently change a number.
+- **Loading.** `Dashboard.vue` loads every tab except the home one, and every sheet, with `lazy()` (async components),
+  and warms them when the browser is idle. The PDF library (`jspdf`) is imported only inside `generateReportPdf`, and
+  `tesseract.js`/`hash-wasm` only when used. Don't import these statically.
+
 ## Documents
 
 Everything that is a paper — СТС/ПТС, driver's licence, insurance, tech inspection, tax,

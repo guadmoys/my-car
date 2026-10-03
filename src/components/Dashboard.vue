@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { IonPage, IonTab, IonTabs } from '@ionic/vue'
 import { currency } from '../utils/currency'
 import { useCarStore } from '../composables/useCarStore'
@@ -8,21 +8,30 @@ import { registerBackgroundCheck, runAlertsNow, scheduleAlertCycle } from '../co
 import { haptic } from '../utils/haptics'
 import { useToast } from '../composables/useToast'
 import DashboardTab from './DashboardTab.vue'
-import MaintenanceTab from './MaintenanceTab.vue'
-import FuelTab from './FuelTab.vue'
-import SettingsTab from './SettingsTab.vue'
+// Everything except the home screen is fetched on demand: each sheet or tab is its own chunk, which keeps the first
+// load small. The service worker precaches all chunks, so this still works offline, and after the first paint the
+// chunks are warmed in the background so opening a sheet never waits.
+const prefetchers: (() => Promise<unknown>)[] = []
+function lazy(loader: () => Promise<unknown>) {
+  prefetchers.push(loader)
+  return defineAsyncComponent(loader as Parameters<typeof defineAsyncComponent>[0])
+}
+
+const MaintenanceTab = lazy(() => import('./MaintenanceTab.vue'))
+const FuelTab = lazy(() => import('./FuelTab.vue'))
+const SettingsTab = lazy(() => import('./SettingsTab.vue'))
 import TabBar, { type TabKey } from './TabBar.vue'
-import EditItemModal from './EditItemModal.vue'
-import MileageSheet from './MileageSheet.vue'
-import FuelSheet from './FuelSheet.vue'
-import CarSwitcherSheet from './CarSwitcherSheet.vue'
-import AddCarSheet from './AddCarSheet.vue'
-import CarPassportSheet from './CarPassportSheet.vue'
-import EventsHistorySheet from './EventsHistorySheet.vue'
-import ReminderSheet from './ReminderSheet.vue'
-import MarkServicedSheet from './MarkServicedSheet.vue'
-import MasterListSheet from './MasterListSheet.vue'
-import MasterFormSheet from './MasterFormSheet.vue'
+const EditItemModal = lazy(() => import('./EditItemModal.vue'))
+const MileageSheet = lazy(() => import('./MileageSheet.vue'))
+const FuelSheet = lazy(() => import('./FuelSheet.vue'))
+const CarSwitcherSheet = lazy(() => import('./CarSwitcherSheet.vue'))
+const AddCarSheet = lazy(() => import('./AddCarSheet.vue'))
+const CarPassportSheet = lazy(() => import('./CarPassportSheet.vue'))
+const EventsHistorySheet = lazy(() => import('./EventsHistorySheet.vue'))
+const ReminderSheet = lazy(() => import('./ReminderSheet.vue'))
+const MarkServicedSheet = lazy(() => import('./MarkServicedSheet.vue'))
+const MasterListSheet = lazy(() => import('./MasterListSheet.vue'))
+const MasterFormSheet = lazy(() => import('./MasterFormSheet.vue'))
 import { buildCostStructure } from '../utils/costStructure'
 import { isVaultEnabled } from '../utils/vault'
 import { resolveBackupData } from '../utils/backupFile'
@@ -31,17 +40,17 @@ import { buildExpensesCsv } from '../utils/expensesCsv'
 import { buildWarranties } from '../utils/warranty'
 import { monthSpend, monthlyBudget } from '../utils/budget'
 import { buildPartsList } from '../utils/partsList'
-import PartsHistorySheet from './PartsHistorySheet.vue'
+const PartsHistorySheet = lazy(() => import('./PartsHistorySheet.vue'))
 import { useBackup } from '../composables/useBackup'
 import { buildMasterStats } from '../utils/masterStats'
-import ExpenseListSheet from './ExpenseListSheet.vue'
-import DocumentsSheet from './DocumentsSheet.vue'
-import DocumentFormSheet from './DocumentFormSheet.vue'
-import ExpenseFormSheet from './ExpenseFormSheet.vue'
-import ComponentsSheet from './ComponentsSheet.vue'
-import ComponentFormSheet from './ComponentFormSheet.vue'
-import TripListSheet from './TripListSheet.vue'
-import TripFormSheet from './TripFormSheet.vue'
+const ExpenseListSheet = lazy(() => import('./ExpenseListSheet.vue'))
+const DocumentsSheet = lazy(() => import('./DocumentsSheet.vue'))
+const DocumentFormSheet = lazy(() => import('./DocumentFormSheet.vue'))
+const ExpenseFormSheet = lazy(() => import('./ExpenseFormSheet.vue'))
+const ComponentsSheet = lazy(() => import('./ComponentsSheet.vue'))
+const ComponentFormSheet = lazy(() => import('./ComponentFormSheet.vue'))
+const TripListSheet = lazy(() => import('./TripListSheet.vue'))
+const TripFormSheet = lazy(() => import('./TripFormSheet.vue'))
 import type { PassportData } from '../utils/carPassport'
 import { generateReportPdf } from '../utils/pdfReport'
 import { buildMoyaMashinaCsv, parseMoyaMashinaCsv } from '../utils/carCsvFormat'
@@ -58,6 +67,7 @@ import type {
   Master,
   Part,
 } from '../types'
+
 
 const store = useCarStore()
 const backup = useBackup()
@@ -90,6 +100,14 @@ const {
 } = store
 
 const toast = useToast()
+
+onMounted(() => {
+  // Warm the lazy chunks one by one once the browser is idle, so the first tap on a tab or sheet is instant.
+  const idle = (fn: () => void) => ('requestIdleCallback' in window ? window.requestIdleCallback(fn) : setTimeout(fn, 1500))
+  idle(() => {
+    void prefetchers.reduce((chain, load) => chain.then(() => load()).catch(() => undefined), Promise.resolve<unknown>(undefined))
+  })
+})
 
 // A rapid double-tap on a sheet's "Готово" fires its click handler twice
 // before the first async store write resolves and the sheet closes — there's
@@ -400,10 +418,11 @@ function confirmPlainExport(): boolean {
   return window.confirm('Эта выгрузка не шифруется: файл можно будет открыть без пароля. Продолжить?')
 }
 
-function handleExportPdf() {
+async function handleExportPdf() {
   if (!confirmPlainExport()) return
   if (!car.value) return
-  generateReportPdf({
+  try {
+    await generateReportPdf({
     car: car.value,
     statuses: statuses.value,
     totalFuelCost: totalFuelCost.value,
@@ -416,7 +435,10 @@ function handleExportPdf() {
     totalPersonalKm: totalPersonalKm.value,
     recentHistory: store.historyEntries.slice().sort((a, b) => b.date - a.date),
     structure: buildCostStructure(store.fuelEntries, store.historyEntries, store.expenses),
-  })
+    })
+  } catch {
+    toast.show('Не удалось создать PDF — попробуйте ещё раз')
+  }
 }
 
 async function handleSaveDocument(payload: {
