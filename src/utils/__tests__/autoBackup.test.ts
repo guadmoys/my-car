@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isDailySnapshotDue, snapshotsToPrune } from '../autoBackup'
+import { isDailySnapshotDue, snapshotsToPrune } from '../backup/autoBackup'
 
 const DAY = 24 * 60 * 60 * 1000
 

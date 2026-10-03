@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { IonButton, IonButtons, IonContent, IonHeader, IonInput, IonItem, IonList, IonModal, IonNote, IonTitle, IonToolbar } from '@ionic/vue'
-import { setPin } from '../utils/appLock'
+import { setPin } from '../utils/security/appLock'
 
 const emit = defineEmits<{
   close: []
@@ -65,7 +65,7 @@ function handleInput() {
             label="Код-пароль, 4–6 цифр"
             label-placement="stacked"
             type="password"
-            inputmode="numeric"
+            enterkeyhint="done" inputmode="numeric"
             autofocus
             @ion-input="handleInput"
           />

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { IonButton, IonContent, IonIcon, IonInput, IonNote, IonPage } from '@ionic/vue'
 import { carSportOutline, fingerPrintOutline, lockClosedOutline } from 'ionicons/icons'
-import { isBiometricEnabled, verifyBiometric, verifyPin } from '../utils/appLock'
+import { isBiometricEnabled, lockoutRemainingMs, verifyBiometric, verifyPin } from '../utils/security/appLock'
 import { haptic } from '../utils/haptics'
 
 const emit = defineEmits<{
@@ -25,12 +25,29 @@ async function tryBiometric() {
   }
 }
 
+// Seconds left of the pause after too many wrong attempts; ticks down once a second.
+const lockoutSeconds = ref(Math.ceil(lockoutRemainingMs() / 1000))
+let timer: ReturnType<typeof setInterval> | undefined
+
+function startTimer() {
+  if (timer) clearInterval(timer)
+  timer = setInterval(() => {
+    lockoutSeconds.value = Math.ceil(lockoutRemainingMs() / 1000)
+    if (lockoutSeconds.value <= 0 && timer) clearInterval(timer)
+  }, 1000)
+}
+
 onMounted(() => {
+  if (lockoutSeconds.value > 0) startTimer()
   if (biometricAvailable.value) tryBiometric()
 })
 
+onBeforeUnmount(() => {
+  if (timer) clearInterval(timer)
+})
+
 async function submitPin() {
-  if (pin.value.trim() === '') return
+  if (pin.value.trim() === '' || lockoutSeconds.value > 0) return
   const ok = await verifyPin(pin.value)
   if (ok) {
     haptic('success')
@@ -39,6 +56,8 @@ async function submitPin() {
     haptic('warning')
     error.value = true
     pin.value = ''
+    lockoutSeconds.value = Math.ceil(lockoutRemainingMs() / 1000)
+    if (lockoutSeconds.value > 0) startTimer()
   }
 }
 
@@ -61,7 +80,7 @@ function handleInput() {
           <ion-input
             v-model="pin"
             type="password"
-            inputmode="numeric"
+            enterkeyhint="done" inputmode="numeric"
             placeholder="Код-пароль"
             autofocus
             :class="{ 'ion-invalid': error }"
@@ -69,9 +88,12 @@ function handleInput() {
             @keyup.enter="submitPin"
           />
         </div>
-        <ion-note v-if="error" color="danger" class="hint">Неверный код-пароль</ion-note>
+        <ion-note v-if="lockoutSeconds > 0" color="danger" class="hint">
+          Слишком много попыток. Повторите через {{ lockoutSeconds }} с
+        </ion-note>
+        <ion-note v-else-if="error" color="danger" class="hint">Неверный код-пароль</ion-note>
 
-        <ion-button expand="block" :disabled="pin.trim() === ''" @click="submitPin">Войти</ion-button>
+        <ion-button expand="block" :disabled="pin.trim() === '' || lockoutSeconds > 0" @click="submitPin">Войти</ion-button>
 
         <ion-button v-if="biometricAvailable" fill="clear" :disabled="checkingBiometric" @click="tryBiometric">
           <ion-icon slot="start" :icon="fingerPrintOutline" />

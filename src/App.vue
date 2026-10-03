@@ -8,28 +8,86 @@ import Dashboard from './components/Dashboard.vue'
 import ToastHost from './components/ToastHost.vue'
 import SplashSkeleton from './components/SplashSkeleton.vue'
 import LockScreen from './components/LockScreen.vue'
+import VaultUnlockScreen from './components/VaultUnlockScreen.vue'
 import UpdateScreen from './components/UpdateScreen.vue'
-import { isLockEnabled } from './utils/appLock'
+import { isLockEnabled } from './utils/security/appLock'
 import { isUpdating } from './utils/appUpdate'
+import { getAutoLockMinutes, isVaultEnabled, isVaultUnlocked, lockVault, onVaultStateChange } from './utils/security/vault'
+import { resumeInterruptedMigration } from './utils/security/vaultActions'
+import { registerBackgroundCheck, runAlertsNow, scheduleAlertCycle } from './composables/useAlerts'
+import { isNotificationsEnabled } from './utils/alerts/notifications'
+import { useBackup } from './composables/useBackup'
 
 const store = useCarStore()
 const { cars, isLoaded } = store
 
-const locked = ref(isLockEnabled())
+const locked = ref(isLockEnabled() && !isVaultEnabled())
+/** True while encryption is on and the key isn't in memory: nothing is read from storage until it is. */
+const vaultLocked = ref(isVaultEnabled() && !isVaultUnlocked())
 
-/** Re-locks whenever the app comes back from being backgrounded/hidden — not
- * just on cold start — so the passcode actually gates re-entry, not just launch. */
-function handleVisibilityChange() {
-  if (document.visibilityState === 'visible' && isLockEnabled()) locked.value = true
+let started = false
+
+/** Loads data and starts background work. With encryption on, this waits for the unlock. */
+async function startApp() {
+  if (started) return
+  started = true
+  await resumeInterruptedMigration().catch(() => {})
+  // Once the data is in, check every car's deadlines (not only the one on screen).
+  void store.load().then(() => {
+    void runAlertsNow()
+    if (isNotificationsEnabled()) void registerBackgroundCheck()
+    // If a folder was chosen, due copies are written to it without any tap; otherwise the home banner asks.
+    void useBackup().refresh().then(() => useBackup().autoSaveToFolder())
+  })
+  useCloudSync().initCloudSync()
 }
 
+function handleVaultUnlocked() {
+  vaultLocked.value = false
+  void startApp()
+  scheduleAlertCycle(500)
+}
+
+let hiddenAt: number | null = null
+
+/** Re-locks whenever the app comes back from being backgrounded/hidden — not
+ * just on cold start — so the passcode actually gates re-entry, not just launch.
+ * With encryption on, the key is dropped once the app has been away longer
+ * than the chosen auto-lock delay. */
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    hiddenAt = Date.now()
+    return
+  }
+  if (isVaultEnabled()) {
+    const away = hiddenAt === null ? 0 : Date.now() - hiddenAt
+    if (isVaultUnlocked() && away >= getAutoLockMinutes() * 60_000) lockVault()
+  } else if (isLockEnabled()) {
+    locked.value = true
+  }
+  hiddenAt = null
+  // Coming back to the app is a good moment to look at the clock again.
+  scheduleAlertCycle(500)
+  if (isVaultUnlocked() || !isVaultEnabled()) void useBackup().refresh().then(() => useBackup().autoSaveToFolder())
+}
+
+let stopVaultWatch: (() => void) | undefined
+
 onMounted(() => {
-  store.load()
-  useCloudSync().initCloudSync()
+  stopVaultWatch = onVaultStateChange(() => {
+    // Only ever *raises* the lock here. The unlock screen must stay up until it says it is done
+    // (after a recovery-code login it still has to ask for a new passphrase), so lowering the
+    // flag is that screen's job (handleVaultUnlocked), not a reaction to the key appearing.
+    if (isVaultEnabled() && !isVaultUnlocked()) vaultLocked.value = true
+    // Encryption was just turned on or off from Settings: the PIN gate no longer applies / is back.
+    locked.value = false
+  })
+  if (!isVaultEnabled()) void startApp()
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
+  stopVaultWatch?.()
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
@@ -46,6 +104,7 @@ async function handleOnboardingSubmit(payload: {
 <template>
   <ion-app>
     <UpdateScreen v-if="isUpdating" />
+    <VaultUnlockScreen v-else-if="vaultLocked" @unlock="handleVaultUnlocked" />
     <LockScreen v-else-if="locked" @unlock="locked = false" />
     <template v-else>
       <SplashSkeleton v-if="!isLoaded" />

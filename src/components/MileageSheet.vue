@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmDialog } from '../utils/confirmDialog'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -108,7 +109,7 @@ function handleSave(rollback: boolean) {
 // Отмена button still closes immediately, same as every other sheet.
 async function canDismiss(): Promise<boolean> {
   if (!touched.value || value.value.trim() === '') return true
-  return window.confirm('Введённый пробег не будет сохранён. Закрыть?')
+  return confirmDialog('Введённый пробег не будет сохранён. Закрыть?', { confirmText: 'Закрыть' })
 }
 </script>
 
@@ -142,7 +143,7 @@ async function canDismiss(): Promise<boolean> {
             label="Пробег на выбранную дату, км"
             label-placement="stacked"
             type="text"
-            inputmode="numeric"
+            enterkeyhint="next" inputmode="numeric"
             autofocus
             @ion-input="touched = true"
           />

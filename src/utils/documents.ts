@@ -30,6 +30,7 @@ const EXPENSE_TO_DOCUMENT_TYPE: Record<ExpenseCategory, DocumentType> = {
   parking: 'other',
   fine: 'other',
   loan: 'other',
+  damage: 'other',
   other: 'other',
 }
 

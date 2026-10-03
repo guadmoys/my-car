@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMoney } from '../utils/currency'
+import { formatMoney } from '../utils/money/currency'
 import { computed, ref, watch } from 'vue'
 import {
   IonAccordion,
@@ -20,10 +20,12 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { calendarOutline, close, trash } from 'ionicons/icons'
-import type { HistoryEntry, MaintenanceItem, Part } from '../types'
+import type { ExpenseItem, HistoryEntry, MaintenanceItem, Part } from '../types'
+import { useCarStore } from '../composables/useCarStore'
+import { EXPENSE_CATEGORY_LABELS } from '../types'
 import HistoryEditSheet from './HistoryEditSheet.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
-import { downloadIcsReminder } from '../utils/ics'
+import { downloadIcsReminder } from '../utils/alerts/ics'
 import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
 
 function addMonths(ts: number, months: number): number {
@@ -78,7 +80,7 @@ const emit = defineEmits<{
   delete: [id: string]
   updateHistory: [
     id: string,
-    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
+    payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[]; masterId?: string },
   ]
 }>()
 
@@ -94,10 +96,17 @@ function handleSaveHistory(payload: {
   cost?: number
   receiptPhoto?: string
   note?: string
+  items?: ExpenseItem[]
+  masterId?: string
 }) {
   if (editingHistoryId.value) emit('updateHistory', editingHistoryId.value, payload)
   editingHistoryId.value = null
 }
+
+const store = useCarStore()
+const linkedExpenses = computed(() =>
+  props.item ? store.expenses.filter((e) => e.itemId === props.item!.id).sort((a, b) => b.date - a.date) : [],
+)
 
 const isCreate = computed(() => props.item === null)
 
@@ -279,13 +288,13 @@ function handleAddToCalendar() {
 
       <ion-list inset>
         <ion-item>
-          <ion-input v-model="interval" label="Интервал, км" label-placement="stacked" inputmode="numeric" placeholder="5000" />
+          <ion-input v-model="interval" label="Интервал, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" placeholder="5000" />
         </ion-item>
         <ion-item>
-          <ion-input v-model="intervalMax" label="До (необязательно, для диапазона)" label-placement="stacked" inputmode="numeric" placeholder="—" />
+          <ion-input v-model="intervalMax" label="До (необязательно, для диапазона)" label-placement="stacked" enterkeyhint="next" inputmode="numeric" placeholder="—" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="intervalMonths" label="Или раз в N месяцев (необязательно)" label-placement="stacked" inputmode="numeric" placeholder="—" />
+          <ion-input v-model="intervalMonths" label="Или раз в N месяцев (необязательно)" label-placement="stacked" enterkeyhint="next" inputmode="numeric" placeholder="—" />
         </ion-item>
       </ion-list>
 
@@ -300,7 +309,7 @@ function handleAddToCalendar() {
                 v-model="notifyBeforeKm"
                 label="Уведомлять за, км до ТО"
                 label-placement="stacked"
-                inputmode="numeric"
+                enterkeyhint="next" inputmode="numeric"
                 :placeholder="`по умолчанию ${Math.round(kmThresholdDefault.value)}`"
               />
             </ion-item>
@@ -309,7 +318,7 @@ function handleAddToCalendar() {
                 v-model="notifyBeforeDays"
                 label="Уведомлять за, дней до ТО"
                 label-placement="stacked"
-                inputmode="numeric"
+                enterkeyhint="next" inputmode="numeric"
                 :placeholder="`по умолчанию ${Math.round(dayThresholdDefault.value)}`"
               />
             </ion-item>
@@ -328,7 +337,7 @@ function handleAddToCalendar() {
 
       <ion-list v-if="!isCreate" inset>
         <ion-item lines="none">
-          <ion-input v-model="lastServiceMileage" label="Пробег последнего ТО, км" label-placement="stacked" inputmode="numeric" />
+          <ion-input v-model="lastServiceMileage" label="Пробег последнего ТО, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" />
         </ion-item>
       </ion-list>
       <ion-note v-if="!isCreate && Number(lastServiceMileage) > currentMileage" color="danger" class="hint">
@@ -339,6 +348,17 @@ function handleAddToCalendar() {
         <ion-icon slot="start" :icon="calendarOutline" />
         Добавить напоминание в календарь
       </ion-button>
+
+      <ion-list v-if="linkedExpenses.length > 0" inset>
+        <ion-list-header>Связанные расходы</ion-list-header>
+        <ion-item v-for="e in linkedExpenses" :key="e.id" lines="full">
+          <ion-label>
+            <h3>{{ e.title || EXPENSE_CATEGORY_LABELS[e.category] }}</h3>
+            <p>{{ fmtHistoryDate(e.date) }}</p>
+          </ion-label>
+          <ion-note slot="end" color="primary">{{ fmtCost(e.amount) }}</ion-note>
+        </ion-item>
+      </ion-list>
 
       <ion-list v-if="!isCreate && history.length > 0" inset>
         <ion-list-header>История ТО</ion-list-header>

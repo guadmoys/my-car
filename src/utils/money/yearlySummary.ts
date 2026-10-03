@@ -1,4 +1,4 @@
-import type { Expense, FuelEntry, HistoryEntry } from '../types'
+import type { Expense, FuelEntry, HistoryEntry } from '../../types'
 
 export interface YearSummary {
   year: number

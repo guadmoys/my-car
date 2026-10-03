@@ -84,10 +84,10 @@ function handleSave() {
           </ion-segment>
         </ion-item>
         <ion-item>
-          <ion-input v-model="startMileage" label="Пробег в начале, км" label-placement="stacked" inputmode="numeric" />
+          <ion-input v-model="startMileage" label="Пробег в начале, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="endMileage" label="Пробег в конце, км" label-placement="stacked" inputmode="numeric" />
+          <ion-input v-model="endMileage" label="Пробег в конце, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" />
         </ion-item>
       </ion-list>
 

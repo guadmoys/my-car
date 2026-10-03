@@ -1,5 +1,5 @@
 /**
- * A local device lock for the app: a PIN checked against a salted SHA-256
+ * A local device lock for the app: a PIN checked against a salted PBKDF2-SHA-256
  * hash (via Web Crypto — nothing leaves the device, there's no server to
  * verify anything against), plus an optional WebAuthn platform-authenticator
  * step (Face ID / Touch ID / Android biometric or device PIN) as a faster
@@ -10,7 +10,16 @@
 const ENABLED_KEY = 'my-car-lock-enabled'
 const SALT_KEY = 'my-car-lock-salt'
 const HASH_KEY = 'my-car-lock-hash'
+/** Present only for PBKDF2 hashes; a PIN saved by an older version has no iteration count and is a plain salted SHA-256. */
+const ITERATIONS_KEY = 'my-car-lock-iterations'
+const FAILS_KEY = 'my-car-lock-fails'
+const LOCKED_UNTIL_KEY = 'my-car-lock-until'
 const WEBAUTHN_CREDENTIAL_KEY = 'my-car-lock-webauthn-credential'
+
+const PBKDF2_ITERATIONS = 300_000
+/** Wrong attempts allowed before a pause starts. */
+const FREE_ATTEMPTS = 5
+const MAX_PAUSE_MS = 15 * 60 * 1000
 
 export function isLockEnabled(): boolean {
   return localStorage.getItem(ENABLED_KEY) === 'true'
@@ -22,25 +31,85 @@ function randomHex(byteLength: number): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function hashPin(pin: string, salt: string): Promise<string> {
-  const data = new TextEncoder().encode(`${salt}:${pin}`)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
+function toHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** The pre-PBKDF2 scheme, kept only so existing PINs keep working until their next successful unlock. */
+async function legacyHashPin(pin: string, salt: string): Promise<string> {
+  return toHex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${pin}`)))
+}
+
+async function pbkdf2HashPin(pin: string, salt: string, iterations: number): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations },
+    key,
+    256,
+  )
+  return toHex(bits)
+}
+
+/** Length-independent comparison, so timing doesn't reveal how many leading characters matched. */
+function equalStrings(a: string, b: string): boolean {
+  let diff = a.length ^ b.length
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
+  return diff === 0
+}
+
+async function storeHash(pin: string): Promise<void> {
+  const salt = randomHex(16)
+  const hash = await pbkdf2HashPin(pin, salt, PBKDF2_ITERATIONS)
+  localStorage.setItem(SALT_KEY, salt)
+  localStorage.setItem(HASH_KEY, hash)
+  localStorage.setItem(ITERATIONS_KEY, String(PBKDF2_ITERATIONS))
 }
 
 export async function setPin(pin: string): Promise<void> {
-  const salt = randomHex(16)
-  const hash = await hashPin(pin, salt)
-  localStorage.setItem(SALT_KEY, salt)
-  localStorage.setItem(HASH_KEY, hash)
+  await storeHash(pin)
   localStorage.setItem(ENABLED_KEY, 'true')
+  resetFailures()
 }
 
-export async function verifyPin(pin: string): Promise<boolean> {
+function resetFailures(): void {
+  localStorage.removeItem(FAILS_KEY)
+  localStorage.removeItem(LOCKED_UNTIL_KEY)
+}
+
+/** Milliseconds left of the pause after too many wrong attempts; 0 when entering a PIN is allowed. */
+export function lockoutRemainingMs(now = Date.now()): number {
+  const until = Number(localStorage.getItem(LOCKED_UNTIL_KEY))
+  return Number.isFinite(until) && until > now ? until - now : 0
+}
+
+function recordFailure(now: number): void {
+  const fails = (Number(localStorage.getItem(FAILS_KEY)) || 0) + 1
+  localStorage.setItem(FAILS_KEY, String(fails))
+  if (fails >= FREE_ATTEMPTS) {
+    // 30 s after the fifth miss, doubling each time, capped at 15 min.
+    const pause = Math.min(MAX_PAUSE_MS, 30_000 * 2 ** (fails - FREE_ATTEMPTS))
+    localStorage.setItem(LOCKED_UNTIL_KEY, String(now + pause))
+  }
+}
+
+export async function verifyPin(pin: string, now = Date.now()): Promise<boolean> {
+  if (lockoutRemainingMs(now) > 0) return false
   const salt = localStorage.getItem(SALT_KEY)
   const storedHash = localStorage.getItem(HASH_KEY)
   if (!salt || !storedHash) return false
-  return (await hashPin(pin, salt)) === storedHash
+
+  const iterations = Number(localStorage.getItem(ITERATIONS_KEY))
+  const isLegacy = !Number.isFinite(iterations) || iterations <= 0
+  const candidate = isLegacy ? await legacyHashPin(pin, salt) : await pbkdf2HashPin(pin, salt, iterations)
+  if (!equalStrings(candidate, storedHash)) {
+    recordFailure(now)
+    return false
+  }
+
+  resetFailures()
+  // Upgrade an old SHA-256 PIN to PBKDF2 now that we hold the plaintext.
+  if (isLegacy) await storeHash(pin).catch(() => {})
+  return true
 }
 
 /** Disables the lock entirely — passcode and any registered biometric. */
@@ -48,7 +117,9 @@ export function disableLock(): void {
   localStorage.removeItem(ENABLED_KEY)
   localStorage.removeItem(SALT_KEY)
   localStorage.removeItem(HASH_KEY)
+  localStorage.removeItem(ITERATIONS_KEY)
   localStorage.removeItem(WEBAUTHN_CREDENTIAL_KEY)
+  resetFailures()
 }
 
 function bufferToBase64Url(buf: ArrayBuffer): string {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { currency, formatPricePerLiter } from '../utils/currency'
+import { currency, formatPricePerLiter } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonAccordion,
@@ -373,15 +373,15 @@ function handleSave() {
             v-model="mileage"
             label="Пробег на заправке, км"
             label-placement="stacked"
-            inputmode="numeric"
+            enterkeyhint="next" inputmode="numeric"
             @ion-input="mileageTouched = true"
           />
         </ion-item>
         <ion-item>
-          <ion-input v-model="liters" label="Литры" label-placement="stacked" inputmode="decimal" placeholder="35.5" />
+          <ion-input v-model="liters" label="Литры" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="35.5" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="cost" :label="`Стоимость, ${currency} (необязательно)`" label-placement="stacked" inputmode="decimal" placeholder="—" />
+          <ion-input v-model="cost" :label="`Стоимость, ${currency} (необязательно)`" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
       <ion-note v-if="isBelowMinReal" color="danger" class="hint">
@@ -426,7 +426,7 @@ function handleSave() {
               </ion-label>
             </ion-item>
             <ion-item>
-              <ion-input v-model="pricePerLiter" :label="`Цена, ${currency}/л (необязательно)`" label-placement="stacked" inputmode="decimal" placeholder="—" />
+              <ion-input v-model="pricePerLiter" :label="`Цена, ${currency}/л (необязательно)`" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
             </ion-item>
             <ion-item>
               <ion-toggle :checked="isFullTank" @ion-change="(e: ToggleCustomEvent) => toggleFullTank(e.detail.checked)">Полный бак</ion-toggle>
@@ -437,7 +437,7 @@ function handleSave() {
               </ion-toggle>
             </ion-item>
             <ion-item v-if="hasRemaining && !isFullTank">
-              <ion-input v-model="remainingLiters" label="Сколько оставалось до заправки, л" label-placement="stacked" inputmode="decimal" placeholder="5" />
+              <ion-input v-model="remainingLiters" label="Сколько оставалось до заправки, л" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="5" />
             </ion-item>
             <ion-item>
               <ion-input v-model="station" label="АЗС (необязательно)" label-placement="stacked" placeholder="Название или адрес" />

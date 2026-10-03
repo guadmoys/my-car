@@ -1,6 +1,6 @@
 import type { Car, HistoryEntry } from '../types'
 import { formatDate } from './dateFormat'
-import { currency } from './currency'
+import { currency } from './money/currency'
 
 export interface PassportData {
   car: Car

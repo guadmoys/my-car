@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMoney } from '../utils/currency'
+import { formatMoney } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import { IonCard, IonCardContent } from '@ionic/vue'
 import type { Expense, FuelEntry, HistoryEntry } from '../types'

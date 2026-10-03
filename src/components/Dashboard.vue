@@ -1,61 +1,61 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { IonPage, IonTab, IonTabs } from '@ionic/vue'
-import { currency } from '../utils/currency'
 import { useCarStore } from '../composables/useCarStore'
-import {
-  checkAndNotify,
-  checkAndNotifyDocuments,
-  checkAndNotifyLowFuel,
-  checkAndNotifyReminders,
-  clearNotifiedDocument,
-  clearNotifiedItem,
-  clearNotifiedReminder,
-  updateAppBadge,
-} from '../utils/notifications'
-import { haptic } from '../utils/haptics'
-import { useToast } from '../composables/useToast'
 import DashboardTab from './DashboardTab.vue'
-import MaintenanceTab from './MaintenanceTab.vue'
-import FuelTab from './FuelTab.vue'
-import SettingsTab from './SettingsTab.vue'
+// Everything except the home screen is fetched on demand: each sheet or tab is its own chunk, which keeps the first
+// load small. The service worker precaches all chunks, so this still works offline, and after the first paint the
+// chunks are warmed in the background so opening a sheet never waits.
+const prefetchers: (() => Promise<unknown>)[] = []
+function lazy(loader: () => Promise<unknown>) {
+  prefetchers.push(loader)
+  return defineAsyncComponent(loader as Parameters<typeof defineAsyncComponent>[0])
+}
+
+const MaintenanceTab = lazy(() => import('./MaintenanceTab.vue'))
+const FuelTab = lazy(() => import('./FuelTab.vue'))
+const SettingsTab = lazy(() => import('./SettingsTab.vue'))
 import TabBar, { type TabKey } from './TabBar.vue'
-import EditItemModal from './EditItemModal.vue'
-import MileageSheet from './MileageSheet.vue'
-import FuelSheet from './FuelSheet.vue'
-import CarSwitcherSheet from './CarSwitcherSheet.vue'
-import AddCarSheet from './AddCarSheet.vue'
-import CarPassportSheet from './CarPassportSheet.vue'
-import EventsHistorySheet from './EventsHistorySheet.vue'
-import ReminderSheet from './ReminderSheet.vue'
-import MarkServicedSheet from './MarkServicedSheet.vue'
-import MasterListSheet from './MasterListSheet.vue'
-import MasterFormSheet from './MasterFormSheet.vue'
-import ExpenseListSheet from './ExpenseListSheet.vue'
-import DocumentsSheet from './DocumentsSheet.vue'
-import DocumentFormSheet from './DocumentFormSheet.vue'
-import ExpenseFormSheet from './ExpenseFormSheet.vue'
-import ComponentsSheet from './ComponentsSheet.vue'
-import ComponentFormSheet from './ComponentFormSheet.vue'
-import TripListSheet from './TripListSheet.vue'
-import TripFormSheet from './TripFormSheet.vue'
+const EditItemModal = lazy(() => import('./EditItemModal.vue'))
+const MileageSheet = lazy(() => import('./MileageSheet.vue'))
+const FuelSheet = lazy(() => import('./FuelSheet.vue'))
+const CarSwitcherSheet = lazy(() => import('./CarSwitcherSheet.vue'))
+const AddCarSheet = lazy(() => import('./AddCarSheet.vue'))
+const CarPassportSheet = lazy(() => import('./CarPassportSheet.vue'))
+const EventsHistorySheet = lazy(() => import('./EventsHistorySheet.vue'))
+const ReminderSheet = lazy(() => import('./ReminderSheet.vue'))
+const MarkServicedSheet = lazy(() => import('./MarkServicedSheet.vue'))
+const MasterListSheet = lazy(() => import('./MasterListSheet.vue'))
+const MasterFormSheet = lazy(() => import('./MasterFormSheet.vue'))
+import { buildWarranties } from '../utils/money/warranty'
+import { monthSpend } from '../utils/money/budget'
+import { buildPartsList } from '../utils/money/partsList'
+const PartsHistorySheet = lazy(() => import('./PartsHistorySheet.vue'))
+import { useBackup } from '../composables/useBackup'
+import { useDashboardAlerts } from '../composables/useDashboardAlerts'
+import { useMaintenanceSheets } from '../composables/useMaintenanceSheets'
+import { useFuelSheets } from '../composables/useFuelSheets'
+import { useRecordSheets } from '../composables/useRecordSheets'
+import { submitOnce } from '../composables/useSubmitOnce'
+import { useDataTransfer } from '../composables/useDataTransfer'
+import { buildMasterStats } from '../utils/money/masterStats'
+const ExpenseListSheet = lazy(() => import('./ExpenseListSheet.vue'))
+const DocumentsSheet = lazy(() => import('./DocumentsSheet.vue'))
+const DocumentFormSheet = lazy(() => import('./DocumentFormSheet.vue'))
+const ExpenseFormSheet = lazy(() => import('./ExpenseFormSheet.vue'))
+const ComponentsSheet = lazy(() => import('./ComponentsSheet.vue'))
+const ComponentFormSheet = lazy(() => import('./ComponentFormSheet.vue'))
+const TripListSheet = lazy(() => import('./TripListSheet.vue'))
+const TripFormSheet = lazy(() => import('./TripFormSheet.vue'))
 import type { PassportData } from '../utils/carPassport'
-import { generateReportPdf } from '../utils/pdfReport'
-import { buildMoyaMashinaCsv, parseMoyaMashinaCsv } from '../utils/carCsvFormat'
 import type {
-  ComponentType,
-  Expense,
-  ExpenseCategory,
-  CarDocument,
-  DocumentType,
   FuelEntry,
-  MaintenanceItem,
   MaintenanceStatus,
-  Master,
-  Part,
 } from '../types'
 
+
 const store = useCarStore()
+const backup = useBackup()
 const {
   car,
   cars,
@@ -84,69 +84,80 @@ const {
   totalPersonalKm,
 } = store
 
-const toast = useToast()
+const {
+  markServicedItem,
+  editingItem,
+  editModalItem,
+  openEdit,
+  closeEdit,
+  handleMarkServiced,
+  handleConfirmMarkServiced,
+  handleSaveItem,
+  handleCreateItem,
+  handleDeleteItem,
+  handleBulkDelete,
+  handleUpdateHistory,
+} = useMaintenanceSheets()
+const {
+  showMileageSheet,
+  showFuelSheet,
+  showReminderSheet,
+  editingFuelEntryId,
+  editingFuelEntry,
+  handleSaveMileage,
+  handleSaveFuel,
+  handleSaveReminder,
+  handleDeleteReminder,
+  handleDeleteFuel,
+  handleSaveFuelEntry,
+} = useFuelSheets()
+const {
+  editingMaster,
+  editingExpense,
+  editingComponentType,
+  showTripForm,
+  editingDocument,
+  newDocumentType,
+  handleSaveMaster,
+  handleDeleteMaster,
+  handleSaveExpense,
+  handleDeleteExpense,
+  handleSaveComponentCheck,
+  handleSaveTrip,
+  handleDeleteTrip,
+  handleSaveDocument,
+  handleDeleteDocument,
+  openNewDocument,
+} = useRecordSheets()
+const { importError, importCsvError, exportPdf, exportBackup, exportExpensesCsv, exportFuelCsv, exportCarCsv, importBackupFile, importCarCsv } =
+  useDataTransfer()
 
-// A rapid double-tap on a sheet's "Готово" fires its click handler twice
-// before the first async store write resolves and the sheet closes — there's
-// no per-sheet "already submitting" state, so both taps go through and
-// create two records from one intended save. This is the single shared lock
-// every create/update handler below goes through: the second tap is simply
-// ignored rather than producing a visible duplicate (or, for edits, a
-// harmless redundant write).
-const isSubmitting = ref(false)
-async function submitOnce(fn: () => Promise<void>): Promise<void> {
-  if (isSubmitting.value) return
-  isSubmitting.value = true
-  try {
-    await fn()
-  } finally {
-    isSubmitting.value = false
-  }
-}
+onMounted(() => {
+  // Warm the lazy chunks one by one once the browser is idle, so the first tap on a tab or sheet is instant.
+  const idle = (fn: () => void) => ('requestIdleCallback' in window ? window.requestIdleCallback(fn) : setTimeout(fn, 1500))
+  idle(() => {
+    void prefetchers.reduce((chain, load) => chain.then(() => load()).catch(() => undefined), Promise.resolve<unknown>(undefined))
+  })
+})
 
 const activeTab = ref<TabKey>('dashboard')
 
-const showMileageSheet = ref(false)
-const showFuelSheet = ref(false)
 const showCarSwitcher = ref(false)
 const showAddCar = ref(false)
 const showPassportSheet = ref(false)
 const showEventsSheet = ref(false)
-const showReminderSheet = ref(false)
 const showMasterList = ref(false)
-const editingMaster = ref<Master | null | 'new'>(null)
+const warranties = computed(() => buildWarranties(store.historyEntries, store.expenses, Date.now()))
+const thisMonthSpend = computed(() => monthSpend(store.fuelEntries, store.historyEntries, store.expenses, Date.now()))
+const masterStats = computed(() => buildMasterStats(store.historyEntries, store.expenses))
+const { handleNotificationsEnabled } = useDashboardAlerts(thisMonthSpend, computed(() => warranties.value.map((w) => w.key)))
+const showPartsSheet = ref(false)
+const partsRows = computed(() => buildPartsList(store.historyEntries, store.expenses))
 const showExpenseList = ref(false)
 const showDocuments = ref(false)
-const editingDocument = ref<CarDocument | null | 'new'>(null)
-const newDocumentType = ref<DocumentType | undefined>(undefined)
-const editingExpense = ref<Expense | null | 'new'>(null)
 const showComponentsSheet = ref(false)
-const editingComponentType = ref<ComponentType | null>(null)
 const showTripList = ref(false)
-const showTripForm = ref(false)
-const markServicedItem = ref<MaintenanceItem | null>(null)
-const editingItem = ref<MaintenanceItem | null | 'new'>(null)
-const editingFuelEntryId = ref<string | null>(null)
-const importError = ref<string | null>(null)
-const importCsvError = ref<string | null>(null)
 
-const editingFuelEntry = computed<FuelEntry | null>(
-  () => store.fuelEntries.find((e) => e.id === editingFuelEntryId.value) ?? null,
-)
-
-// Opens the matching sheet when launched from a PWA shortcut (manifest.shortcuts
-// links to "?action=fuel"/"?action=mileage"), then strips the param so a
-// later reload of the same tab doesn't reopen it.
-onMounted(() => {
-  const url = new URL(window.location.href)
-  const action = url.searchParams.get('action')
-  if (action === 'fuel') showFuelSheet.value = true
-  else if (action === 'mileage') showMileageSheet.value = true
-  if (action) {
-    url.searchParams.delete('action')
-    window.history.replaceState({}, '', url)
-  }
-})
 
 const lastFuelEntry = computed<FuelEntry | null>(() => {
   if (store.fuelEntries.length === 0) return null
@@ -180,7 +191,6 @@ const urgentStatuses = computed<MaintenanceStatus[]>(() =>
 )
 const urgentPreview = computed(() => urgentStatuses.value.slice(0, 3))
 
-const editModalItem = computed(() => (editingItem.value === 'new' ? null : editingItem.value))
 
 const passportData = computed<PassportData | null>(() => {
   if (!car.value) return null
@@ -201,411 +211,9 @@ const passportData = computed<PassportData | null>(() => {
   }
 })
 
-watch(
-  [car, statuses],
-  ([carVal, statusesVal]) => {
-    updateAppBadge(dueCount.value + soonCount.value)
-    if (carVal) checkAndNotify(carVal.id, statusesVal)
-  },
-  { immediate: true },
-)
-
-watch(
-  [car, estimatedRangeKm],
-  ([carVal, rangeVal]) => {
-    if (carVal) checkAndNotifyLowFuel(carVal.id, rangeVal)
-  },
-  { immediate: true },
-)
-
-watch(
-  [car, reminderStatuses],
-  ([carVal, statusesVal]) => {
-    if (carVal) checkAndNotifyReminders(carVal.id, statusesVal.filter((s) => s.isDue))
-  },
-  { immediate: true },
-)
-
-watch(
-  [car, documentStatuses],
-  ([carVal, statusesVal]) => {
-    if (carVal) checkAndNotifyDocuments(carVal.id, statusesVal)
-  },
-  { immediate: true },
-)
-
-/** Re-runs the due/soon, low-fuel and reminder checks against the current
- * state, since enabling notifications doesn't itself change `car`/`statuses`
- * and so wouldn't otherwise trigger the watchers below for items already due. */
-function handleNotificationsEnabled() {
-  if (!car.value) return
-  checkAndNotify(car.value.id, statuses.value)
-  checkAndNotifyLowFuel(car.value.id, estimatedRangeKm.value)
-  checkAndNotifyReminders(car.value.id, reminderStatuses.value.filter((s) => s.isDue))
-  checkAndNotifyDocuments(car.value.id, documentStatuses.value)
-}
-
-function openEdit(id: string) {
-  const item = store.items.find((i) => i.id === id)
-  if (item) editingItem.value = item
-}
-
 function openEditFromDashboard(id: string) {
   activeTab.value = 'maintenance'
   openEdit(id)
-}
-
-function closeEdit() {
-  editingItem.value = null
-}
-
-function handleMarkServiced(id: string) {
-  const item = store.items.find((i) => i.id === id)
-  if (item) markServicedItem.value = item
-}
-
-async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?: string }) {
-  const item = markServicedItem.value
-  if (!item) return
-  markServicedItem.value = null
-  await submitOnce(async () => {
-    let result: Awaited<ReturnType<typeof store.markServiced>>
-    try {
-      result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto)
-    } catch {
-      toast.show('Не удалось сохранить — попробуйте ещё раз')
-      return
-    }
-    if (car.value) clearNotifiedItem(car.value.id, item.id)
-    if (!result) return
-    haptic('success')
-    toast.show(`«${item.name}» — выполнено`, {
-      label: 'Отменить',
-      onAction: () => store.undoMarkServiced(item.id, result),
-    })
-  })
-}
-
-async function handleSaveMaster(payload: {
-  name: string
-  phone?: string
-  cardNumber?: string
-  link?: string
-  specialty?: string
-}) {
-  await submitOnce(async () => {
-    if (editingMaster.value && editingMaster.value !== 'new') {
-      await store.updateMaster(editingMaster.value.id, payload)
-    } else {
-      await store.addMaster(payload)
-    }
-    editingMaster.value = null
-  })
-}
-
-async function handleDeleteMaster(id: string) {
-  const master = store.masters.find((m) => m.id === id)
-  const removed = await store.deleteMaster(id)
-  if (!removed) return
-  haptic('delete')
-  toast.show(master ? `«${master.name}» удалён` : 'Мастер удалён', {
-    label: 'Отменить',
-    onAction: () => store.restoreMaster(removed),
-  })
-}
-
-async function handleSaveExpense(payload: {
-  category: ExpenseCategory
-  title?: string
-  amount: number
-  date: number
-  note?: string
-  receiptPhoto?: string
-}) {
-  await submitOnce(async () => {
-    const isNew = !editingExpense.value || editingExpense.value === 'new'
-    if (editingExpense.value && editingExpense.value !== 'new') {
-      await store.updateExpense(editingExpense.value.id, payload)
-    } else {
-      await store.addExpense(payload)
-    }
-    editingExpense.value = null
-    if (isNew) {
-      haptic('success')
-      toast.show('Расход добавлен')
-    }
-  })
-}
-
-async function handleDeleteExpense(id: string) {
-  const expense = store.expenses.find((e) => e.id === id)
-  const removed = await store.deleteExpense(id)
-  if (!removed) return
-  haptic('delete')
-  toast.show(expense ? 'Расход удалён' : 'Запись удалена', {
-    label: 'Отменить',
-    onAction: () => store.restoreExpense(removed),
-  })
-}
-
-async function handleSaveComponentCheck(payload: {
-  type: ComponentType
-  season?: 'summer' | 'winter' | 'allseason'
-  treadDepthMm?: number
-  pressureFront?: number
-  pressureRear?: number
-  thicknessMm?: number
-  installedDate?: number
-  note?: string
-}) {
-  await submitOnce(async () => {
-    await store.addComponentCheck(payload)
-    editingComponentType.value = null
-    haptic('success')
-    toast.show('Запись добавлена')
-  })
-}
-
-async function handleSaveTrip(payload: {
-  startMileage: number
-  endMileage: number
-  purpose: 'business' | 'personal'
-  date?: number
-  note?: string
-}) {
-  await submitOnce(async () => {
-    await store.addTrip(payload)
-    showTripForm.value = false
-    haptic('success')
-    toast.show('Поездка добавлена')
-  })
-}
-
-async function handleDeleteTrip(id: string) {
-  const removed = await store.deleteTrip(id)
-  if (!removed) return
-  haptic('delete')
-  toast.show('Поездка удалена', {
-    label: 'Отменить',
-    onAction: () => store.restoreTrip(removed),
-  })
-}
-
-function handleExportPdf() {
-  if (!car.value) return
-  generateReportPdf({
-    car: car.value,
-    statuses: statuses.value,
-    totalFuelCost: totalFuelCost.value,
-    totalServiceCost: totalServiceCost.value,
-    totalExpensesCost: totalExpensesCost.value,
-    totalCost: totalCost.value,
-    expenses: store.expenses,
-    trips: store.trips,
-    totalBusinessKm: totalBusinessKm.value,
-    totalPersonalKm: totalPersonalKm.value,
-    recentHistory: store.historyEntries.slice().sort((a, b) => b.date - a.date),
-  })
-}
-
-async function handleSaveDocument(payload: {
-  type: DocumentType
-  title?: string
-  number?: string
-  issuedDate?: number
-  expiryDate?: number
-  photos: string[]
-  note?: string
-}) {
-  await submitOnce(async () => {
-    const editing = editingDocument.value
-    if (editing && editing !== 'new') {
-      await store.updateDocument(editing.id, payload)
-      // The expiry may have moved: let it notify again when it next becomes due.
-      if (car.value) clearNotifiedDocument(car.value.id, editing.id)
-      haptic('success')
-    } else {
-      await store.addDocument(payload)
-      haptic('success')
-      toast.show('Документ добавлен')
-    }
-    editingDocument.value = null
-    newDocumentType.value = undefined
-  })
-}
-
-async function handleDeleteDocument(id: string) {
-  const document = store.documents.find((d) => d.id === id)
-  const removed = await store.deleteDocument(id)
-  if (!removed) return
-  if (car.value) clearNotifiedDocument(car.value.id, id)
-  editingDocument.value = null
-  haptic('delete')
-  toast.show(document ? 'Документ удалён' : 'Запись удалена', {
-    label: 'Отменить',
-    onAction: () => store.restoreDocument(removed),
-  })
-}
-
-function openNewDocument(type?: DocumentType) {
-  newDocumentType.value = type
-  editingDocument.value = 'new'
-}
-
-async function handleSaveItem(payload: {
-  name: string
-  intervalKm: number
-  intervalKmMax?: number
-  intervalMonths?: number
-  lastServiceMileage: number
-  parts: Part[]
-  notifyBeforeKm?: number
-  notifyBeforeDays?: number
-}) {
-  await submitOnce(async () => {
-    if (editModalItem.value) {
-      await store.updateItem(editModalItem.value.id, payload)
-    }
-    closeEdit()
-  })
-}
-
-async function handleCreateItem(payload: {
-  name: string
-  intervalKm: number
-  intervalKmMax?: number
-  intervalMonths?: number
-  parts: Part[]
-  notifyBeforeKm?: number
-  notifyBeforeDays?: number
-}) {
-  await submitOnce(async () => {
-    await store.addCustomItem(payload)
-    closeEdit()
-  })
-}
-
-async function handleDeleteItem(id: string) {
-  const item = store.items.find((i) => i.id === id)
-  const removed = await store.deleteItem(id)
-  closeEdit()
-  if (!removed) return
-  haptic('delete')
-  toast.show(item ? `«${item.name}» удалён` : 'Параметр удалён', {
-    label: 'Отменить',
-    onAction: () => store.restoreItem(removed),
-  })
-}
-
-async function handleBulkDelete(ids: string[]) {
-  if (ids.length === 0) return
-  const removed = (await Promise.all(ids.map((id) => store.deleteItem(id)))).filter(
-    (item): item is MaintenanceItem => item !== null,
-  )
-  if (removed.length === 0) return
-  haptic('delete')
-  toast.show(removed.length === 1 ? `«${removed[0].name}» удалён` : `Удалено параметров: ${removed.length}`, {
-    label: 'Отменить',
-    onAction: () => Promise.all(removed.map((item) => store.restoreItem(item))),
-  })
-}
-
-async function handleSaveMileage(mileage: number, date: number, isRollback: boolean) {
-  await submitOnce(async () => {
-    const applied = await store.updateMileage(mileage, date, { allowDecrease: isRollback })
-    showMileageSheet.value = false
-    if (!applied) {
-      toast.show('Уже есть более поздняя запись пробега — текущий пробег не изменён')
-      return
-    }
-    haptic('success')
-    toast.show('Пробег обновлён')
-  })
-}
-
-async function handleSaveFuel(payload: {
-  mileage: number
-  liters: number
-  date?: number
-  cost?: number
-  fuelType?: string
-  isFullTank?: boolean
-  remainingLiters?: number
-  station?: string
-  comment?: string
-  receiptPhoto?: string
-}) {
-  await submitOnce(async () => {
-    await store.addFuelEntry(payload)
-    showFuelSheet.value = false
-    haptic('success')
-    toast.show('Заправка добавлена')
-  })
-}
-
-async function handleSaveReminder(payload: {
-  text: string
-  dueMileage?: number
-  dueDate?: number
-  hasTime?: boolean
-}) {
-  await submitOnce(async () => {
-    await store.addReminder(payload)
-    showReminderSheet.value = false
-    haptic('success')
-    toast.show('Напоминание добавлено')
-  })
-}
-
-async function handleDeleteReminder(id: string) {
-  const removed = await store.deleteReminder(id)
-  if (!removed) return
-  if (car.value) clearNotifiedReminder(car.value.id, id)
-  haptic('success')
-  toast.show(`«${removed.text}» — готово`, {
-    label: 'Отменить',
-    onAction: () => store.restoreReminder(removed),
-  })
-}
-
-async function handleDeleteFuel(id: string) {
-  const removed = await store.deleteFuelEntry(id)
-  if (!removed) return
-  haptic('delete')
-  toast.show('Заправка удалена', {
-    label: 'Отменить',
-    onAction: () => store.restoreFuelEntry(removed),
-  })
-}
-
-async function handleSaveFuelEntry(payload: {
-  mileage: number
-  liters: number
-  date?: number
-  cost?: number
-  fuelType?: string
-  isFullTank?: boolean
-  remainingLiters?: number
-  station?: string
-  comment?: string
-  receiptPhoto?: string
-}) {
-  if (!editingFuelEntryId.value) return
-  const entry = editingFuelEntry.value
-  await submitOnce(async () => {
-    await store.updateFuelEntry(editingFuelEntryId.value!, {
-      ...payload,
-      date: payload.date ?? entry?.date ?? Date.now(),
-    })
-    editingFuelEntryId.value = null
-  })
-}
-
-async function handleUpdateHistory(
-  id: string,
-  payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string },
-) {
-  await submitOnce(() => store.updateHistoryEntry(id, payload))
 }
 
 async function handleSaveCarInfo(payload: {
@@ -645,127 +253,6 @@ async function handleCreateCar(payload: {
     showCarSwitcher.value = false
   })
 }
-
-async function handleExport() {
-  const data = await store.exportData()
-  const json = JSON.stringify(data, null, 2)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const dateStr = new Date().toISOString().slice(0, 10)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `moya-mashina-backup-${dateStr}.json`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
-
-function csvEscape(value: string): string {
-  return /["\n,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
-}
-
-function handleExportFuelCsv() {
-  const rows = store.fuelEntries.slice().sort((a, b) => a.date - b.date)
-  const header = ['Дата', 'Пробег, км', 'Литры', `Стоимость, ${currency.value}`, `Цена, ${currency.value}/л`, 'Вид топлива', 'Полный бак', 'АЗС', 'Комментарий']
-  const lines = [header.join(',')]
-  for (const e of rows) {
-    const price = e.cost !== undefined && e.liters > 0 ? (e.cost / e.liters).toFixed(2) : ''
-    lines.push(
-      [
-        new Date(e.date).toLocaleDateString('ru-RU'),
-        String(e.mileage),
-        String(e.liters),
-        e.cost !== undefined ? String(e.cost) : '',
-        price,
-        csvEscape(e.fuelType ?? ''),
-        e.isFullTank === false ? 'нет' : 'да',
-        csvEscape(e.station ?? ''),
-        csvEscape(e.comment ?? ''),
-      ].join(','),
-    )
-  }
-
-  const csv = '\uFEFF' + lines.join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const dateStr = new Date().toISOString().slice(0, 10)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `zapravki-${dateStr}.csv`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
-
-async function handleImportFile(file: File) {
-  importError.value = null
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(await file.text())
-  } catch {
-    importError.value = 'Не удалось прочитать файл — это не корректный JSON'
-    return
-  }
-
-  const confirmed = window.confirm(
-    'Импорт полностью заменит текущие данные (машина, параметры ТО, заправки, история) содержимым файла. Продолжить?',
-  )
-  if (!confirmed) return
-
-  const result = await store.importData(parsed)
-  if (!result.ok) importError.value = result.error
-}
-
-function handleExportCarCsv() {
-  if (!car.value) return
-  const csv = buildMoyaMashinaCsv({ fuel: store.fuelEntries, history: store.historyEntries })
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const dateStr = new Date().toISOString().slice(0, 10)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `moya-mashina-${dateStr}.csv`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
-
-async function handleImportCarCsv(file: File) {
-  importCsvError.value = null
-  if (!car.value) return
-
-  let text: string
-  try {
-    text = await file.text()
-  } catch {
-    importCsvError.value = 'Не удалось прочитать файл'
-    return
-  }
-
-  const parsed = parseMoyaMashinaCsv(text)
-  if (parsed.fuel.length === 0 && parsed.service.length === 0 && parsed.parts.length === 0) {
-    importCsvError.value = 'В файле не нашлось ни одной записи в формате «Моя машина» (Заправки/Сервис/Детали)'
-    return
-  }
-
-  const summary = await store.importCarCsv(parsed)
-  haptic('success')
-  const added = summary.fuelAdded + summary.serviceAdded + summary.partsAdded
-  const skipped = summary.fuelSkipped + summary.serviceSkipped
-  const parts = [
-    `Заправок добавлено: ${summary.fuelAdded}`,
-    `Записей ТО добавлено: ${summary.serviceAdded + summary.partsAdded}`,
-  ]
-  if (skipped > 0) parts.push(`уже было: ${skipped}`)
-  if (summary.partsSkippedNoDate > 0) parts.push(`деталей без даты установки пропущено: ${summary.partsSkippedNoDate}`)
-  toast.show(added > 0 ? parts.join(', ') : 'Новых записей не найдено — похоже, файл уже импортирован')
-}
 </script>
 
 <template>
@@ -794,10 +281,19 @@ async function handleImportCarCsv(file: File) {
         :reminder-statuses="reminderStatuses"
         :document-statuses="documentStatuses"
         :document-count="store.documents.length"
+        :warranties="warranties"
+        :backup-due="backup.state.due"
+        :backup-days="backup.state.daysSince"
+        :backup-never="backup.state.never"
+        :backup-saving="backup.state.saving"
+        @save-backup="backup.saveNow()"
+        @snooze-backup="backup.snooze()"
+        :month-spend="thisMonthSpend"
         @open-documents="showDocuments = true"
         @edit-mileage="showMileageSheet = true"
         @switch-car="showCarSwitcher = true"
         @quick-fuel="showFuelSheet = true"
+        @quick-expense="editingExpense = 'new'"
         @open-item="openEditFromDashboard"
         @mark-serviced="handleMarkServiced"
         @view-all-maintenance="activeTab = 'maintenance'"
@@ -839,7 +335,9 @@ async function handleImportCarCsv(file: File) {
         @add-fuel="showFuelSheet = true"
         @delete-fuel="handleDeleteFuel"
         @edit-fuel="editingFuelEntryId = $event"
-        @export-csv="handleExportFuelCsv"
+        @export-csv="exportFuelCsv"
+        @export-expenses-csv="exportExpensesCsv"
+        @view-parts="showPartsSheet = true"
         @view-other-expenses="showExpenseList = true"
       />
       </ion-tab>
@@ -857,11 +355,11 @@ async function handleImportCarCsv(file: File) {
         :import-csv-error="importCsvError"
         @save="handleSaveCarInfo"
         @delete-car="handleDeleteCar"
-        @export="handleExport"
-        @export-pdf="handleExportPdf"
-        @import="handleImportFile"
-        @export-csv="handleExportCarCsv"
-        @import-csv="handleImportCarCsv"
+        @export="exportBackup"
+        @export-pdf="exportPdf"
+        @import="importBackupFile"
+        @export-csv="exportCarCsv"
+        @import-csv="importCarCsv"
         @open-car-switcher="showCarSwitcher = true"
         @open-masters="showMasterList = true"
         @open-expenses="showExpenseList = true"
@@ -979,6 +477,7 @@ async function handleImportCarCsv(file: File) {
     <MasterListSheet
       v-if="showMasterList"
       :masters="store.masters"
+      :stats="masterStats"
       @close="showMasterList = false"
       @edit="editingMaster = $event"
       @delete="handleDeleteMaster"
@@ -1009,6 +508,13 @@ async function handleImportCarCsv(file: File) {
       @close="editingDocument = null; newDocumentType = undefined"
       @save="handleSaveDocument"
       @delete="handleDeleteDocument"
+    />
+
+    <PartsHistorySheet
+      v-if="showPartsSheet"
+      :rows="partsRows"
+      :master-name="(id: string) => store.masters.find((m) => m.id === id)?.name"
+      @close="showPartsSheet = false"
     />
 
     <ExpenseListSheet

@@ -138,6 +138,10 @@ export interface HistoryEntry {
   receiptPhoto?: string
   /** Free-text note. Also where details that don't have a dedicated field (location, work breakdown, imported part specs) are kept. */
   note?: string
+  /** Optional breakdown of `cost` into parts, labor, etc. */
+  items?: ExpenseItem[]
+  /** Master/service that did the work. */
+  masterId?: string
 }
 
 export interface FuelEntry {
@@ -164,7 +168,7 @@ export interface FuelEntry {
 }
 
 /** Non-fuel, non-service running cost — the categories a car owner pays for besides gas and repairs. */
-export type ExpenseCategory = 'insurance' | 'parking' | 'fine' | 'tax' | 'loan' | 'other'
+export type ExpenseCategory = 'insurance' | 'parking' | 'fine' | 'tax' | 'loan' | 'damage' | 'other'
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   insurance: 'Страховка',
@@ -172,6 +176,7 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   fine: 'Штраф',
   tax: 'Налог/ОСАГО/техосмотр',
   loan: 'Кредит/лизинг',
+  damage: 'Ущерб/ремонт',
   other: 'Другое',
 }
 
@@ -182,6 +187,32 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
  * this expense needs renewing/repeating (e.g. a policy's end date) — used
  * to drive a due/soon reminder the same way MaintenanceItem/Reminder do.
  */
+/** What a line of an expense's breakdown pays for. */
+export type ExpenseItemKind = 'part' | 'labor' | 'other'
+
+export const EXPENSE_ITEM_KIND_LABELS: Record<ExpenseItemKind, string> = {
+  part: 'Деталь',
+  labor: 'Работа',
+  other: 'Другое',
+}
+
+/** One line of an expense's optional breakdown (a part, a job, ...). Lines are informational: Expense.amount stays the total. */
+export interface ExpenseItem {
+  id: string
+  kind: ExpenseItemKind
+  name: string
+  amount: number
+  /** Warranty on a part, in months from the date of the expense/service. */
+  warrantyMonths?: number
+}
+
+/** How often an expense repeats on its own (insurance, loan payment, parking pass...). */
+export interface ExpenseRecurrence {
+  every: 'month' | 'year'
+  /** Day of month the series is anchored to, so a 31st clamped to Feb 28 doesn't drift. */
+  anchorDay: number
+}
+
 export interface Expense {
   id: string
   carId: string
@@ -195,13 +226,31 @@ export interface Expense {
   note?: string
   /** Photo of the receipt/invoice, as a compressed data URL. */
   receiptPhoto?: string
+  /** Optional breakdown of `amount` into parts, labor, etc. */
+  items?: ExpenseItem[]
+  /** Photos of damage, before/after, etc., as compressed data URLs. */
+  photos?: string[]
+  /** Master/service this was paid to. */
+  masterId?: string
+  /** The maintenance item this relates to (e.g. a bumper repair filed under a body-work item). */
+  itemId?: string
+  /** Set only on the newest entry of a repeating series; the next one is created when it falls due. */
+  recurrence?: ExpenseRecurrence
 }
 
-export interface ExpenseStatus {
-  expense: Expense
-  isDue: boolean
-  isSoon: boolean
-  remainingDays?: number
+/** What the expense form hands to the store. `repeat` becomes an ExpenseRecurrence anchored to `date`. */
+export interface ExpensePayload {
+  category: ExpenseCategory
+  title?: string
+  amount: number
+  date: number
+  note?: string
+  receiptPhoto?: string
+  items?: ExpenseItem[]
+  photos?: string[]
+  masterId?: string
+  itemId?: string
+  repeat?: ExpenseRecurrence['every']
 }
 
 /** What kind of paper a CarDocument is. */
@@ -315,10 +364,11 @@ export interface CostForecast {
   total: number
 }
 
-/** A fuel fill-up or a completed maintenance item, merged into one date-sorted feed for the home screen. */
+/** A fuel fill-up, a completed maintenance item or another expense, merged into one date-sorted feed for the home screen. */
 export type TimelineEvent =
   | { kind: 'fuel'; id: string; date: number; mileage: number; entry: FuelEntry }
   | { kind: 'service'; id: string; date: number; mileage: number; entry: HistoryEntry }
+  | { kind: 'expense'; id: string; date: number; mileage: null; entry: Expense }
 
 export interface BackupData {
   version: 2
@@ -340,6 +390,8 @@ export interface BackupData {
   trips?: Trip[]
   /** Absent when importing a backup made before the documents section existed. */
   documents?: CarDocument[]
+  /** Per-device preferences worth carrying to a new device. Absent in older backups. */
+  settings?: { monthlyBudget?: number }
 }
 
 /** Shape of a v1 backup (single car, no carId fields), kept only for import compatibility. */

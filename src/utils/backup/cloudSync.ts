@@ -1,4 +1,5 @@
-import type { BackupData } from '../types'
+import type { BackupData } from '../../types'
+import { decryptBackup, encryptBackup, isEncryptedBackup, isVaultEnabled, isVaultUnlocked, openString, sealString, type EncryptedBackup, type Secret } from '../security/vault'
 
 export type CloudProvider = 'google' | 'yandex'
 
@@ -27,7 +28,10 @@ interface CloudEnvelope {
   cloudFormatVersion: 1
   appVersion: string
   savedAt: number
-  backup: BackupData
+  /** Present when encryption is off. */
+  backup?: BackupData
+  /** Present when encryption is on: the backup never leaves the device in the clear. */
+  encrypted?: EncryptedBackup
 }
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
@@ -43,6 +47,37 @@ const LAST_SYNC_KEY = (p: CloudProvider) => `my-car-cloud-last-sync-${p}`
 const ACTIVE_PROVIDER_KEY = 'my-car-cloud-active-provider'
 const AUTO_SYNC_KEY = 'my-car-cloud-auto-sync'
 const YANDEX_TOKEN_KEY = 'my-car-cloud-yandex-token'
+
+// The Yandex access token is the one credential kept long-term; with encryption on it is stored sealed.
+const YANDEX_TOKEN_AAD = 'yandex-token'
+
+async function storeYandexToken(token: string): Promise<void> {
+  localStorage.setItem(YANDEX_TOKEN_KEY, isVaultEnabled() ? await sealString(token, YANDEX_TOKEN_AAD) : token)
+}
+
+async function readYandexToken(): Promise<string | null> {
+  const stored = localStorage.getItem(YANDEX_TOKEN_KEY)
+  if (!stored) return null
+  if (!stored.startsWith('enc1:')) return stored
+  if (!isVaultUnlocked()) return null
+  try {
+    return await openString(stored, YANDEX_TOKEN_AAD)
+  } catch {
+    return null
+  }
+}
+
+/** Re-stores the token sealed (call right after encryption is turned on). */
+export async function protectStoredSecrets(): Promise<void> {
+  const stored = localStorage.getItem(YANDEX_TOKEN_KEY)
+  if (stored && !stored.startsWith('enc1:')) await storeYandexToken(stored)
+}
+
+/** Writes the token back in the clear (call before encryption is turned off, while the vault is still open). */
+export async function unprotectStoredSecrets(): Promise<void> {
+  const token = await readYandexToken()
+  if (token) localStorage.setItem(YANDEX_TOKEN_KEY, token)
+}
 
 export function isProviderConfigured(provider: CloudProvider): boolean {
   return provider === 'google' ? GOOGLE_CLIENT_ID.length > 0 : YANDEX_CLIENT_ID.length > 0
@@ -300,9 +335,9 @@ async function yandexDownload(token: string): Promise<string | null> {
 
 async function getAccessToken(provider: CloudProvider, interactive: boolean): Promise<string | null> {
   if (provider === 'google') return getGoogleAccessToken(interactive)
-  const stored = localStorage.getItem(YANDEX_TOKEN_KEY)
+  const stored = await readYandexToken()
   if (stored) return stored
-  if (interactive) startYandexAuth()
+  if (interactive && !localStorage.getItem(YANDEX_TOKEN_KEY)) startYandexAuth()
   return null
 }
 
@@ -330,7 +365,7 @@ export async function finishPendingConnections(): Promise<CloudAccount | null> {
   if (!token) return null
   try {
     const account = await yandexFetchAccount(token)
-    localStorage.setItem(YANDEX_TOKEN_KEY, token)
+    await storeYandexToken(token)
     setActiveProvider('yandex')
     setAccount('yandex', account)
     return account
@@ -363,7 +398,7 @@ export async function uploadBackup(provider: CloudProvider, data: BackupData): P
     cloudFormatVersion: 1,
     appVersion: __APP_VERSION__,
     savedAt: Date.now(),
-    backup: data,
+    ...(isVaultEnabled() ? { encrypted: await encryptBackup(data) } : { backup: data }),
   }
   const json = JSON.stringify(envelope)
 
@@ -375,9 +410,23 @@ export async function uploadBackup(provider: CloudProvider, data: BackupData): P
   return record
 }
 
-export async function downloadBackup(
-  provider: CloudProvider,
-): Promise<{ backup: BackupData; appVersion: string; savedAt: number } | null> {
+export interface DownloadedBackup {
+  appVersion: string
+  savedAt: number
+  /** Readable backup (encryption was off when it was saved). */
+  backup?: BackupData
+  /** Encrypted backup; open it with openDownloadedBackup(). */
+  encrypted?: EncryptedBackup
+}
+
+/** Returns the backup data, decrypting with `secret` (or, on the device that made it, the open vault) when needed. */
+export async function openDownloadedBackup(result: DownloadedBackup, secret?: Secret): Promise<BackupData> {
+  if (result.backup) return result.backup
+  if (result.encrypted) return decryptBackup<BackupData>(result.encrypted, secret)
+  throw new Error('Файл в облаке имеет неизвестный формат')
+}
+
+export async function downloadBackup(provider: CloudProvider): Promise<DownloadedBackup | null> {
   const token = await getAccessToken(provider, false)
   if (!token) throw new CloudAuthError(provider)
 
@@ -390,11 +439,11 @@ export async function downloadBackup(
   } catch {
     throw new Error('Файл в облаке повреждён')
   }
-  if (envelope.kind !== 'moya-mashina-cloud-backup' || !envelope.backup) {
+  if (envelope.kind !== 'moya-mashina-cloud-backup' || (!envelope.backup && !isEncryptedBackup(envelope.encrypted))) {
     throw new Error('Файл в облаке имеет неизвестный формат')
   }
 
   const record: CloudSyncRecord = { savedAt: envelope.savedAt ?? 0, appVersion: envelope.appVersion ?? '?' }
   setLastSync(provider, record)
-  return { backup: envelope.backup, appVersion: record.appVersion, savedAt: record.savedAt }
+  return { backup: envelope.backup, encrypted: envelope.encrypted, appVersion: record.appVersion, savedAt: record.savedAt }
 }

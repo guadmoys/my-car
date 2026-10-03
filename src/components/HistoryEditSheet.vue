@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { currency } from '../utils/currency'
+import { currency } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -18,7 +18,9 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import type { HistoryEntry } from '../types'
+import type { ExpenseItem, HistoryEntry } from '../types'
+import CostBreakdownEditor from './CostBreakdownEditor.vue'
+import MasterPicker from './MasterPicker.vue'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
@@ -28,7 +30,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string }]
+  save: [payload: { itemName: string; mileage: number; date: number; cost?: number; receiptPhoto?: string; note?: string; items?: ExpenseItem[]; masterId?: string }]
 }>()
 
 const itemName = ref(props.entry.itemName)
@@ -36,6 +38,8 @@ const mileage = ref(String(props.entry.mileage))
 const cost = ref(props.entry.cost !== undefined ? String(props.entry.cost) : '')
 const note = ref(props.entry.note ?? '')
 const receiptPhoto = ref<string | undefined>(props.entry.receiptPhoto)
+const masterId = ref<string | undefined>(props.entry.masterId)
+const items = ref<ExpenseItem[]>(props.entry.items ? props.entry.items.map((i) => ({ ...i })) : [])
 const dateIso = ref(new Date(props.entry.date).toISOString())
 
 const mileageNumber = computed(() => Number(mileage.value.replace(/\s/g, '').replace(',', '.')))
@@ -57,11 +61,16 @@ const isValid = computed(() => {
 
 function handleSave() {
   if (!isValid.value) return
+  const itemsSum = items.value.reduce((s, i) => s + i.amount, 0)
+  // No total typed but the breakdown is filled: the total is the sum of its lines.
+  const total = cost.value.trim() === '' ? (itemsSum > 0 ? itemsSum : undefined) : costNumber.value
   emit('save', {
     itemName: itemName.value.trim(),
     mileage: Math.round(mileageNumber.value),
     date: new Date(dateIso.value).getTime(),
-    cost: cost.value.trim() === '' ? undefined : costNumber.value,
+    cost: total,
+    items: items.value,
+    masterId: masterId.value,
     receiptPhoto: receiptPhoto.value,
     note: note.value.trim() || undefined,
   })
@@ -97,17 +106,20 @@ function handleSave() {
 
       <ion-list inset>
         <ion-item>
-          <ion-input v-model="mileage" label="Пробег, км" label-placement="stacked" inputmode="numeric" />
+          <ion-input v-model="mileage" label="Пробег, км" label-placement="stacked" enterkeyhint="next" inputmode="numeric" />
         </ion-item>
         <ion-item lines="none">
-          <ion-input v-model="cost" :label="`Стоимость, ${currency} (необязательно)`" label-placement="stacked" inputmode="decimal" placeholder="—" />
+          <ion-input v-model="cost" :label="`Стоимость, ${currency} (необязательно)`" label-placement="stacked" enterkeyhint="next" inputmode="decimal" placeholder="—" />
         </ion-item>
       </ion-list>
+      <CostBreakdownEditor v-model="items" :total="cost.trim() !== '' && costNumber > 0 ? costNumber : null" />
+
       <ion-list inset>
         <ion-item lines="none">
           <ion-textarea v-model="note" label="Заметка (необязательно)" label-placement="stacked" placeholder="—" :auto-grow="true" />
         </ion-item>
       </ion-list>
+      <MasterPicker v-model="masterId" />
       <ReceiptPhotoField v-model="receiptPhoto" />
       <ion-note v-if="mileageNumber > currentMileage" color="danger" class="hint">
         Не может быть больше текущего пробега машины ({{ Math.round(currentMileage).toLocaleString('ru-RU') }} км)

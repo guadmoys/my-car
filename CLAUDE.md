@@ -59,6 +59,30 @@ mode.
   `.card` containers everywhere (`SettingsTab.vue`, `DashboardTab.vue`,
   `SettingsTab.vue`'s forms, etc).
 
+## Code layout
+
+- **Store.** `composables/useCarStore.ts` is only a facade. State and logic live in `composables/store/*`, one module per
+  concern (state, car, maintenance, fuel, expenses, documents, reminders, masters, components, trips, derived, backupData,
+  csvImport). Modules import `state` and a few of each other, never the facade, so there are no cycles; keep it that way.
+- **Importing a backup.** Nothing in a file is trusted: `utils/backup/backupValidation.ts` (`cleanBackupRecords`) checks every
+  record before it can replace the database, drops damaged, duplicate or orphaned ones (counted and shown to the user),
+  repairs what it safely can, keeps unknown fields, and `importData` refuses files from a newer format version. When you add
+  a field to a stored type, add it to the matching cleaner, and `importRoundTrip.test.ts` will tell you if it is lost.
+- **Utils are grouped by concern.** `utils/security/` (app lock, vault, secret prompt), `utils/backup/` (snapshots, export,
+  schedule, validation, cloud sync), `utils/alerts/` (alert engine, dispatcher, store, notifications, `.ics`) and
+  `utils/money/` (budget, currency, costs, warranties, recurring, receipts, CSV); the rest stay flat in `utils/`.
+- **Dashboard logic lives in composables.** `Dashboard.vue` only wires the tabs and sheets together: data in/out is
+  `useDataTransfer`, badge/low-fuel/budget/alert-cycle watchers are `useDashboardAlerts`, and the add/edit/delete
+  handlers are grouped by sheet family (`useRecordSheets`, `useMaintenanceSheets`, `useFuelSheets`), all behind the
+  shared double-tap lock `submitOnce` (`useSubmitOnce`). New handlers go into the matching composable, not the component.
+- **Pure logic.** Anything algorithmic belongs in `utils/` as a function that takes its inputs explicitly (see
+  `maintenance.ts`, `fuelAnalytics.ts`, `alerts.ts`): it is then testable on its own and usable for any car, not just the
+  active one. `composables/__tests__/fuelAnalytics.golden.test.ts` snapshots the real store output so a refactor can't
+  silently change a number.
+- **Loading.** `Dashboard.vue` loads every tab except the home one, and every sheet, with `lazy()` (async components),
+  and warms them when the browser is idle. The PDF library (`jspdf`) is imported only inside `generateReportPdf`, and
+  `tesseract.js`/`hash-wasm` only when used. Don't import these statically.
+
 ## Documents
 
 Everything that is a paper — СТС/ПТС, driver's licence, insurance, tech inspection, tax,
@@ -69,6 +93,73 @@ plus the old car photo gallery — lives in the `documents` store (`CarDocument`
 longer carry renewal dates. `migrateLegacyToDocuments` (`utils/documents.ts`) is idempotent
 and moves the legacy `Car.stsNumber`/`Car.photos`/`Expense.renewalDate` on startup and on
 import of old backups — don't reintroduce those fields in the UI.
+
+## Expenses, breakdowns & money features
+
+- **Chronological feeds.** «Все события» (`EventsHistorySheet`) and «Прочие расходы» (`ExpenseListSheet`)
+  are one newest-first list split only by month headers (`utils/monthLabel.ts`) — never regrouped by kind.
+  `TimelineEvent` has three kinds: `fuel`, `service`, `expense` (expenses have `mileage: null`).
+- **Breakdown (`ExpenseItem`: part / labor / other).** Optional `items` on `Expense` and `HistoryEntry`;
+  the total (`amount`/`cost`) stays the source of truth and the lines are informational. Edited through the
+  shared `CostBreakdownEditor.vue` (expense form, ТО edit, «Выполнено»); a part can carry `warrantyMonths`.
+  `utils/money/costStructure.ts` powers «Куда уходят деньги», `utils/money/expensesCsv.ts` the full CSV export, and the PDF
+  report prints the lines too.
+- **Recurring expenses.** `Expense.recurrence` lives only on the newest entry of a series;
+  `utils/money/recurring.ts` (`materializeRecurring`, idempotent) creates owed entries on load and after each save.
+- **Budget** is a per-device monthly limit (`utils/money/budget.ts`, localStorage, set in Settings → Бюджет), shown on
+  the home screen. **Warranties** (`utils/money/warranty.ts`) and **master stats** (`utils/money/masterStats.ts`, via
+  `masterId` on expenses/ТО and `MasterPicker.vue`) are derived, never stored. Damage photos use
+  `Expense.photos` + `PhotoGalleryField.vue`.
+- **Alerts.** `checkAndNotifyBudget` (80% and 100%, once per month per level) and `checkAndNotifyWarranties`
+  (≤30 days, once per part) live in `utils/alerts/notifications.ts` and are wired in `Dashboard.vue` like the other checks.
+  The budget also travels in the backup (`BackupData.settings`), applied only after a successful import.
+- **Entering expenses fast.** `ExpenseFormSheet` has a quick-entry line (`utils/money/expenseQuickEntry.ts`: «осаго 12000»,
+  «ремонт бампера 45к») and «Заполнить по чеку» (`utils/money/receiptOcr.ts` → lazy `tesseract.js`, parsing in
+  `utils/money/receiptText.ts`; needs a connection once to fetch language data, fails softly offline).
+  `Expense.itemId` links an expense to a maintenance item and shows in that item's screen.
+- **Overviews.** «Месяц к месяцу» (`utils/money/monthComparison.ts`) and «Детали и работы» (`PartsHistorySheet.vue`,
+  `utils/money/partsList.ts`) on the расход tab.
+
+## App lock
+
+`utils/security/appLock.ts` gates the UI with a PIN stored as a salted PBKDF2-SHA-256 hash (300k iterations, `my-car-lock-iterations`)
+and an optional WebAuthn step. PINs saved by older versions (plain salted SHA-256, no iteration key) still verify and are
+rehashed on the next successful unlock. Five wrong attempts start a pause (30 s, doubling, capped at 15 min) that
+`LockScreen.vue` shows as a countdown. It is a UI gate, not encryption of the IndexedDB data.
+
+## Encryption at rest (opt-in)
+
+Settings → «Шифрование данных» (`VaultSetupSheet`/`VaultManageSheet`, logic in `utils/security/vault.ts` + `utils/security/vaultActions.ts`).
+- **Keys.** One random AES-256-GCM data key encrypts every record. It is stored only wrapped: once under the
+  passphrase (Argon2id via `hash-wasm`, 64 MiB × 3) and once under a 160-bit recovery code. Lose both and the data is
+  gone — there is no backdoor. While unlocked it lives in memory as a non-extractable `CryptoKey`.
+- **Storage seam.** Only `db/database.ts` seals/opens records (`seal`/`open`): a sealed row is `{id, carId?, e, iv, ct}`,
+  bound to `store:id` as AAD. Plain rows still read, so an interrupted migration is resumable
+  (`resumeInterruptedMigration`) and `reencryptAll` is idempotent and one transaction. Never await crypto inside an
+  IndexedDB transaction — seal first, then write.
+- **Everything that could leak is covered.** Local snapshots (`autoBackup.ts`, cleared on enable), the JSON export and cloud
+  payload (`serializeBackup`/`encryptBackup`, openable with passphrase or recovery code anywhere), and the Yandex token.
+  CSV/PDF exports stay plain files, so `Dashboard.vue` asks first when encryption is on.
+- **App flow.** With the vault on, `App.vue` loads nothing until `VaultUnlockScreen` emits `unlock`; the screen PIN is
+  disabled and biometrics can't unlock (they hold no key). Auto-lock drops the key after the chosen time in the background.
+  `onVaultStateChange` may only *raise* the lock — the unlock screen decides when it is done.
+
+## Notifications & backups
+
+- **Alert engine.** `utils/alerts/alerts.ts` turns every car's data into alerts (`computeAlerts`: ТО by mileage/date/pace, dated
+  and odometer reminders, document expiry, warranties) with *stable keys* that embed what resets them (last service,
+  expiry date), so nothing needs manual "notified" clean-up. `utils/alerts/alertDispatcher.ts` (`runAlertCycle`) runs over **all**
+  cars, delivers what is newly due once (grouped per car, soon → due escalates), and writes the upcoming ones to a small
+  plain database (`utils/alerts/alertStore.ts`, `my-car-alerts`). The first run is silent. Triggered from `composables/useAlerts.ts`
+  at startup, on returning to the app, and (debounced) on data changes. Low fuel and budget keep their own checks.
+- **Background.** `public/sw-extra.js` (pulled into the generated worker by `workbox.importScripts`) answers
+  `periodicsync` (Chromium, installed PWA only) from that schedule and handles notification taps. iOS has no background
+  path, so Settings also offers **deadlines as .ics** (`buildIcsCalendar`), which rings at the OS level. While encryption is
+  on the schedule is never written and the background check is off.
+- **Backups off the device.** `utils/backup/backupSchedule.ts` decides when to remind (default weekly, a clock that starts when
+  data first exists, "later" = 1 day, cloud sync counts); `utils/backup/backupExport.ts` saves via a chosen folder
+  (File System Access, written without a tap while permission lasts, newest 10 kept), else the share sheet, else a
+  download. `composables/useBackup.ts` drives the home banner and the Settings section. Files are encrypted when the vault is on.
 
 ## Feedback & state
 
@@ -122,6 +213,6 @@ import of old backups — don't reintroduce those fields in the UI.
   `useCarStore` (all data), `useToast` (undo/notices), `haptics.ts`, `ics.ts` (calendar
   export). Icons come from `ionicons/icons` (`import { xOutline } from 'ionicons/icons'`)
   — don't hand-draw a new inline SVG glyph or reach for emoji where a real Ionicon fits.
-- Run `npm run typecheck` before considering any change done — the project has no test
-  suite, so type-checking + manual verification (dev server + Playwright screenshots) is
-  the bar.
+- Run `npm run typecheck` and `npm test` (vitest; pure utils plus the store against
+  `fake-indexeddb`) before considering any change done, then verify UI changes manually
+  (dev server + Playwright screenshots). Fix a bug together with a test that fails without it.

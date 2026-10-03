@@ -17,13 +17,23 @@ export const DATE_FORMAT_OPTIONS: DateFormatOption[] = [
 const FORMAT_KEY = 'my-car-date-format'
 const SHOW_YEAR_KEY = 'my-car-date-show-year'
 
+// These run at import time, so blocked storage (private mode, strict browser
+// settings) must fall back to defaults instead of crashing the whole app.
 function loadFormat(): DateFormatId {
-  const stored = localStorage.getItem(FORMAT_KEY)
-  return DATE_FORMAT_OPTIONS.some((o) => o.value === stored) ? (stored as DateFormatId) : 'auto'
+  try {
+    const stored = localStorage.getItem(FORMAT_KEY)
+    return DATE_FORMAT_OPTIONS.some((o) => o.value === stored) ? (stored as DateFormatId) : 'auto'
+  } catch {
+    return 'auto'
+  }
 }
 
 function loadShowYear(): boolean {
-  return localStorage.getItem(SHOW_YEAR_KEY) === 'true'
+  try {
+    return localStorage.getItem(SHOW_YEAR_KEY) === 'true'
+  } catch {
+    return false
+  }
 }
 
 const dateFormat = ref<DateFormatId>(loadFormat())
@@ -35,7 +45,11 @@ export function getDateFormat(): DateFormatId {
 
 export function setDateFormat(value: DateFormatId): void {
   dateFormat.value = value
-  localStorage.setItem(FORMAT_KEY, value)
+  try {
+    localStorage.setItem(FORMAT_KEY, value)
+  } catch {
+    /* best effort */
+  }
 }
 
 export function isShowYearEnabled(): boolean {
@@ -44,7 +58,11 @@ export function isShowYearEnabled(): boolean {
 
 export function setShowYearEnabled(enabled: boolean): void {
   showYear.value = enabled
-  localStorage.setItem(SHOW_YEAR_KEY, enabled ? 'true' : 'false')
+  try {
+    localStorage.setItem(SHOW_YEAR_KEY, enabled ? 'true' : 'false')
+  } catch {
+    /* best effort */
+  }
 }
 
 function pad(n: number): string {
