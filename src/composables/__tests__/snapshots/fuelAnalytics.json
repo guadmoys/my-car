@@ -1,0 +1,220 @@
+{
+  "averageConsumption": 7.563386334336054,
+  "history": [
+    {
+      "mileage": 62055,
+      "distanceKm": 445,
+      "l100": 6.089887640449437,
+      "quality": "good"
+    },
+    {
+      "mileage": 61610,
+      "distanceKm": 498,
+      "l100": 8.835341365461847,
+      "quality": "bad"
+    },
+    {
+      "mileage": 61112,
+      "distanceKm": 461,
+      "l100": 7.852494577006508,
+      "quality": "bad"
+    },
+    {
+      "mileage": 60651,
+      "distanceKm": 424,
+      "l100": 7.5,
+      "quality": "good"
+    },
+    {
+      "mileage": 60227,
+      "distanceKm": 777,
+      "l100": 4.388674388674389,
+      "quality": "good"
+    },
+    {
+      "mileage": 59450,
+      "distanceKm": 140,
+      "l100": 21.357142857142854,
+      "quality": "bad"
+    },
+    {
+      "mileage": 59310,
+      "distanceKm": 493,
+      "l100": 8.1947261663286,
+      "quality": "bad"
+    },
+    {
+      "mileage": 58817,
+      "distanceKm": 456,
+      "l100": 6.578947368421052,
+      "quality": "good"
+    },
+    {
+      "mileage": 58361,
+      "distanceKm": 509,
+      "l100": 8.644400785854616,
+      "quality": "bad"
+    },
+    {
+      "mileage": 57852,
+      "distanceKm": 472,
+      "l100": 7.139830508474578,
+      "quality": "good"
+    },
+    {
+      "mileage": 57380,
+      "distanceKm": 435,
+      "l100": 6.804597701149426,
+      "quality": "good"
+    },
+    {
+      "mileage": 56945,
+      "distanceKm": 488,
+      "l100": 8.19672131147541,
+      "quality": "bad"
+    },
+    {
+      "mileage": 56457,
+      "distanceKm": 451,
+      "l100": 7.849223946784923,
+      "quality": "bad"
+    },
+    {
+      "mileage": 56006,
+      "distanceKm": 504,
+      "l100": 7.5,
+      "quality": "good"
+    },
+    {
+      "mileage": 55502,
+      "distanceKm": 467,
+      "l100": 3.9828693790149883,
+      "quality": "good"
+    },
+    {
+      "mileage": 55035,
+      "distanceKm": 430,
+      "l100": 10.232558139534884,
+      "quality": "bad"
+    },
+    {
+      "mileage": 54605,
+      "distanceKm": 483,
+      "l100": 8.198757763975156,
+      "quality": "bad"
+    },
+    {
+      "mileage": 54122,
+      "distanceKm": 446,
+      "l100": 7.847533632286996,
+      "quality": "bad"
+    },
+    {
+      "mileage": 53676,
+      "distanceKm": 499,
+      "l100": 7.494989979959919,
+      "quality": "good"
+    },
+    {
+      "mileage": 53177,
+      "distanceKm": 462,
+      "l100": 7.142857142857142,
+      "quality": "good"
+    },
+    {
+      "mileage": 52715,
+      "distanceKm": 425,
+      "l100": 6.799999999999999,
+      "quality": "good"
+    },
+    {
+      "mileage": 52290,
+      "distanceKm": 478,
+      "l100": 6.234309623430965,
+      "quality": "good"
+    },
+    {
+      "mileage": 51812,
+      "distanceKm": 441,
+      "l100": 9.977324263038549,
+      "quality": "bad"
+    },
+    {
+      "mileage": 51371,
+      "distanceKm": 494,
+      "l100": 7.51012145748988,
+      "quality": "good"
+    },
+    {
+      "mileage": 50877,
+      "distanceKm": 457,
+      "l100": 8.446389496717725,
+      "quality": "bad"
+    },
+    {
+      "mileage": 50420,
+      "distanceKm": 420,
+      "l100": null,
+      "quality": "neutral"
+    }
+  ],
+  "estimatedRangeKm": 661.0795454545455,
+  "averageFuelPrice": 52.98456823902813,
+  "totalCo2Kg": 2213.7660000000005,
+  "insights": [
+    {
+      "id": "trend",
+      "icon": "📉",
+      "text": "Расход снижается: последние заправки в среднем на 31% экономичнее, чем раньше",
+      "tone": "good"
+    },
+    {
+      "id": "range",
+      "icon": "🛣",
+      "text": "Ориентировочный запас хода: ~661 км (~13 дней при вашем темпе)",
+      "tone": "neutral"
+    },
+    {
+      "id": "reference",
+      "icon": "📛",
+      "text": "Средний расход на 8% выше заданного эталона (7.0 л/100км)",
+      "tone": "bad"
+    },
+    {
+      "id": "budget",
+      "icon": "📊",
+      "text": "За последние 27 дн. на топливо потрачено 5 639 ₽ — при таком темпе выйдет ~6 266 ₽ за 30 дней",
+      "tone": "neutral"
+    },
+    {
+      "id": "station",
+      "icon": "📍",
+      "text": "Самая выгодная АЗС — «Лукойл»: в среднем 51.7 ₽/л",
+      "tone": "good"
+    },
+    {
+      "id": "fuel-type",
+      "icon": "🔬",
+      "text": "На АИ-95 расход в среднем на 18% ниже, чем на Дизель",
+      "tone": "neutral"
+    }
+  ],
+  "monthDistanceKm": 0,
+  "costForecast": {
+    "sixMonths": {
+      "fuel": 37920.12266666667,
+      "maintenance": 33747.03844842104,
+      "total": 71667.16111508771
+    },
+    "twelveMonths": {
+      "fuel": 75840.24533333334,
+      "maintenance": 67494.07689684207,
+      "total": 143334.32223017543
+    }
+  },
+  "totals": {
+    "fuel": 48412,
+    "service": 7000,
+    "all": 55412
+  }
+}
