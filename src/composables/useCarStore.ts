@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { currency } from '../utils/currency'
 import { dailySnapshotDue, saveSnapshot } from '../utils/autoBackup'
 import { monthlyBudget, setMonthlyBudget } from '../utils/budget'
-import { addMonthsClamped } from '../utils/dates'
+import { averageDailyKm, maintenanceStatus } from '../utils/maintenance'
 import { materializeRecurring } from '../utils/recurring'
 import { documentStatuses as buildDocumentStatuses, migrateLegacyToDocuments } from '../utils/documents'
 import type {
@@ -32,7 +32,6 @@ import type {
   Trip,
 } from '../types'
 import { buildDefaultItems } from '../data/defaultMaintenance'
-import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
 import * as db from '../db/database'
 import { composePartNote, composeServiceNote, type ParsedCarCsv } from '../utils/carCsvFormat'
 
@@ -853,31 +852,9 @@ const totalPersonalKm = computed(() =>
   trips.filter((t) => t.purpose === 'personal').reduce((sum, t) => sum + Math.max(0, t.endMileage - t.startMileage), 0),
 )
 
-function addMonths(ts: number, months: number): number {
-  return addMonthsClamped(ts, months)
-}
-
-function stateRank(state: MaintenanceStatus['state']): number {
-  return state === 'due' ? 2 : state === 'soon' ? 1 : 0
-}
-
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/**
- * Average km driven per day, from the span of the fuel history. Guarded
- * against a short/burst date span the same way the budget forecast is, so
- * backfilling several fill-ups in one sitting doesn't produce a wild rate.
- */
-const avgDailyKm = computed<number | null>(() => {
-  if (fuelEntries.length < 2) return null
-  const sorted = fuelEntries.slice().sort((a, b) => a.date - b.date)
-  const first = sorted[0]
-  const last = sorted[sorted.length - 1]
-  const days = (last.date - first.date) / DAY_MS
-  const distance = last.mileage - first.mileage
-  if (days < 3 || distance <= 0) return null
-  return distance / days
-})
+const avgDailyKm = computed<number | null>(() => averageDailyKm(fuelEntries))
 
 function statusFor(
   item: MaintenanceItem,
@@ -885,49 +862,8 @@ function statusFor(
   now: number,
   dailyKm: number | null,
 ): MaintenanceStatus {
-  const dueAtMileage = item.lastServiceMileage + item.intervalKm
-  const remainingKm = dueAtMileage - currentMileage
-  const traveled = currentMileage - item.lastServiceMileage
-  const kmProgress = item.intervalKm > 0 ? Math.min(1, Math.max(0, traveled / item.intervalKm)) : 1
   const itemHistory = historyEntries.filter((h) => h.itemId === item.id)
-  const kmSoonThreshold = adaptiveKmThreshold(
-    item.intervalKm,
-    item.notifyBeforeKm,
-    itemHistory.map((h) => h.mileage),
-  ).value
-  const kmState: MaintenanceStatus['state'] =
-    remainingKm <= 0 ? 'due' : remainingKm <= kmSoonThreshold ? 'soon' : 'ok'
-
-  let dueAtDate: number | undefined
-  let remainingDays: number | undefined
-  let dateState: MaintenanceStatus['state'] | null = null
-  let dateProgress = 0
-
-  if (item.intervalMonths && item.lastServiceDate) {
-    dueAtDate = addMonths(item.lastServiceDate, item.intervalMonths)
-    remainingDays = Math.ceil((dueAtDate - now) / DAY_MS)
-    const totalSpan = dueAtDate - item.lastServiceDate
-    dateProgress = totalSpan > 0 ? Math.min(1, Math.max(0, (now - item.lastServiceDate) / totalSpan)) : 1
-    const daySoonThreshold = adaptiveDayThreshold(
-      totalSpan,
-      item.notifyBeforeDays,
-      itemHistory.map((h) => h.date),
-    ).value
-    dateState = remainingDays <= 0 ? 'due' : remainingDays <= daySoonThreshold ? 'soon' : 'ok'
-  }
-
-  // Capped to a ~3-year horizon: beyond that, a daily-pace guess for a
-  // long-interval item (e.g. a timing belt) is just noise, not a useful date.
-  let estimatedDueDate: number | undefined
-  if (dueAtDate === undefined && dailyKm !== null && dailyKm > 0 && remainingKm > 0) {
-    const daysUntil = remainingKm / dailyKm
-    if (daysUntil <= 1095) estimatedDueDate = now + daysUntil * DAY_MS
-  }
-
-  const state = dateState && stateRank(dateState) > stateRank(kmState) ? dateState : kmState
-  const progress = dateState ? Math.max(kmProgress, dateProgress) : kmProgress
-
-  return { item, dueAtMileage, remainingKm, dueAtDate, remainingDays, estimatedDueDate, progress, state }
+  return maintenanceStatus(item, currentMileage, now, dailyKm, itemHistory)
 }
 
 const statuses = computed<MaintenanceStatus[]>(() => {

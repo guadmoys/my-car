@@ -14,6 +14,8 @@ import { isLockEnabled } from './utils/appLock'
 import { isUpdating } from './utils/appUpdate'
 import { getAutoLockMinutes, isVaultEnabled, isVaultUnlocked, lockVault, onVaultStateChange } from './utils/vault'
 import { resumeInterruptedMigration } from './utils/vaultActions'
+import { registerBackgroundCheck, runAlertsNow, scheduleAlertCycle } from './composables/useAlerts'
+import { isNotificationsEnabled } from './utils/notifications'
 
 const store = useCarStore()
 const { cars, isLoaded } = store
@@ -29,13 +31,18 @@ async function startApp() {
   if (started) return
   started = true
   await resumeInterruptedMigration().catch(() => {})
-  void store.load()
+  // Once the data is in, check every car's deadlines (not only the one on screen).
+  void store.load().then(() => {
+    void runAlertsNow()
+    if (isNotificationsEnabled()) void registerBackgroundCheck()
+  })
   useCloudSync().initCloudSync()
 }
 
 function handleVaultUnlocked() {
   vaultLocked.value = false
   void startApp()
+  scheduleAlertCycle(500)
 }
 
 let hiddenAt: number | null = null
@@ -56,6 +63,8 @@ function handleVisibilityChange() {
     locked.value = true
   }
   hiddenAt = null
+  // Coming back to the app is a good moment to look at the clock again.
+  scheduleAlertCycle(500)
 }
 
 let stopVaultWatch: (() => void) | undefined

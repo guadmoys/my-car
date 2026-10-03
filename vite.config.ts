@@ -69,6 +69,8 @@ export default defineConfig(({ command, isPreview }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
+          // Background notification check and notification taps (see public/sw-extra.js).
+          importScripts: ['sw-extra.js'],
           navigateFallback: `${base}index.html`,
           runtimeCaching: [
             {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addMonthsClamped, calendarDaysBetween, startOfDay } from '../dates'
 import { buildWarranties } from '../warranty'
-import { buildIcsReminder } from '../ics'
+import { buildIcsCalendar, buildIcsReminder } from '../ics'
 import { buildExpensesCsv } from '../expensesCsv'
 import { buildCostStructure } from '../costStructure'
 import { buildPartsList } from '../partsList'
@@ -89,5 +89,32 @@ describe('derived lists stay consistent', () => {
     expect(rows.reduce((s, r) => s + r.share, 0)).toBeCloseTo(1)
     expect(rows.reduce((s, r) => s + r.amount, 0)).toBe(180)
     expect(buildPartsList(hist, []).map((r) => r.key)).toEqual(['b-2', 'a-1'])
+  })
+})
+
+describe('ics calendar', () => {
+  it('writes one timed event with an alarm per deadline, in local time', () => {
+    const ics = buildIcsCalendar(
+      [
+        { uid: 'a', title: 'Ford: Масло', description: 'Скоро ТО', start: new Date(2026, 9, 5, 9, 0).getTime() },
+        { uid: 'b', title: '≈ Ремень', start: new Date(2026, 10, 1, 14, 30).getTime() },
+      ],
+      new Date(2026, 5, 15),
+    )
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2)
+    expect(ics.match(/BEGIN:VALARM/g)).toHaveLength(2)
+    expect(ics).toContain('DTSTART:20261005T090000')
+    expect(ics).toContain('DTEND:20261005T093000')
+    expect(ics).toContain('DTSTART:20261101T143000')
+    expect(ics).toContain('UID:a@moya-mashina')
+    expect(ics.startsWith('BEGIN:VCALENDAR')).toBe(true)
+    expect(ics.endsWith('END:VCALENDAR')).toBe(true)
+  })
+
+  it('folds long lines to 75 characters', () => {
+    const ics = buildIcsCalendar([{ uid: 'a', title: 'ОЧЕНЬ длинное название '.repeat(8), start: 0 }])
+    for (const line of ics.split('\r\n')) expect(line.length).toBeLessThanOrEqual(75)
+    // Unfolding restores the original text.
+    expect(ics.replace(/\r\n /g, '')).toContain('ОЧЕНЬ длинное название ОЧЕНЬ')
   })
 })

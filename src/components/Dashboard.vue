@@ -3,18 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { IonPage, IonTab, IonTabs } from '@ionic/vue'
 import { currency } from '../utils/currency'
 import { useCarStore } from '../composables/useCarStore'
-import {
-  checkAndNotify,
-  checkAndNotifyBudget,
-  checkAndNotifyDocuments,
-  checkAndNotifyWarranties,
-  checkAndNotifyLowFuel,
-  checkAndNotifyReminders,
-  clearNotifiedDocument,
-  clearNotifiedItem,
-  clearNotifiedReminder,
-  updateAppBadge,
-} from '../utils/notifications'
+import { checkAndNotifyBudget, checkAndNotifyLowFuel, updateAppBadge } from '../utils/notifications'
+import { registerBackgroundCheck, runAlertsNow, scheduleAlertCycle } from '../composables/useAlerts'
 import { haptic } from '../utils/haptics'
 import { useToast } from '../composables/useToast'
 import DashboardTab from './DashboardTab.vue'
@@ -221,9 +211,8 @@ const passportData = computed<PassportData | null>(() => {
 
 watch(
   [car, statuses],
-  ([carVal, statusesVal]) => {
+  () => {
     updateAppBadge(dueCount.value + soonCount.value)
-    if (carVal) checkAndNotify(carVal.id, statusesVal)
   },
   { immediate: true },
 )
@@ -237,14 +226,6 @@ watch(
 )
 
 watch(
-  [car, reminderStatuses],
-  ([carVal, statusesVal]) => {
-    if (carVal) checkAndNotifyReminders(carVal.id, statusesVal.filter((s) => s.isDue))
-  },
-  { immediate: true },
-)
-
-watch(
   [car, thisMonthSpend, monthlyBudget],
   ([carVal, spent, budget]) => {
     if (carVal) checkAndNotifyBudget(carVal.id, spent, budget)
@@ -252,33 +233,25 @@ watch(
   { immediate: true },
 )
 
+/** A change in anything the alert engine reads re-runs it (debounced), for every car. */
 watch(
-  [car, warranties],
-  ([carVal, list]) => {
-    if (carVal) checkAndNotifyWarranties(carVal.id, list)
-  },
-  { immediate: true },
+  () => [
+    car.value?.currentMileage,
+    statuses.value.map((x) => `${x.item.id}:${x.state}`).join(),
+    reminderStatuses.value.map((x) => `${x.reminder.id}:${x.isDue}`).join(),
+    documentStatuses.value.map((x) => `${x.document.id}:${x.document.expiryDate}`).join(),
+    warranties.value.map((x) => x.key).join(),
+  ],
+  () => scheduleAlertCycle(),
 )
 
-watch(
-  [car, documentStatuses],
-  ([carVal, statusesVal]) => {
-    if (carVal) checkAndNotifyDocuments(carVal.id, statusesVal)
-  },
-  { immediate: true },
-)
-
-/** Re-runs the due/soon, low-fuel and reminder checks against the current
- * state, since enabling notifications doesn't itself change `car`/`statuses`
- * and so wouldn't otherwise trigger the watchers below for items already due. */
+/** Enabling notifications doesn't change any data, so run the checks once for what is already due. */
 function handleNotificationsEnabled() {
+  void runAlertsNow()
+  void registerBackgroundCheck()
   if (!car.value) return
-  checkAndNotify(car.value.id, statuses.value)
   checkAndNotifyLowFuel(car.value.id, estimatedRangeKm.value)
-  checkAndNotifyReminders(car.value.id, reminderStatuses.value.filter((s) => s.isDue))
-  checkAndNotifyDocuments(car.value.id, documentStatuses.value)
   checkAndNotifyBudget(car.value.id, thisMonthSpend.value, monthlyBudget.value)
-  checkAndNotifyWarranties(car.value.id, warranties.value)
 }
 
 function openEdit(id: string) {
@@ -312,7 +285,6 @@ async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?
       toast.show('Не удалось сохранить — попробуйте ещё раз')
       return
     }
-    if (car.value) clearNotifiedItem(car.value.id, item.id)
     if (!result) return
     haptic('success')
     toast.show(`«${item.name}» — выполнено`, {
@@ -458,8 +430,6 @@ async function handleSaveDocument(payload: {
     const editing = editingDocument.value
     if (editing && editing !== 'new') {
       await store.updateDocument(editing.id, payload)
-      // The expiry may have moved: let it notify again when it next becomes due.
-      if (car.value) clearNotifiedDocument(car.value.id, editing.id)
       haptic('success')
     } else {
       await store.addDocument(payload)
@@ -475,7 +445,6 @@ async function handleDeleteDocument(id: string) {
   const document = store.documents.find((d) => d.id === id)
   const removed = await store.deleteDocument(id)
   if (!removed) return
-  if (car.value) clearNotifiedDocument(car.value.id, id)
   editingDocument.value = null
   haptic('delete')
   toast.show(document ? 'Документ удалён' : 'Запись удалена', {
@@ -597,7 +566,6 @@ async function handleSaveReminder(payload: {
 async function handleDeleteReminder(id: string) {
   const removed = await store.deleteReminder(id)
   if (!removed) return
-  if (car.value) clearNotifiedReminder(car.value.id, id)
   haptic('success')
   toast.show(`«${removed.text}» — готово`, {
     label: 'Отменить',
