@@ -253,13 +253,6 @@ export interface ExpensePayload {
   repeat?: ExpenseRecurrence['every']
 }
 
-export interface ExpenseStatus {
-  expense: Expense
-  isDue: boolean
-  isSoon: boolean
-  remainingDays?: number
-}
-
 /** What kind of paper a CarDocument is. */
 export type DocumentType = 'sts' | 'pts' | 'license' | 'insurance' | 'inspection' | 'tax' | 'other'
 

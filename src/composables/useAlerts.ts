@@ -1,5 +1,5 @@
 import { runAlertCycle } from '../utils/alertDispatcher'
-import { META_ENABLED, META_LAST_CHECK, getMeta, setMeta } from '../utils/alertStore'
+import { META_ENABLED, setMeta } from '../utils/alertStore'
 import { canNotify, showLocalNotification } from '../utils/notifications'
 import { isVaultEnabled, isVaultUnlocked } from '../utils/vault'
 
@@ -94,8 +94,4 @@ export async function backgroundStatus(): Promise<BackgroundStatus> {
   } catch {
     return 'unsupported'
   }
-}
-
-export async function lastAlertCheck(): Promise<number | null> {
-  return (await getMeta<number>(META_LAST_CHECK)) ?? null
 }
