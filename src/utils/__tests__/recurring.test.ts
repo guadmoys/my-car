@@ -49,4 +49,12 @@ describe('recurring expenses', () => {
     expect(r.created).toHaveLength(1)
     expect(new Date(r.created[0].date).getFullYear()).toBe(2026)
   })
+
+  it('does not duplicate an entry that already exists on the owed day', () => {
+    const head: Expense = { ...base, id: 'h', date: new Date(2026, 0, 31).getTime() }
+    const existing: Expense = { ...base, id: 'x', recurrence: undefined, date: new Date(2026, 1, 28, 9).getTime() }
+    let n = 0
+    const { created } = materializeRecurring([head, existing], new Date(2026, 2, 15).getTime(), () => `n${n++}`)
+    expect(created).toHaveLength(0)
+  })
 })

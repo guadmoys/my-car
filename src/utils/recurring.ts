@@ -12,6 +12,21 @@ export function nextOccurrence(from: number, rec: ExpenseRecurrence): number {
   return target.getTime()
 }
 
+const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString()
+
+/** True when the list already holds the entry a series would create (same day, title, category, amount). */
+function alreadyExists(expenses: Expense[], from: Expense, date: number): boolean {
+  return expenses.some(
+    (e) =>
+      e.id !== from.id &&
+      !e.recurrence &&
+      e.category === from.category &&
+      (e.title ?? '') === (from.title ?? '') &&
+      e.amount === from.amount &&
+      sameDay(e.date, date),
+  )
+}
+
 export interface RecurringResult {
   /** Heads whose recurrence moved on to a newly created entry (recurrence cleared). */
   updated: Expense[]
@@ -36,8 +51,10 @@ export function materializeRecurring(expenses: Expense[], now: number, makeId: (
     const series: Expense[] = []
     while (date <= now && steps < MAX_CATCH_UP) {
       const { recurrence: _drop, receiptPhoto: _photo, photos: _photos, ...rest } = last
-      series.push({ ...rest, id: makeId(), date, items: last.items?.map((i) => ({ ...i })) })
-      last = series[series.length - 1]
+      if (!alreadyExists(expenses, head, date)) {
+        series.push({ ...rest, id: makeId(), date, items: last.items?.map((i) => ({ ...i })) })
+        last = series[series.length - 1]
+      }
       date = nextOccurrence(date, rec)
       steps++
     }
