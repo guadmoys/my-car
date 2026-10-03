@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { currency, formatPricePerLiter } from '../utils/currency'
+import { currency, formatPricePerLiter } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonAccordion,

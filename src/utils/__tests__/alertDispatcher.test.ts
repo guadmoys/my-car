@@ -8,9 +8,9 @@ vi.stubGlobal('localStorage', {
   removeItem: (k: string) => void memory.delete(k),
 })
 
-import { runAlertCycle } from '../alertDispatcher'
-import { readSchedule, readShown, resetAlertStore } from '../alertStore'
-import type { CarBundle } from '../alerts'
+import { runAlertCycle } from '../alerts/alertDispatcher'
+import { readSchedule, readShown, resetAlertStore } from '../alerts/alertStore'
+import type { CarBundle } from '../alerts/alerts'
 import type { Car, MaintenanceItem } from '../../types'
 
 const DAY = 86400000

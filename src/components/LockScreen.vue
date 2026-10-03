@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { IonButton, IonContent, IonIcon, IonInput, IonNote, IonPage } from '@ionic/vue'
 import { carSportOutline, fingerPrintOutline, lockClosedOutline } from 'ionicons/icons'
-import { isBiometricEnabled, lockoutRemainingMs, verifyBiometric, verifyPin } from '../utils/appLock'
+import { isBiometricEnabled, lockoutRemainingMs, verifyBiometric, verifyPin } from '../utils/security/appLock'
 import { haptic } from '../utils/haptics'
 
 const emit = defineEmits<{

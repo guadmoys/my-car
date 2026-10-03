@@ -2,10 +2,10 @@ import { reactive, watch } from 'vue'
 import { useCarStore } from './useCarStore'
 import { useToast } from './useToast'
 import { haptic } from '../utils/haptics'
-import * as cloud from '../utils/cloudSync'
-import { openEncryptedBackup } from '../utils/backupFile'
-import { isVaultEnabled, isVaultUnlocked } from '../utils/vault'
-import type { CloudAccount, CloudProvider, CloudSyncRecord } from '../utils/cloudSync'
+import * as cloud from '../utils/backup/cloudSync'
+import { openEncryptedBackup } from '../utils/backup/backupFile'
+import { isVaultEnabled, isVaultUnlocked } from '../utils/security/vault'
+import type { CloudAccount, CloudProvider, CloudSyncRecord } from '../utils/backup/cloudSync'
 
 const SYNC_DEBOUNCE_MS = 5000
 

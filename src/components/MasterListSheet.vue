@@ -16,8 +16,8 @@ import {
 } from '@ionic/vue'
 import { add } from 'ionicons/icons'
 import type { Master } from '../types'
-import type { MasterStats } from '../utils/masterStats'
-import { formatMoney } from '../utils/currency'
+import type { MasterStats } from '../utils/money/masterStats'
+import { formatMoney } from '../utils/money/currency'
 
 defineProps<{
   masters: Master[]

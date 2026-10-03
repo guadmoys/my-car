@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { addMonthsClamped, calendarDaysBetween, startOfDay } from '../dates'
-import { buildWarranties } from '../warranty'
-import { buildIcsCalendar, buildIcsReminder } from '../ics'
-import { buildExpensesCsv } from '../expensesCsv'
-import { buildCostStructure } from '../costStructure'
-import { buildPartsList } from '../partsList'
+import { buildWarranties } from '../money/warranty'
+import { buildIcsCalendar, buildIcsReminder } from '../alerts/ics'
+import { buildExpensesCsv } from '../money/expensesCsv'
+import { buildCostStructure } from '../money/costStructure'
+import { buildPartsList } from '../money/partsList'
 
 describe('dates', () => {
   it('clamps month overflow instead of rolling into the next month', () => {

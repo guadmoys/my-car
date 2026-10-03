@@ -1,4 +1,4 @@
-import type { Expense, ExpenseRecurrence } from '../types'
+import type { Expense, ExpenseRecurrence } from '../../types'
 
 const MAX_CATCH_UP = 36
 

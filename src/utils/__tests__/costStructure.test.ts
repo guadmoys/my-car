@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCostStructure } from '../costStructure'
+import { buildCostStructure } from '../money/costStructure'
 
 describe('buildCostStructure', () => {
   it('splits service cost into parts, labor and the rest', () => {

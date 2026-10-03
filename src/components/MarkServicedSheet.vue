@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { confirmDialog } from '../utils/confirmDialog'
-import { currency } from '../utils/currency'
+import { currency } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,

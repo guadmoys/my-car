@@ -10,7 +10,7 @@ vi.stubGlobal('localStorage', {
 })
 
 import * as db from '../../db/database'
-import { listSnapshots, saveSnapshot } from '../../utils/autoBackup'
+import { listSnapshots, saveSnapshot } from '../../utils/backup/autoBackup'
 import {
   VaultAuthError,
   VaultLockedError,
@@ -22,16 +22,16 @@ import {
   serializeBackup,
   unlockVault,
   type KdfParams,
-} from '../../utils/vault'
-import { resolveBackupData } from '../../utils/backupFile'
+} from '../../utils/security/vault'
+import { resolveBackupData } from '../../utils/backup/backupFile'
 import {
   cancelPreparedEncryption,
   commitEncryption,
   disableEncryption,
   prepareEncryption,
   resumeInterruptedMigration,
-} from '../../utils/vaultActions'
-import { downloadBackup as _unused } from '../../utils/cloudSync'
+} from '../../utils/security/vaultActions'
+import { downloadBackup as _unused } from '../../utils/backup/cloudSync'
 
 void _unused
 

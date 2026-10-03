@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildYearlySummary } from '../yearlySummary'
+import { buildYearlySummary } from '../money/yearlySummary'
 
 const d = (y: number, m = 5) => new Date(y, m, 15).getTime()
 

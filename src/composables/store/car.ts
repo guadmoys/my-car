@@ -1,7 +1,7 @@
 import { buildDefaultItems } from '../../data/defaultMaintenance'
 import * as db from '../../db/database'
 import type { Car } from '../../types'
-import { dailySnapshotDue, saveSnapshot } from '../../utils/autoBackup'
+import { dailySnapshotDue, saveSnapshot } from '../../utils/backup/autoBackup'
 import { migrateLegacyToDocuments } from '../../utils/documents'
 import { exportData } from './backupData'
 import { applyRecurringExpenses } from './expenses'

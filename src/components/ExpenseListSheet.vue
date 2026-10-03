@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMoney } from '../utils/currency'
+import { formatMoney } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -22,7 +22,7 @@ import {
 import { add, alertCircleOutline, buildOutline, trashOutline, carSportOutline, cardOutline, receiptOutline, shieldCheckmarkOutline, walletOutline } from 'ionicons/icons'
 import { EXPENSE_CATEGORY_LABELS, type Expense, type ExpenseCategory } from '../types'
 import { monthLabel } from '../utils/monthLabel'
-import { itemLine } from '../utils/expenseItems'
+import { itemLine } from '../utils/money/expenseItems'
 import { useCarStore } from '../composables/useCarStore'
 
 const props = defineProps<{

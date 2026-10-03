@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { materializeRecurring, nextOccurrence } from '../recurring'
+import { materializeRecurring, nextOccurrence } from '../money/recurring'
 import type { Expense } from '../../types'
 
 const base: Expense = {

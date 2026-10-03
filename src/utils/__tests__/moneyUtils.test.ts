@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { parseExpenseQuickEntry } from '../expenseQuickEntry'
-import { parseReceiptText } from '../receiptText'
-import { compareMonths } from '../monthComparison'
+import { parseExpenseQuickEntry } from '../money/expenseQuickEntry'
+import { parseReceiptText } from '../money/receiptText'
+import { compareMonths } from '../money/monthComparison'
 
 describe('parseExpenseQuickEntry', () => {
   it('reads category, amount and title', () => {

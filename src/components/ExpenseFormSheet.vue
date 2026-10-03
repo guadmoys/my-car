@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { currency } from '../utils/currency'
+import { currency } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -30,8 +30,8 @@ import {
   type ExpenseItem,
   type ExpensePayload,
 } from '../types'
-import { parseExpenseQuickEntry } from '../utils/expenseQuickEntry'
-import { recognizeReceipt } from '../utils/receiptOcr'
+import { parseExpenseQuickEntry } from '../utils/money/expenseQuickEntry'
+import { recognizeReceipt } from '../utils/money/receiptOcr'
 import { useCarStore } from '../composables/useCarStore'
 import { useToast } from '../composables/useToast'
 import CostBreakdownEditor from './CostBreakdownEditor.vue'

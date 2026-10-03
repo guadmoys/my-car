@@ -34,7 +34,7 @@ import {
   vaultLockoutRemainingMs,
   verifyVaultSecret,
   type KdfParams,
-} from '../vault'
+} from '../security/vault'
 
 // Same algorithm, tiny cost, so the suite stays fast.
 const FAST: KdfParams = { name: 'argon2id', m: 64, t: 1, p: 1 }

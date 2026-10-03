@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { Expense, FuelEntry, HistoryEntry } from '../types'
+import type { Expense, FuelEntry, HistoryEntry } from '../../types'
 
 const STORAGE_KEY = 'my-car-monthly-budget'
 

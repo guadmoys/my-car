@@ -1,8 +1,8 @@
-import { formatMoney } from './currency'
+import { formatMoney } from './money/currency'
 import { EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Car, Expense, HistoryEntry, MaintenanceStatus, Trip } from '../types'
-import type { CostShare } from './costStructure'
-import { itemLine } from './expenseItems'
+import type { CostShare } from './money/costStructure'
+import { itemLine } from './money/expenseItems'
 
 export interface ReportData {
   car: Car

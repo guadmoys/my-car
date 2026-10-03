@@ -1,4 +1,4 @@
-import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS, DOCUMENT_TYPE_LABELS } from '../types'
+import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS, DOCUMENT_TYPE_LABELS } from '../../types'
 import type {
   Car,
   CarDocument,
@@ -11,7 +11,7 @@ import type {
   Master,
   Reminder,
   Trip,
-} from '../types'
+} from '../../types'
 
 /**
  * Checks and cleans the records of a backup before they replace the user's data.

@@ -1,5 +1,5 @@
-import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS } from '../types'
-import type { ExpenseItem, TimelineEvent } from '../types'
+import { EXPENSE_CATEGORY_LABELS, EXPENSE_ITEM_KIND_LABELS } from '../../types'
+import type { ExpenseItem, TimelineEvent } from '../../types'
 
 function esc(raw: string): string {
   // A cell starting with = + - @ would run as a formula when opened in Excel/Sheets.

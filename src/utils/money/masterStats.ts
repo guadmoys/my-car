@@ -1,4 +1,4 @@
-import type { Expense, HistoryEntry } from '../types'
+import type { Expense, HistoryEntry } from '../../types'
 
 export interface MasterStats {
   count: number

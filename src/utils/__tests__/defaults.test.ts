@@ -7,8 +7,8 @@ vi.stubGlobal('localStorage', {
   removeItem: (k: string) => void memory.delete(k),
 })
 
-import { isBiometricEnabled, isLockEnabled, lockoutRemainingMs } from '../appLock'
-import { isVaultEnabled, isVaultUnlocked, vaultLockoutRemainingMs } from '../vault'
+import { isBiometricEnabled, isLockEnabled, lockoutRemainingMs } from '../security/appLock'
+import { isVaultEnabled, isVaultUnlocked, vaultLockoutRemainingMs } from '../security/vault'
 
 describe('fresh install', () => {
   it('has no PIN, no biometrics and no encryption, so nothing blocks the first launch', () => {

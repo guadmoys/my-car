@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMoney } from '../utils/currency'
+import { formatMoney } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -24,7 +24,7 @@ import {
 import { construct, searchOutline, walletOutline, water } from 'ionicons/icons'
 import { EXPENSE_CATEGORY_LABELS, type TimelineEvent } from '../types'
 import { monthLabel } from '../utils/monthLabel'
-import { itemLine } from '../utils/expenseItems'
+import { itemLine } from '../utils/money/expenseItems'
 
 const props = defineProps<{
   events: TimelineEvent[]

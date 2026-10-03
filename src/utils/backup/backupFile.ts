@@ -1,5 +1,5 @@
-import { VaultAuthError, decryptBackup, isEncryptedBackup, normalizeRecoveryCode, type EncryptedBackup } from './vault'
-import { secretCandidates } from './secretPrompt'
+import { VaultAuthError, decryptBackup, isEncryptedBackup, normalizeRecoveryCode, type EncryptedBackup } from '../security/vault'
+import { secretCandidates } from '../security/secretPrompt'
 
 const MAX_TRIES = 3
 

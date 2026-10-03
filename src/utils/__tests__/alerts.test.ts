@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { atMorning, computeAlerts, groupIntoNotes, type CarBundle } from '../alerts'
+import { atMorning, computeAlerts, groupIntoNotes, type CarBundle } from '../alerts/alerts'
 import type { Car, MaintenanceItem } from '../../types'
 
 const DAY = 86400000

@@ -7,7 +7,7 @@ vi.stubGlobal('localStorage', {
   removeItem: (k: string) => void memory.delete(k),
 })
 
-import { disableLock, isLockEnabled, lockoutRemainingMs, setPin, verifyPin } from '../appLock'
+import { disableLock, isLockEnabled, lockoutRemainingMs, setPin, verifyPin } from '../security/appLock'
 
 async function legacySha(pin: string, salt: string): Promise<string> {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${pin}`))

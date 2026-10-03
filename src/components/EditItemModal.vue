@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMoney } from '../utils/currency'
+import { formatMoney } from '../utils/money/currency'
 import { computed, ref, watch } from 'vue'
 import {
   IonAccordion,
@@ -25,7 +25,7 @@ import { useCarStore } from '../composables/useCarStore'
 import { EXPENSE_CATEGORY_LABELS } from '../types'
 import HistoryEditSheet from './HistoryEditSheet.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
-import { downloadIcsReminder } from '../utils/ics'
+import { downloadIcsReminder } from '../utils/alerts/ics'
 import { adaptiveKmThreshold, adaptiveDayThreshold } from '../utils/adaptiveThreshold'
 
 function addMonths(ts: number, months: number): number {

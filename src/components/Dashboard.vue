@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { IonPage, IonTab, IonTabs } from '@ionic/vue'
-import { currency } from '../utils/currency'
+import { currency } from '../utils/money/currency'
 import { useCarStore } from '../composables/useCarStore'
-import { checkAndNotifyBudget, checkAndNotifyLowFuel, updateAppBadge } from '../utils/notifications'
+import { checkAndNotifyBudget, checkAndNotifyLowFuel, updateAppBadge } from '../utils/alerts/notifications'
 import { registerBackgroundCheck, runAlertsNow, scheduleAlertCycle } from '../composables/useAlerts'
 import { haptic } from '../utils/haptics'
 import { useToast } from '../composables/useToast'
@@ -32,18 +32,18 @@ const ReminderSheet = lazy(() => import('./ReminderSheet.vue'))
 const MarkServicedSheet = lazy(() => import('./MarkServicedSheet.vue'))
 const MasterListSheet = lazy(() => import('./MasterListSheet.vue'))
 const MasterFormSheet = lazy(() => import('./MasterFormSheet.vue'))
-import { buildCostStructure } from '../utils/costStructure'
-import { isVaultEnabled } from '../utils/vault'
-import { resolveBackupData } from '../utils/backupFile'
-import { askBackupSecret } from '../utils/secretPrompt'
-import { buildExpensesCsv } from '../utils/expensesCsv'
-import { buildWarranties } from '../utils/warranty'
-import { monthSpend, monthlyBudget } from '../utils/budget'
-import { buildPartsList } from '../utils/partsList'
+import { buildCostStructure } from '../utils/money/costStructure'
+import { isVaultEnabled } from '../utils/security/vault'
+import { resolveBackupData } from '../utils/backup/backupFile'
+import { askBackupSecret } from '../utils/security/secretPrompt'
+import { buildExpensesCsv } from '../utils/money/expensesCsv'
+import { buildWarranties } from '../utils/money/warranty'
+import { monthSpend, monthlyBudget } from '../utils/money/budget'
+import { buildPartsList } from '../utils/money/partsList'
 const PartsHistorySheet = lazy(() => import('./PartsHistorySheet.vue'))
 import { useBackup } from '../composables/useBackup'
 import { confirmDialog } from '../utils/confirmDialog'
-import { buildMasterStats } from '../utils/masterStats'
+import { buildMasterStats } from '../utils/money/masterStats'
 const ExpenseListSheet = lazy(() => import('./ExpenseListSheet.vue'))
 const DocumentsSheet = lazy(() => import('./DocumentsSheet.vue'))
 const DocumentFormSheet = lazy(() => import('./DocumentFormSheet.vue'))

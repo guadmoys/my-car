@@ -13,9 +13,9 @@ import type {
   Reminder,
   Trip,
 } from '../../types'
-import { saveSnapshot } from '../../utils/autoBackup'
-import { monthlyBudget, setMonthlyBudget } from '../../utils/budget'
-import { SUPPORTED_BACKUP_VERSION, cleanBackupRecords, type BackupRecords } from '../../utils/backupValidation'
+import { saveSnapshot } from '../../utils/backup/autoBackup'
+import { monthlyBudget, setMonthlyBudget } from '../../utils/money/budget'
+import { SUPPORTED_BACKUP_VERSION, cleanBackupRecords, type BackupRecords } from '../../utils/backup/backupValidation'
 import { migrateLegacyToDocuments } from '../../utils/documents'
 import {
   ACTIVE_CAR_KEY,

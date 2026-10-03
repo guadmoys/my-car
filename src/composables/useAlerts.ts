@@ -1,7 +1,7 @@
-import { runAlertCycle } from '../utils/alertDispatcher'
-import { META_ENABLED, setMeta } from '../utils/alertStore'
-import { canNotify, showLocalNotification } from '../utils/notifications'
-import { isVaultEnabled, isVaultUnlocked } from '../utils/vault'
+import { runAlertCycle } from '../utils/alerts/alertDispatcher'
+import { META_ENABLED, setMeta } from '../utils/alerts/alertStore'
+import { canNotify, showLocalNotification } from '../utils/alerts/notifications'
+import { isVaultEnabled, isVaultUnlocked } from '../utils/security/vault'
 
 let running: Promise<void> | null = null
 let rerun = false

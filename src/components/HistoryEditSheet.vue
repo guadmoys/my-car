@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { currency } from '../utils/currency'
+import { currency } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,

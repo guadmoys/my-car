@@ -13,12 +13,12 @@ describe('currency', () => {
   })
 
   it('defaults to rubles and rounds amounts', async () => {
-    const { formatMoney } = await import('../currency')
+    const { formatMoney } = await import('../money/currency')
     expect(formatMoney(1234.6).replace(/\s/g, ' ')).toBe('1 235 ₽')
   })
 
   it('switches symbol and persists it', async () => {
-    const { formatMoney, setCurrency, formatPricePerLiter } = await import('../currency')
+    const { formatMoney, setCurrency, formatPricePerLiter } = await import('../money/currency')
     setCurrency('€')
     expect(formatMoney(10)).toBe('10 €')
     expect(formatPricePerLiter(54.321)).toBe('54.3 €/л')
@@ -27,7 +27,7 @@ describe('currency', () => {
 
   it('ignores an unknown stored symbol', async () => {
     localStorage.setItem('my-car-currency', 'XYZ')
-    const { currency } = await import('../currency')
+    const { currency } = await import('../money/currency')
     expect(currency.value).toBe('₽')
   })
 })

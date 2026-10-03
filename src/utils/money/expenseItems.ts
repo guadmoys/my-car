@@ -1,5 +1,5 @@
-import { EXPENSE_ITEM_KIND_LABELS } from '../types'
-import type { ExpenseItem } from '../types'
+import { EXPENSE_ITEM_KIND_LABELS } from '../../types'
+import type { ExpenseItem } from '../../types'
 
 /** One-line description of a breakdown row, e.g. "Деталь: колодки — 3 000 ₽ · гарантия 12 мес.". */
 export function itemLine(item: ExpenseItem, money: (n: number) => string): string {

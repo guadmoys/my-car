@@ -31,8 +31,8 @@ import {
   passphraseProblem,
   rotateRecoveryCode,
   setAutoLockMinutes,
-} from '../utils/vault'
-import { disableEncryption } from '../utils/vaultActions'
+} from '../utils/security/vault'
+import { disableEncryption } from '../utils/security/vaultActions'
 import { haptic } from '../utils/haptics'
 import { useToast } from '../composables/useToast'
 

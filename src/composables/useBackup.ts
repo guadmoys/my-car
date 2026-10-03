@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { useCarStore } from './useCarStore'
 import { useToast } from './useToast'
-import { getActiveProvider, getLastSync } from '../utils/cloudSync'
+import { getActiveProvider, getLastSync } from '../utils/backup/cloudSync'
 import {
   backupState,
   getBackupIntervalDays,
@@ -9,7 +9,7 @@ import {
   markBackupDone,
   setBackupIntervalDays,
   snoozeBackup,
-} from '../utils/backupSchedule'
+} from '../utils/backup/backupSchedule'
 import {
   backupFileName,
   chooseBackupFolder,
@@ -19,8 +19,8 @@ import {
   isFolderSaveSupported,
   saveBackup,
   writeToFolder,
-} from '../utils/backupExport'
-import { isVaultEnabled, isVaultUnlocked, serializeBackup } from '../utils/vault'
+} from '../utils/backup/backupExport'
+import { isVaultEnabled, isVaultUnlocked, serializeBackup } from '../utils/security/vault'
 
 const state = reactive({
   due: false,

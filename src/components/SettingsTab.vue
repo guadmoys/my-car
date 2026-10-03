@@ -64,8 +64,8 @@ import HintButton from './HintButton.vue'
 import AppLockSheet from './AppLockSheet.vue'
 import VaultSetupSheet from './VaultSetupSheet.vue'
 import VaultManageSheet from './VaultManageSheet.vue'
-import { isVaultEnabled } from '../utils/vault'
-import { askBackupSecret } from '../utils/secretPrompt'
+import { isVaultEnabled } from '../utils/security/vault'
+import { askBackupSecret } from '../utils/security/secretPrompt'
 import { confirmDialog } from '../utils/confirmDialog'
 import {
   getNotificationPermission,
@@ -74,18 +74,18 @@ import {
   requestNotificationPermission,
   sendTestNotification,
   setNotificationsEnabled,
-} from '../utils/notifications'
+} from '../utils/alerts/notifications'
 import {
   backgroundStatus,
   runAlertsNow,
   unregisterBackgroundCheck,
   type BackgroundStatus,
 } from '../composables/useAlerts'
-import { computeAlerts } from '../utils/alerts'
-import { loadAllBundles } from '../utils/alertDispatcher'
-import { downloadIcsCalendar } from '../utils/ics'
+import { computeAlerts } from '../utils/alerts/alerts'
+import { loadAllBundles } from '../utils/alerts/alertDispatcher'
+import { downloadIcsCalendar } from '../utils/alerts/ics'
 import { useBackup } from '../composables/useBackup'
-import { BACKUP_INTERVAL_OPTIONS, describeLastBackup } from '../utils/backupSchedule'
+import { BACKUP_INTERVAL_OPTIONS, describeLastBackup } from '../utils/backup/backupSchedule'
 import {
   disableBiometric,
   disableLock,
@@ -93,7 +93,7 @@ import {
   isLockEnabled,
   isPlatformAuthenticatorAvailable,
   registerBiometric,
-} from '../utils/appLock'
+} from '../utils/security/appLock'
 import {
   DATE_FORMAT_OPTIONS,
   formatDate,
@@ -103,17 +103,17 @@ import {
   setShowYearEnabled,
 } from '../utils/dateFormat'
 import type { DateFormatId } from '../utils/dateFormat'
-import { CURRENCY_OPTIONS, currency, setCurrency } from '../utils/currency'
-import { monthlyBudget, setMonthlyBudget } from '../utils/budget'
+import { CURRENCY_OPTIONS, currency, setCurrency } from '../utils/money/currency'
+import { monthlyBudget, setMonthlyBudget } from '../utils/money/budget'
 import { THEME_OPTIONS, getThemeMode, setThemeMode, type ThemeMode } from '../utils/theme'
 import { checkForUpdate } from '../utils/appUpdate'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
 import { useToast } from '../composables/useToast'
 import { useCarStore } from '../composables/useCarStore'
-import { listSnapshots, type Snapshot } from '../utils/autoBackup'
+import { listSnapshots, type Snapshot } from '../utils/backup/autoBackup'
 import { haptic } from '../utils/haptics'
 import { useCloudSync } from '../composables/useCloudSync'
-import type { CloudProvider } from '../utils/cloudSync'
+import type { CloudProvider } from '../utils/backup/cloudSync'
 
 const props = defineProps<{
   car: Car

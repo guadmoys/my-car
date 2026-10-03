@@ -16,8 +16,8 @@ import {
   markBackupDone,
   setBackupIntervalDays,
   snoozeBackup,
-} from '../backupSchedule'
-import { KEEP_FILES, backupFileName, canShareFiles, folderReady, saveBackup, writeToFolder } from '../backupExport'
+} from '../backup/backupSchedule'
+import { KEEP_FILES, backupFileName, canShareFiles, folderReady, saveBackup, writeToFolder } from '../backup/backupExport'
 
 const T0 = new Date(2026, 5, 1, 12, 0).getTime()
 

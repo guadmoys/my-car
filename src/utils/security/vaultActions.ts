@@ -1,7 +1,7 @@
-import * as db from '../db/database'
-import { clearSnapshots } from './autoBackup'
+import * as db from '../../db/database'
+import { clearSnapshots } from '../backup/autoBackup'
 import { disableLock } from './appLock'
-import { protectStoredSecrets, unprotectStoredSecrets } from './cloudSync'
+import { protectStoredSecrets, unprotectStoredSecrets } from '../backup/cloudSync'
 import {
   VaultAuthError,
   clearVaultMeta,

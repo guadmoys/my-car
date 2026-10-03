@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanBackupRecords, type BackupRecords } from '../backupValidation'
+import { cleanBackupRecords, type BackupRecords } from '../backup/backupValidation'
 
 const NOW = new Date(2026, 5, 15).getTime()
 const T = new Date(2026, 4, 1).getTime()

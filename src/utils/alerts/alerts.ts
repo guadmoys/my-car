@@ -1,9 +1,9 @@
-import { DOCUMENT_TYPE_LABELS } from '../types'
-import type { Car, CarDocument, Expense, FuelEntry, HistoryEntry, MaintenanceItem, Reminder } from '../types'
-import { DAY_MS } from './dates'
-import { averageDailyKm, maintenanceStatus } from './maintenance'
-import { DOCUMENT_SOON_DAYS } from './documents'
-import { buildWarranties } from './warranty'
+import { DOCUMENT_TYPE_LABELS } from '../../types'
+import type { Car, CarDocument, Expense, FuelEntry, HistoryEntry, MaintenanceItem, Reminder } from '../../types'
+import { DAY_MS } from '../dates'
+import { averageDailyKm, maintenanceStatus } from '../maintenance'
+import { DOCUMENT_SOON_DAYS } from '../documents'
+import { buildWarranties } from '../money/warranty'
 
 /** Everything about one car that can raise an alert. */
 export interface CarBundle {

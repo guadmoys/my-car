@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import swSource from '../../../public/sw-extra.js?raw'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { markShown, resetAlertStore, setMeta, writeSchedule, readShown } from '../alertStore'
+import { markShown, resetAlertStore, setMeta, writeSchedule, readShown } from '../alerts/alertStore'
 
 type Handler = (event: Record<string, unknown>) => void
 

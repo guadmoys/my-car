@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMoney } from '../utils/currency'
+import { formatMoney } from '../utils/money/currency'
 import { computed } from 'vue'
 import {
   IonButton,
@@ -22,8 +22,8 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { add, alarmOutline, cashOutline, cloudUploadOutline, checkmarkCircleOutline, construct, ellipse, folderOutline, shieldCheckmarkOutline, speedometerOutline, walletOutline, water } from 'ionicons/icons'
-import { monthlyBudget } from '../utils/budget'
-import type { WarrantyStatus } from '../utils/warranty'
+import { monthlyBudget } from '../utils/money/budget'
+import type { WarrantyStatus } from '../utils/money/warranty'
 import { DOCUMENT_TYPE_LABELS, EXPENSE_CATEGORY_LABELS } from '../types'
 import type { Car, DocumentStatus, MaintenanceStatus, ReminderStatus, TimelineEvent } from '../types'
 import { expiryLabel, statusColor } from '../utils/documents'

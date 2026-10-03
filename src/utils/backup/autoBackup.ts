@@ -1,6 +1,6 @@
 import { openDB, type DBSchema } from 'idb'
-import type { BackupData } from '../types'
-import { isSealed, isVaultEnabled, isVaultUnlocked, openJson, sealJson, type Sealed } from './vault'
+import type { BackupData } from '../../types'
+import { isSealed, isVaultEnabled, isVaultUnlocked, openJson, sealJson, type Sealed } from '../security/vault'
 
 /**
  * Local safety-net copies of the whole database, kept in a *separate*

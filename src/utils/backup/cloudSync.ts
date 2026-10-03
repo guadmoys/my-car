@@ -1,5 +1,5 @@
-import type { BackupData } from '../types'
-import { decryptBackup, encryptBackup, isEncryptedBackup, isVaultEnabled, isVaultUnlocked, openString, sealString, type EncryptedBackup, type Secret } from './vault'
+import type { BackupData } from '../../types'
+import { decryptBackup, encryptBackup, isEncryptedBackup, isVaultEnabled, isVaultUnlocked, openString, sealString, type EncryptedBackup, type Secret } from '../security/vault'
 
 export type CloudProvider = 'google' | 'yandex'
 

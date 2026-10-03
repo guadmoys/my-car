@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatPricePerLiter } from '../utils/currency'
+import { formatPricePerLiter } from '../utils/money/currency'
 import { computed } from 'vue'
 import { IonIcon, IonItem, IonLabel, IonList, IonListHeader, IonNote } from '@ionic/vue'
 import { caretDown, caretUp } from 'ionicons/icons'

@@ -7,7 +7,7 @@ import type {
   ReminderStatus,
   TimelineEvent,
 } from '../../types'
-import { currency } from '../../utils/currency'
+import { currency } from '../../utils/money/currency'
 import {
   analyzeConsumption,
   averageFuelPrice,

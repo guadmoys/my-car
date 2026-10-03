@@ -1,5 +1,5 @@
-import { EXPENSE_CATEGORY_LABELS } from '../types'
-import type { Expense, ExpenseItem, HistoryEntry } from '../types'
+import { EXPENSE_CATEGORY_LABELS } from '../../types'
+import type { Expense, ExpenseItem, HistoryEntry } from '../../types'
 
 export interface PartRow {
   key: string

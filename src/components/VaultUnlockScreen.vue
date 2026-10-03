@@ -10,7 +10,7 @@ import {
   passphraseProblem,
   unlockVault,
   vaultLockoutRemainingMs,
-} from '../utils/vault'
+} from '../utils/security/vault'
 import { haptic } from '../utils/haptics'
 
 const emit = defineEmits<{

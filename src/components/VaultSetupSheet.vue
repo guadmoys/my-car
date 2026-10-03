@@ -19,8 +19,8 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { copyOutline, downloadOutline } from 'ionicons/icons'
-import { normalizeRecoveryCode, passphraseBits, passphraseProblem, type CreatedVault } from '../utils/vault'
-import { cancelPreparedEncryption, commitEncryption, prepareEncryption } from '../utils/vaultActions'
+import { normalizeRecoveryCode, passphraseBits, passphraseProblem, type CreatedVault } from '../utils/security/vault'
+import { cancelPreparedEncryption, commitEncryption, prepareEncryption } from '../utils/security/vaultActions'
 import { haptic } from '../utils/haptics'
 import { useToast } from '../composables/useToast'
 

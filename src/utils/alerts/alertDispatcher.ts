@@ -1,8 +1,8 @@
-import * as db from '../db/database'
+import * as db from '../../db/database'
 import { computeAlerts, groupIntoNotes, type Alert, type CarBundle } from './alerts'
-import { DAY_MS } from './dates'
+import { DAY_MS } from '../dates'
 import { META_BASELINE, META_LAST_CHECK, getMeta, markShown, pruneShown, readShown, setMeta, writeSchedule } from './alertStore'
-import { isVaultEnabled } from './vault'
+import { isVaultEnabled } from '../security/vault'
 
 /** Date-driven alerts older than this are not announced on first sight (e.g. a document added already expired). */
 const STALE_MS = 14 * DAY_MS

@@ -18,9 +18,9 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { EXPENSE_ITEM_KIND_LABELS, type ExpenseItemKind } from '../types'
-import { formatMoney } from '../utils/currency'
+import { formatMoney } from '../utils/money/currency'
 import { monthLabel } from '../utils/monthLabel'
-import type { PartRow } from '../utils/partsList'
+import type { PartRow } from '../utils/money/partsList'
 
 const props = defineProps<{
   rows: PartRow[]

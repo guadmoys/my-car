@@ -1,4 +1,4 @@
-import type { ExpenseCategory } from '../types'
+import type { ExpenseCategory } from '../../types'
 
 export interface ParsedExpenseEntry {
   amount?: number

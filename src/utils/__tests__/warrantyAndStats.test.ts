@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildWarranties } from '../warranty'
-import { buildMasterStats } from '../masterStats'
-import { monthSpend } from '../budget'
+import { buildWarranties } from '../money/warranty'
+import { buildMasterStats } from '../money/masterStats'
+import { monthSpend } from '../money/budget'
 
 describe('warranty', () => {
   const now = new Date(2026, 5, 1).getTime()

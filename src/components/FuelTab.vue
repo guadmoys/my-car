@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { currency, formatMoney } from '../utils/currency'
+import { currency, formatMoney } from '../utils/money/currency'
 import { computed, ref } from 'vue'
 import {
   IonButton,
@@ -34,9 +34,9 @@ import MonthlySpendChart from './MonthlySpendChart.vue'
 import StationPricesCard from './StationPricesCard.vue'
 import { formatDate } from '../utils/dateFormat'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
-import { buildYearlySummary } from '../utils/yearlySummary'
-import { compareMonths } from '../utils/monthComparison'
-import { buildCostStructure } from '../utils/costStructure'
+import { buildYearlySummary } from '../utils/money/yearlySummary'
+import { compareMonths } from '../utils/money/monthComparison'
+import { buildCostStructure } from '../utils/money/costStructure'
 
 const props = defineProps<{
   fuelHistory: FuelConsumption[]

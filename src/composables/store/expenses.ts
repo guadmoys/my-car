@@ -1,6 +1,6 @@
 import * as db from '../../db/database'
 import type { Expense, ExpensePayload } from '../../types'
-import { materializeRecurring } from '../../utils/recurring'
+import { materializeRecurring } from '../../utils/money/recurring'
 import { car, expenses, makeId, nowTs } from './state'
 
 export function recurrenceFor(payload: Pick<ExpensePayload, 'repeat' | 'date'>): Expense['recurrence'] {

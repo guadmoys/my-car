@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { IonButton, IonIcon, IonInput, IonItem, IonLabel, IonList, IonListHeader, IonSelect, IonSelectOption } from '@ionic/vue'
 import { add, closeCircleOutline } from 'ionicons/icons'
-import { currency, formatMoney } from '../utils/currency'
+import { currency, formatMoney } from '../utils/money/currency'
 import { haptic } from '../utils/haptics'
 import { EXPENSE_ITEM_KIND_LABELS, type ExpenseItem, type ExpenseItemKind } from '../types'
 

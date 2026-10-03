@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import { isSealed, isVaultEnabled, openJson, sealJson } from '../utils/vault'
+import { isSealed, isVaultEnabled, openJson, sealJson } from '../utils/security/vault'
 import type { Car, CarDocument, ComponentCheck, Expense, FuelEntry, HistoryEntry, MaintenanceItem, Master, Reminder, Trip } from '../types'
 
 interface MyCarDB extends DBSchema {
