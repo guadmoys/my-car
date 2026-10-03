@@ -17,6 +17,8 @@ import {
   IonNote,
   IonSelect,
   IonSelectOption,
+  IonSpinner,
+  IonIcon,
   IonTextarea,
   IonTitle,
   IonToolbar,
@@ -28,7 +30,12 @@ import {
   type ExpenseItem,
   type ExpensePayload,
 } from '../types'
+import { parseExpenseQuickEntry } from '../utils/expenseQuickEntry'
+import { recognizeReceipt } from '../utils/receiptOcr'
+import { useCarStore } from '../composables/useCarStore'
+import { useToast } from '../composables/useToast'
 import CostBreakdownEditor from './CostBreakdownEditor.vue'
+import { checkmark, scanOutline } from 'ionicons/icons'
 import MasterPicker from './MasterPicker.vue'
 import PhotoGalleryField from './PhotoGalleryField.vue'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
@@ -53,6 +60,49 @@ const dateIso = ref(new Date(props.expense?.date ?? Date.now()).toISOString())
 const note = ref(props.expense?.note ?? '')
 const receiptPhoto = ref<string | undefined>(props.expense?.receiptPhoto)
 const maxDateIso = new Date().toISOString()
+
+const store = useCarStore()
+const toast = useToast()
+
+const itemId = ref<string | undefined>(props.expense?.itemId)
+const quickEntry = ref('')
+const recognizing = ref(false)
+
+function applyQuickEntry() {
+  if (!quickEntry.value.trim()) return
+  const parsed = parseExpenseQuickEntry(quickEntry.value)
+  if (parsed.amount !== undefined) amount.value = String(parsed.amount)
+  if (parsed.category) category.value = parsed.category
+  if (parsed.title && !title.value.trim()) title.value = parsed.title
+  if (Object.values(parsed).some((v) => v !== undefined)) {
+    haptic('success')
+    quickEntry.value = ''
+  } else {
+    haptic('warning')
+  }
+}
+
+// Fills the amount and date from the receipt photo. Works on-device but needs
+// a connection the first time (language data); fails softly otherwise.
+async function fillFromReceipt() {
+  if (!receiptPhoto.value || recognizing.value) return
+  recognizing.value = true
+  try {
+    const parsed = await recognizeReceipt(receiptPhoto.value)
+    if (parsed.amount === undefined && parsed.date === undefined) {
+      haptic('warning')
+      toast.show('Не удалось найти сумму на чеке — введите вручную')
+      return
+    }
+    if (parsed.amount !== undefined) amount.value = String(parsed.amount)
+    if (parsed.date !== undefined) dateIso.value = new Date(parsed.date).toISOString()
+    haptic('success')
+  } catch {
+    toast.show('Не удалось распознать чек — проверьте интернет и попробуйте ещё раз')
+  } finally {
+    recognizing.value = false
+  }
+}
 
 const photos = ref<string[]>([...(props.expense?.photos ?? [])])
 const masterId = ref<string | undefined>(props.expense?.masterId)
@@ -80,6 +130,7 @@ function handleSave() {
     items: items.value,
     photos: photos.value,
     masterId: masterId.value,
+    itemId: itemId.value,
     repeat: repeat.value === 'none' ? undefined : repeat.value,
   })
 }
@@ -99,6 +150,24 @@ function handleSave() {
       </ion-toolbar>
     </ion-header>
     <ion-content>
+      <ion-list v-if="!props.expense" inset>
+        <ion-item lines="none">
+          <ion-input
+            v-model="quickEntry"
+            label="Быстрый ввод"
+            label-placement="stacked"
+            placeholder="осаго 12000 · штраф 500р · ремонт бампера 45к"
+            aria-label="Быстрый ввод расхода"
+            enterkeyhint="done"
+            @keydown.enter="applyQuickEntry"
+          >
+            <ion-button v-if="quickEntry.trim()" slot="end" fill="clear" aria-label="Применить" @click="applyQuickEntry">
+              <ion-icon slot="icon-only" :icon="checkmark" />
+            </ion-button>
+          </ion-input>
+        </ion-item>
+      </ion-list>
+
       <ion-list inset>
         <ion-item>
           <ion-input
@@ -157,6 +226,21 @@ function handleSave() {
 
       <MasterPicker v-model="masterId" />
 
+      <ion-list v-if="store.items.length > 0" inset>
+        <ion-item lines="none">
+          <ion-select
+            label="Связать с ТО"
+            :value="itemId ?? ''"
+            interface="action-sheet"
+            :interface-options="{ cancelText: 'Отмена' }"
+            @ion-change="itemId = $event.detail.value || undefined"
+          >
+            <ion-select-option value="">Не связывать</ion-select-option>
+            <ion-select-option v-for="i in store.items" :key="i.id" :value="i.id">{{ i.name }}</ion-select-option>
+          </ion-select>
+        </ion-item>
+      </ion-list>
+
       <ion-list inset>
         <ion-item lines="none">
           <ion-select v-model="repeat" label="Повторять" interface="action-sheet" :interface-options="{ cancelText: 'Отмена' }">
@@ -171,6 +255,13 @@ function handleSave() {
       </ion-note>
 
       <ReceiptPhotoField v-model="receiptPhoto" />
+      <div v-if="receiptPhoto" class="ocr-row">
+        <ion-button fill="outline" size="small" :disabled="recognizing" @click="fillFromReceipt">
+          <ion-spinner v-if="recognizing" slot="start" name="dots" />
+          <ion-icon v-else slot="start" :icon="scanOutline" />
+          {{ recognizing ? 'Распознаю…' : 'Заполнить по чеку' }}
+        </ion-button>
+      </div>
       <PhotoGalleryField v-model="photos" :label="category === 'damage' ? 'Фото повреждений' : 'Добавить фото'" />
     </ion-content>
   </ion-modal>
@@ -182,6 +273,10 @@ function handleSave() {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 6px;
+}
+
+.ocr-row {
+  padding: 0 16px 8px;
 }
 
 .amount-input {

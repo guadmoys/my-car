@@ -1,5 +1,6 @@
 import { DOCUMENT_TYPE_LABELS } from '../types'
 import type { DocumentStatus, MaintenanceStatus, ReminderStatus } from '../types'
+import type { WarrantyStatus } from './warranty'
 
 const ENABLED_KEY = 'my-car-notifications-enabled'
 const ICON = `${import.meta.env.BASE_URL}icons/icon-192.png`
@@ -205,6 +206,61 @@ export async function checkAndNotifyDocuments(carId: string, statuses: DocumentS
 
   for (const s of fresh) notifiedIds.add(s.document.id)
   saveDocumentsNotifiedIds(carId, notifiedIds)
+}
+
+const BUDGET_KEY = (carId: string) => `my-car-budget-notified-${carId}`
+const WARRANTY_KEY = (carId: string) => `my-car-warranty-notified-${carId}`
+
+function readList(key: string): string[] {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Notifies when the month's spending crosses 80% and again at 100% of the
+ * budget — each level once per calendar month.
+ */
+export async function checkAndNotifyBudget(carId: string, spent: number, budget: number | null, now = Date.now()): Promise<void> {
+  if (!budget || !isNotificationsEnabled() || getNotificationPermission() !== 'granted') return
+  const d = new Date(now)
+  const month = `${d.getFullYear()}-${d.getMonth() + 1}`
+  const level = spent > budget ? 100 : spent >= budget * 0.8 ? 80 : 0
+  if (level === 0) return
+
+  // Keys look like "2026-10:80"; drop other months so the list can't grow forever.
+  const done = readList(BUDGET_KEY(carId)).filter((k) => k.startsWith(`${month}:`))
+  const key = `${month}:${level}`
+  if (done.includes(key)) return
+
+  const body =
+    level === 100
+      ? `Потрачено ${Math.round(spent).toLocaleString('ru-RU')} из ${Math.round(budget).toLocaleString('ru-RU')} — бюджет превышен`
+      : `Потрачено ${Math.round(spent).toLocaleString('ru-RU')} из ${Math.round(budget).toLocaleString('ru-RU')} (80% бюджета)`
+  await showLocalNotification('Бюджет на месяц', body)
+  // Crossing 100% also covers the 80% notice for this month.
+  const next = level === 100 ? [...done, `${month}:80`, key] : [...done, key]
+  localStorage.setItem(BUDGET_KEY(carId), JSON.stringify(next))
+}
+
+/** Notifies once per part when its warranty has 30 days or less left. */
+export async function checkAndNotifyWarranties(carId: string, warranties: WarrantyStatus[]): Promise<void> {
+  if (!isNotificationsEnabled() || getNotificationPermission() !== 'granted') return
+  const done = new Set(readList(WARRANTY_KEY(carId)))
+  const fresh = warranties.filter((w) => w.remainingDays <= 30 && !done.has(w.key))
+  if (fresh.length === 0) return
+
+  const title = fresh.length === 1 ? `Гарантия: ${fresh[0].name}` : `Заканчивается гарантия: ${fresh.length}`
+  const body =
+    fresh.length === 1
+      ? `Осталось ${fresh[0].remainingDays} дн. — проверьте деталь, пока она на гарантии`
+      : fresh.map((w) => w.name).join(', ')
+  await showLocalNotification(title, body)
+  for (const w of fresh) done.add(w.key)
+  localStorage.setItem(WARRANTY_KEY(carId), JSON.stringify([...done]))
 }
 
 export function updateAppBadge(count: number): void {

@@ -1,7 +1,7 @@
 {
   "name": "my-car",
   "private": true,
-  "version": "2.5.0",
+  "version": "2.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
     "idb": "^8.0.0",
     "ionicons": "^7.4.0",
     "jspdf": "^2.5.2",
+    "tesseract.js": "^5.1.1",
     "vue": "^3.4.38"
   },
   "devDependencies": {

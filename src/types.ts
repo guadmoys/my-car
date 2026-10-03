@@ -232,6 +232,8 @@ export interface Expense {
   photos?: string[]
   /** Master/service this was paid to. */
   masterId?: string
+  /** The maintenance item this relates to (e.g. a bumper repair filed under a body-work item). */
+  itemId?: string
   /** Set only on the newest entry of a repeating series; the next one is created when it falls due. */
   recurrence?: ExpenseRecurrence
 }
@@ -247,6 +249,7 @@ export interface ExpensePayload {
   items?: ExpenseItem[]
   photos?: string[]
   masterId?: string
+  itemId?: string
   repeat?: ExpenseRecurrence['every']
 }
 
@@ -394,6 +397,8 @@ export interface BackupData {
   trips?: Trip[]
   /** Absent when importing a backup made before the documents section existed. */
   documents?: CarDocument[]
+  /** Per-device preferences worth carrying to a new device. Absent in older backups. */
+  settings?: { monthlyBudget?: number }
 }
 
 /** Shape of a v1 backup (single car, no carId fields), kept only for import compatibility. */

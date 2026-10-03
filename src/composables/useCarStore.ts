@@ -1,6 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { currency } from '../utils/currency'
 import { dailySnapshotDue, saveSnapshot } from '../utils/autoBackup'
+import { monthlyBudget, setMonthlyBudget } from '../utils/budget'
 import { materializeRecurring } from '../utils/recurring'
 import { documentStatuses as buildDocumentStatuses, migrateLegacyToDocuments } from '../utils/documents'
 import type {
@@ -619,6 +620,7 @@ async function addExpense(input: Omit<ExpensePayload, 'date'> & { date?: number 
     items: input.items?.length ? input.items : undefined,
     photos: input.photos?.length ? input.photos : undefined,
     masterId: input.masterId || undefined,
+    itemId: input.itemId || undefined,
     recurrence: recurrenceFor({ repeat: input.repeat, date }),
   }
   expenses.unshift(expense)
@@ -639,6 +641,7 @@ async function updateExpense(id: string, patch: ExpensePayload): Promise<void> {
   expense.items = patch.items?.length ? patch.items : undefined
   expense.photos = patch.photos?.length ? patch.photos : undefined
   expense.masterId = patch.masterId || undefined
+  expense.itemId = patch.itemId || undefined
   expense.recurrence = recurrenceFor(patch)
   await db.putExpense({ ...expense })
   await applyRecurringExpenses()
@@ -1567,6 +1570,7 @@ async function exportData(): Promise<BackupData> {
     components: allComponents,
     trips: allTrips,
     documents: allDocuments,
+    settings: monthlyBudget.value ? { monthlyBudget: monthlyBudget.value } : undefined,
   }
 }
 
@@ -1582,6 +1586,9 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
   let importedTrips: Trip[]
   let importedDocuments: CarDocument[]
   let newActiveCarId: string | undefined
+
+  // Applied only once the import succeeded, so a rejected file can't change settings.
+  const importedBudget = isMultiCarBackup(data) ? data.settings?.monthlyBudget : undefined
 
   if (isMultiCarBackup(data)) {
     importedCars = data.cars
@@ -1679,6 +1686,7 @@ async function importData(data: unknown): Promise<{ ok: true } | { ok: false; er
     isImporting.value = false
   }
 
+  if (typeof importedBudget === 'number') setMonthlyBudget(importedBudget)
   return { ok: true }
 }
 

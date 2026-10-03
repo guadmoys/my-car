@@ -21,6 +21,8 @@ import {
 } from '@ionic/vue'
 import { calendarOutline, close, trash } from 'ionicons/icons'
 import type { ExpenseItem, HistoryEntry, MaintenanceItem, Part } from '../types'
+import { useCarStore } from '../composables/useCarStore'
+import { EXPENSE_CATEGORY_LABELS } from '../types'
 import HistoryEditSheet from './HistoryEditSheet.vue'
 import PartQuickLinks from './PartQuickLinks.vue'
 import { downloadIcsReminder } from '../utils/ics'
@@ -100,6 +102,11 @@ function handleSaveHistory(payload: {
   if (editingHistoryId.value) emit('updateHistory', editingHistoryId.value, payload)
   editingHistoryId.value = null
 }
+
+const store = useCarStore()
+const linkedExpenses = computed(() =>
+  props.item ? store.expenses.filter((e) => e.itemId === props.item!.id).sort((a, b) => b.date - a.date) : [],
+)
 
 const isCreate = computed(() => props.item === null)
 
@@ -341,6 +348,17 @@ function handleAddToCalendar() {
         <ion-icon slot="start" :icon="calendarOutline" />
         Добавить напоминание в календарь
       </ion-button>
+
+      <ion-list v-if="linkedExpenses.length > 0" inset>
+        <ion-list-header>Связанные расходы</ion-list-header>
+        <ion-item v-for="e in linkedExpenses" :key="e.id" lines="full">
+          <ion-label>
+            <h3>{{ e.title || EXPENSE_CATEGORY_LABELS[e.category] }}</h3>
+            <p>{{ fmtHistoryDate(e.date) }}</p>
+          </ion-label>
+          <ion-note slot="end" color="primary">{{ fmtCost(e.amount) }}</ion-note>
+        </ion-item>
+      </ion-list>
 
       <ion-list v-if="!isCreate && history.length > 0" inset>
         <ion-list-header>История ТО</ion-list-header>

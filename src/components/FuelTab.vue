@@ -26,7 +26,7 @@ import {
   IonToolbar,
   type SegmentCustomEvent,
 } from '@ionic/vue'
-import { add, downloadOutline, ellipse, trash } from 'ionicons/icons'
+import { add, downloadOutline, listOutline, ellipse, trash } from 'ionicons/icons'
 import type { CostForecast, Expense, FuelConsumption, FuelInsight, HistoryEntry } from '../types'
 import { haptic } from '../utils/haptics'
 import ConsumptionChart from './ConsumptionChart.vue'
@@ -35,6 +35,7 @@ import StationPricesCard from './StationPricesCard.vue'
 import { formatDate } from '../utils/dateFormat'
 import { handlePullToRefresh } from '../utils/pullToRefresh'
 import { buildYearlySummary } from '../utils/yearlySummary'
+import { compareMonths } from '../utils/monthComparison'
 import { buildCostStructure } from '../utils/costStructure'
 
 const props = defineProps<{
@@ -60,12 +61,22 @@ const emit = defineEmits<{
   editFuel: [id: string]
   exportCsv: []
   exportExpensesCsv: []
+  viewParts: []
   viewOtherExpenses: []
 }>()
 
 const showAll = ref(false)
 
 const yearlySummary = computed(() => buildYearlySummary(fuelEntriesRaw.value, props.historyEntries, props.expenses))
+
+const monthComparison = computed(() => compareMonths(fuelEntriesRaw.value, props.historyEntries, props.expenses, Date.now()))
+const comparisonText = computed(() => {
+  const c = monthComparison.value
+  if (c.changePct === null) return null
+  const pct = Math.round(Math.abs(c.changePct) * 100)
+  if (pct === 0) return 'Столько же, сколько в прошлом месяце'
+  return `На ${pct}% ${c.changePct > 0 ? 'больше' : 'меньше'}, чем в прошлом месяце`
+})
 
 type StructurePeriod = 'month' | 'year' | 'all'
 const structurePeriod = ref<StructurePeriod>('all')
@@ -164,6 +175,27 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
       <ion-item v-if="totalCo2Kg > 0" lines="none">
         <ion-label color="medium">Выбросы CO₂</ion-label>
         <ion-note slot="end">{{ fmtCo2(totalCo2Kg) }}</ion-note>
+      </ion-item>
+    </ion-list>
+
+    <ion-list v-if="monthComparison.current.total > 0 || monthComparison.previous.total > 0" inset>
+      <ion-list-header>Месяц к месяцу</ion-list-header>
+      <ion-item>
+        <ion-label>Этот месяц</ion-label>
+        <ion-note slot="end" color="primary">{{ fmtCost(monthComparison.current.total) }}</ion-note>
+      </ion-item>
+      <ion-item :lines="comparisonText ? 'full' : 'none'">
+        <ion-label>Прошлый месяц</ion-label>
+        <ion-note slot="end">{{ fmtCost(monthComparison.previous.total) }}</ion-note>
+      </ion-item>
+      <ion-item v-if="comparisonText" lines="none">
+        <ion-label class="ion-text-wrap">
+          <p :class="monthComparison.changePct! > 0 ? 'cmp-up' : 'cmp-down'">{{ comparisonText }}</p>
+          <p v-if="monthComparison.biggestMover">
+            Больше всего изменилось: {{ monthComparison.biggestMover.label }}
+            ({{ monthComparison.biggestMover.delta > 0 ? '+' : '−' }}{{ fmtCost(Math.abs(monthComparison.biggestMover.delta)) }})
+          </p>
+        </ion-label>
       </ion-item>
     </ion-list>
 
@@ -300,6 +332,10 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
       <ion-icon slot="start" :icon="downloadOutline" />
       Экспорт в CSV
     </ion-button>
+    <ion-button v-if="hasAnyCost" expand="block" fill="outline" class="ion-margin" @click="emit('viewParts')">
+      <ion-icon slot="start" :icon="listOutline" />
+      Все детали и работы
+    </ion-button>
     <ion-button v-if="hasAnyCost" expand="block" fill="outline" class="ion-margin" @click="emit('exportExpensesCsv')">
       <ion-icon slot="start" :icon="downloadOutline" />
       Все расходы в CSV (с деталями и работой)
@@ -314,6 +350,14 @@ function qualityColor(quality: FuelConsumption['quality']): string | undefined {
 </template>
 
 <style scoped>
+.cmp-up {
+  color: var(--ion-color-warning-shade);
+}
+
+.cmp-down {
+  color: var(--ion-color-success-shade);
+}
+
 .share-head {
   display: flex;
   justify-content: space-between;

@@ -5,7 +5,9 @@ import { currency } from '../utils/currency'
 import { useCarStore } from '../composables/useCarStore'
 import {
   checkAndNotify,
+  checkAndNotifyBudget,
   checkAndNotifyDocuments,
+  checkAndNotifyWarranties,
   checkAndNotifyLowFuel,
   checkAndNotifyReminders,
   clearNotifiedDocument,
@@ -34,7 +36,9 @@ import MasterFormSheet from './MasterFormSheet.vue'
 import { buildCostStructure } from '../utils/costStructure'
 import { buildExpensesCsv } from '../utils/expensesCsv'
 import { buildWarranties } from '../utils/warranty'
-import { monthSpend } from '../utils/budget'
+import { monthSpend, monthlyBudget } from '../utils/budget'
+import { buildPartsList } from '../utils/partsList'
+import PartsHistorySheet from './PartsHistorySheet.vue'
 import { buildMasterStats } from '../utils/masterStats'
 import ExpenseListSheet from './ExpenseListSheet.vue'
 import DocumentsSheet from './DocumentsSheet.vue'
@@ -124,6 +128,8 @@ const editingMaster = ref<Master | null | 'new'>(null)
 const warranties = computed(() => buildWarranties(store.historyEntries, store.expenses, Date.now()))
 const thisMonthSpend = computed(() => monthSpend(store.fuelEntries, store.historyEntries, store.expenses, Date.now()))
 const masterStats = computed(() => buildMasterStats(store.historyEntries, store.expenses))
+const showPartsSheet = ref(false)
+const partsRows = computed(() => buildPartsList(store.historyEntries, store.expenses))
 const showExpenseList = ref(false)
 const showDocuments = ref(false)
 const editingDocument = ref<CarDocument | null | 'new'>(null)
@@ -236,6 +242,22 @@ watch(
 )
 
 watch(
+  [car, thisMonthSpend, monthlyBudget],
+  ([carVal, spent, budget]) => {
+    if (carVal) checkAndNotifyBudget(carVal.id, spent, budget)
+  },
+  { immediate: true },
+)
+
+watch(
+  [car, warranties],
+  ([carVal, list]) => {
+    if (carVal) checkAndNotifyWarranties(carVal.id, list)
+  },
+  { immediate: true },
+)
+
+watch(
   [car, documentStatuses],
   ([carVal, statusesVal]) => {
     if (carVal) checkAndNotifyDocuments(carVal.id, statusesVal)
@@ -252,6 +274,8 @@ function handleNotificationsEnabled() {
   checkAndNotifyLowFuel(car.value.id, estimatedRangeKm.value)
   checkAndNotifyReminders(car.value.id, reminderStatuses.value.filter((s) => s.isDue))
   checkAndNotifyDocuments(car.value.id, documentStatuses.value)
+  checkAndNotifyBudget(car.value.id, thisMonthSpend.value, monthlyBudget.value)
+  checkAndNotifyWarranties(car.value.id, warranties.value)
 }
 
 function openEdit(id: string) {
@@ -863,6 +887,7 @@ async function handleImportCarCsv(file: File) {
         @edit-fuel="editingFuelEntryId = $event"
         @export-csv="handleExportFuelCsv"
         @export-expenses-csv="handleExportExpensesCsv"
+        @view-parts="showPartsSheet = true"
         @view-other-expenses="showExpenseList = true"
       />
       </ion-tab>
@@ -1033,6 +1058,13 @@ async function handleImportCarCsv(file: File) {
       @close="editingDocument = null; newDocumentType = undefined"
       @save="handleSaveDocument"
       @delete="handleDeleteDocument"
+    />
+
+    <PartsHistorySheet
+      v-if="showPartsSheet"
+      :rows="partsRows"
+      :master-name="(id: string) => store.masters.find((m) => m.id === id)?.name"
+      @close="showPartsSheet = false"
     />
 
     <ExpenseListSheet
