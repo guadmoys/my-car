@@ -14,6 +14,8 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
+import type { ExpenseItem } from '../types'
+import CostBreakdownEditor from './CostBreakdownEditor.vue'
 import ReceiptPhotoField from './ReceiptPhotoField.vue'
 
 const props = defineProps<{
@@ -22,18 +24,22 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [payload: { cost?: number; receiptPhoto?: string }]
+  save: [payload: { cost?: number; receiptPhoto?: string; items?: ExpenseItem[] }]
 }>()
 
 const cost = ref('')
 const receiptPhoto = ref<string | undefined>(undefined)
+const items = ref<ExpenseItem[]>([])
 
 const costNumber = computed(() => Number(cost.value.replace(/\s/g, '').replace(',', '.')))
 const costInvalid = computed(() => cost.value.trim() !== '' && (Number.isNaN(costNumber.value) || costNumber.value < 0))
 
 function handleSave() {
   if (costInvalid.value) return
-  emit('save', { cost: cost.value.trim() === '' ? undefined : costNumber.value, receiptPhoto: receiptPhoto.value })
+  const itemsSum = items.value.reduce((s, i) => s + i.amount, 0)
+  // No total typed but the breakdown is filled: the total is the sum of its lines.
+  const total = cost.value.trim() === '' ? (itemsSum > 0 ? itemsSum : undefined) : costNumber.value
+  emit('save', { cost: total, receiptPhoto: receiptPhoto.value, items: items.value })
 }
 
 // Guards only the accidental paths (swipe-down, backdrop tap) — the explicit
@@ -42,17 +48,13 @@ function handleSave() {
 // "done" action itself hasn't happened yet, so there's no undo needed, just
 // a heads-up before the entered cost is lost.
 async function canDismiss(): Promise<boolean> {
-  if (cost.value.trim() === '' && !receiptPhoto.value) return true
+  if (cost.value.trim() === '' && !receiptPhoto.value && items.value.length === 0) return true
   return window.confirm('Введённые данные не будут сохранены. Закрыть?')
 }
 </script>
 
 <template>
-  <ion-modal
-    :is-open="true"
-    :breakpoints="[0, 1]"
-    :initial-breakpoint="1"
-    :can-dismiss="canDismiss"
+  <ion-modal :is-open="true" :can-dismiss="canDismiss"
     @did-dismiss="emit('close')"
   >
     <ion-header>
@@ -81,6 +83,7 @@ async function canDismiss(): Promise<boolean> {
         </ion-item>
       </ion-list>
       <ion-note v-if="costInvalid" color="danger" class="hint">Стоимость не может быть отрицательной</ion-note>
+      <CostBreakdownEditor v-model="items" :total="cost.trim() !== '' && costNumber > 0 ? costNumber : null" />
       <ReceiptPhotoField v-model="receiptPhoto" />
     </ion-content>
   </ion-modal>

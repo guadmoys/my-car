@@ -265,14 +265,14 @@ function handleMarkServiced(id: string) {
   if (item) markServicedItem.value = item
 }
 
-async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?: string }) {
+async function handleConfirmMarkServiced(payload: { cost?: number; receiptPhoto?: string; items?: ExpenseItem[] }) {
   const item = markServicedItem.value
   if (!item) return
   markServicedItem.value = null
   await submitOnce(async () => {
     let result: Awaited<ReturnType<typeof store.markServiced>>
     try {
-      result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto)
+      result = await store.markServiced(item.id, undefined, payload.cost, payload.receiptPhoto, undefined, payload.items)
     } catch {
       toast.show('Не удалось сохранить — попробуйте ещё раз')
       return
